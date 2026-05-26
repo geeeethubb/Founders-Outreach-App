@@ -29,7 +29,7 @@ export default async function ContactDetailPage({ params }: Props) {
     <div className="p-8 max-w-5xl">
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-sm text-slate-400 mb-6">
-        <Link href="/contacts" className="hover:text-slate-600 transition-colors">Contacts</Link>
+        <Link href="/dashboard/contacts" className="hover:text-slate-600 transition-colors">Contacts</Link>
         <span>/</span>
         <span className="text-slate-700 font-medium">{contact.name}</span>
       </div>
@@ -120,7 +120,7 @@ export default async function ContactDetailPage({ params }: Props) {
           <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-2">
             <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-3">Actions</p>
             <Link
-              href={`/compose?contact=${contact.id}`}
+              href={`/dashboard/compose?contact=${contact.id}`}
               className="flex items-center gap-2 w-full px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

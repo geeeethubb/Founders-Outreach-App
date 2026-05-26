@@ -155,7 +155,7 @@ export default function ComposePage() {
               Send Another
             </button>
             <button
-              onClick={() => router.push('/contacts')}
+              onClick={() => router.push('/dashboard/contacts')}
               className="px-4 py-2 border border-slate-200 text-slate-700 text-sm font-medium rounded-lg hover:bg-slate-50 transition-colors"
             >
               Back to Contacts
@@ -222,7 +222,7 @@ export default function ComposePage() {
               {contacts.length === 0 && (
                 <p className="text-xs text-amber-600 mt-2">
                   No contacts yet.{' '}
-                  <a href="/contacts" className="underline">Add one first →</a>
+                  <a href="/dashboard/contacts" className="underline">Add one first →</a>
                 </p>
               )}
               {selectedContact && !selectedContact.research && (

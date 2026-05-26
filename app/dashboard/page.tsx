@@ -49,28 +49,28 @@ export default async function DashboardPage() {
       <div className="grid grid-cols-4 gap-4 mb-8">
         {[
           {
-            href: '/contacts',
+            href: '/dashboard/contacts',
             title: 'Add Contact',
             desc: 'Add a YC founder or SF operator',
             icon: '➕',
             color: 'border-indigo-200 hover:border-indigo-400',
           },
           {
-            href: '/compose',
+            href: '/dashboard/compose',
             title: 'Write Outreach',
             desc: 'AI-generate a personalized email',
             icon: '✍️',
             color: 'border-purple-200 hover:border-purple-400',
           },
           {
-            href: '/campaigns',
+            href: '/dashboard/campaigns',
             title: 'New Campaign',
             desc: 'Speaker series, mentor drive, jobs',
             icon: '🎯',
             color: 'border-orange-200 hover:border-orange-400',
           },
           {
-            href: '/conversations',
+            href: '/dashboard/conversations',
             title: 'View Replies',
             desc: 'Manage active conversations',
             icon: '💬',
@@ -96,7 +96,7 @@ export default async function DashboardPage() {
         <div className="bg-white rounded-xl border border-slate-200">
           <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
             <h2 className="font-semibold text-slate-800">Recent Contacts</h2>
-            <Link href="/contacts" className="text-sm text-indigo-600 hover:text-indigo-700">
+            <Link href="/dashboard/contacts" className="text-sm text-indigo-600 hover:text-indigo-700">
               View all →
             </Link>
           </div>
@@ -104,7 +104,7 @@ export default async function DashboardPage() {
             {recentContacts.map((contact) => (
               <Link
                 key={contact.id}
-                href={`/contacts/${contact.id}`}
+                href={`/dashboard/contacts/${contact.id}`}
                 className="flex items-center gap-4 px-6 py-3.5 hover:bg-slate-50 transition-colors"
               >
                 {/* Avatar */}
@@ -143,7 +143,7 @@ export default async function DashboardPage() {
             Add YC founders, SF operators, mentors, and investors you want to connect with.
           </p>
           <Link
-            href="/contacts"
+            href="/dashboard/contacts"
             className="inline-flex items-center gap-2 bg-indigo-600 text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors"
           >
             Add your first contact →

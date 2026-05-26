@@ -172,7 +172,7 @@ export default function ContactsPage() {
                   </td>
                   <td className="px-4 py-3.5">
                     <Link
-                      href={`/contacts/${contact.id}`}
+                      href={`/dashboard/contacts/${contact.id}`}
                       className="text-xs text-indigo-600 opacity-0 group-hover:opacity-100 hover:text-indigo-700 font-medium transition-opacity"
                     >
                       Open →

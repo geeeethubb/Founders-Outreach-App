@@ -16,7 +16,7 @@ const NAV_ITEMS = [
     ),
   },
   {
-    href: '/contacts',
+    href: '/dashboard/contacts',
     label: 'Contacts',
     icon: (
       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -25,7 +25,7 @@ const NAV_ITEMS = [
     ),
   },
   {
-    href: '/compose',
+    href: '/dashboard/compose',
     label: 'Compose',
     icon: (
       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -34,7 +34,7 @@ const NAV_ITEMS = [
     ),
   },
   {
-    href: '/campaigns',
+    href: '/dashboard/campaigns',
     label: 'Campaigns',
     icon: (
       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -43,7 +43,7 @@ const NAV_ITEMS = [
     ),
   },
   {
-    href: '/conversations',
+    href: '/dashboard/conversations',
     label: 'Conversations',
     icon: (
       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -103,7 +103,7 @@ export default function Sidebar() {
       {/* Quick action */}
       <div className="px-3 pb-2">
         <Link
-          href="/compose"
+          href="/dashboard/compose"
           className="flex items-center justify-center gap-2 w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-lg transition-colors"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
