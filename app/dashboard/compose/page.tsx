@@ -7,10 +7,11 @@ import type { Contact, EmailVariant, EmailStyle } from '@/types'
 import { EMAIL_STYLES } from '@/types'
 
 const GOAL_OPTIONS = [
-  { value: 'speaker',        label: '🎤 Speaker / Event',   desc: 'Invite them to speak at an Illinois Entrepreneurs event' },
-  { value: 'mentor',         label: '🧭 Mentor / Advisor',  desc: 'Ask them to mentor a UIUC student founder' },
-  { value: 'jobs',           label: '💼 Internship / Jobs', desc: 'Connect our top students with their team' },
-  { value: 'investor_intro', label: '💰 Investor Intro',    desc: 'Intro for a student-led startup' },
+  { value: 'speaker',        label: '🎤 Speaker / Event',      desc: 'Invite them to speak at an Illinois Entrepreneurs event' },
+  { value: 'mentor',         label: '🧭 Mentor / Advisor',     desc: 'Ask them to mentor a UIUC student founder' },
+  { value: 'jobs',           label: '💼 Internship / Jobs',    desc: 'Connect our top students with their team' },
+  { value: 'investor_intro', label: '💰 Investor Intro',       desc: 'Intro for a student-led startup' },
+  { value: 'personal_career', label: '🙋 Personal Opportunity', desc: 'Internships, mentorship, or opportunities for yourself' },
 ] as const
 
 type Goal = typeof GOAL_OPTIONS[number]['value']
@@ -447,4 +448,88 @@ export default function ComposePage() {
                     : 'border-slate-200 text-slate-600 hover:border-slate-300'
                 }`}
               >
-                <span className="font-bold">Variant {v.label}
+                <span className="font-bold">Variant {v.label}</span>
+                <span className="text-xs opacity-70 hidden sm:block">
+                  {v.hook_type === 'accomplishment' ? '🏆' : v.hook_type === 'shared_context' ? '🤝' : '💡'}
+                  {' '}{v.hook_type.replace('_', ' ')}
+                </span>
+              </button>
+            ))}
+            {selectedStyles.length === 0 && (
+              <button
+                onClick={() => { setStep('setup'); setVariants([]) }}
+                className="ml-auto text-sm text-slate-400 hover:text-slate-600 px-3"
+              >
+                ← Back
+              </button>
+            )}
+          </div>
+
+          {/* Hook info */}
+          {variants[selectedVariant] && (
+            <div className="bg-blue-50 border border-blue-100 rounded-lg px-4 py-2 text-sm text-blue-700">
+              <strong>Hook used:</strong> {variants[selectedVariant].hook_used}
+            </div>
+          )}
+
+          {/* Editable email */}
+          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-100">
+              <label className="block text-xs font-medium text-slate-500 mb-1">Subject</label>
+              <input
+                value={editedSubject}
+                onChange={(e) => setEditedSubject(e.target.value)}
+                className="w-full text-sm font-medium text-slate-800 focus:outline-none"
+              />
+            </div>
+            <div className="p-5">
+              <label className="block text-xs font-medium text-slate-500 mb-2">Body</label>
+              <textarea
+                value={editedBody}
+                onChange={(e) => setEditedBody(e.target.value)}
+                rows={12}
+                className="w-full text-sm text-slate-700 leading-relaxed focus:outline-none resize-none"
+              />
+              <div className={`text-right text-xs mt-2 ${wordCount > 150 ? 'text-red-500' : 'text-slate-400'}`}>
+                {wordCount} words {wordCount > 150 && '— aim for under 150'}
+              </div>
+            </div>
+          </div>
+
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-lg">{error}</div>
+          )}
+
+          <div className="flex gap-3">
+            <button
+              onClick={generate}
+              disabled={generating}
+              className="px-4 py-2.5 border border-slate-200 text-slate-700 text-sm font-medium rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50"
+            >
+              {generating ? 'Regenerating…' : '↻ Regenerate'}
+            </button>
+            <button
+              onClick={send}
+              disabled={sending || !selectedContact?.email}
+              className="flex-1 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-medium py-2.5 rounded-lg transition-colors"
+            >
+              {sending ? (
+                <>
+                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  Sending…
+                </>
+              ) : !selectedContact?.email ? (
+                '⚠️ Add email address to send'
+              ) : (
+                `Send to ${selectedContact?.name} →`
+              )}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

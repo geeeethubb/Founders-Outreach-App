@@ -28,6 +28,11 @@ const GOAL_CONFIGS: Record<
     ask_guidance:
       'Ask for a brief intro call or connection on behalf of a UIUC student-led startup. The ask: a 20-min call OR an intro to a relevant investor in their network. Be specific about what the startup does.',
   },
+  personal_career: {
+    label: 'Personal Opportunity',
+    ask_guidance:
+      'This is a PERSONAL outreach from the sender — not on behalf of the club. The sender is a UIUC student reaching out for their own career: internships, project collaborations, professional mentorship, or job opportunities. Write in first person as an ambitious student. The ask should be specific and low-commitment: a 20-min coffee chat, a referral, a look at their resume, or an internship inquiry. Highlight the sender\'s own skills, drive, and UIUC background — not the club. Make it feel genuine and personal, not a mass email.',
+  },
 }
 
 function buildSystemPrompt(styles: EmailStyle[]): string {
@@ -182,26 +187,4 @@ function buildUserPrompt(
     research.hooks.forEach((h) => parts.push(`• ${h}`))
   }
 
-  if (research.shared_context && research.shared_context.length > 0) {
-    parts.push(``, `Shared context / connections:`)
-    research.shared_context.forEach((c) => parts.push(`• ${c}`))
-  }
-
-  parts.push(``, `=== OUTREACH GOAL: ${goal.label} ===`)
-  parts.push(goal.ask_guidance)
-
-  if (research.suggested_ask) {
-    parts.push(``, `Suggested specific ask: ${research.suggested_ask}`)
-  }
-
-  parts.push(``, `=== SENDER ===`)
-  parts.push(`Name: ${senderName}`)
-  parts.push(`Club: Founders: Illinois Entrepreneurs @ UIUC`)
-
-  if (customNote) {
-    parts.push(``, `=== ADDITIONAL CONTEXT ===`)
-    parts.push(customNote)
-  }
-
-  return parts.join('\n')
-}
+  if (research.shared_context && r
