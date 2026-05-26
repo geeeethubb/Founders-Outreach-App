@@ -69,7 +69,7 @@ export default function AddContactModal({ userId, onClose }: Props) {
     onClose()
     router.refresh()
     // Navigate to the contact detail page
-    router.push(`/contacts/${data.id}`)
+    router.push(`/dashboard/contacts/${data.id}`)
   }
 
   return (
