@@ -202,12 +202,6 @@ export default function CampaignsPage() {
                   >
                     {campaign.status === 'active' ? 'Pause' : 'Resume'}
                   </button>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
+                  <span className="text-slate-200">|</span>
+                  <button
+                    onClick={asy
