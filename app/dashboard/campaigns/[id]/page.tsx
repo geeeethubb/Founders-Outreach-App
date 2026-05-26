@@ -8,7 +8,7 @@ import type { Campaign, Contact } from '@/types'
 import { STATUS_COLORS, formatRelativeTime } from '@/lib/utils'
 
 interface CampaignContact {
-  id: string
+  campaign_id: string
   contact_id: string
   added_at: string
   contact: Contact
@@ -38,7 +38,7 @@ export default function CampaignDetailPage() {
       supabase.from('campaigns').select('*').eq('id', campaignId).single(),
       supabase
         .from('campaign_contacts')
-        .select('id, contact_id, added_at, contact:contacts(*, research:contact_research(*))')
+        .select('campaign_id, contact_id, added_at, contact:contacts(*, research:contact_research(*))') 
         .eq('campaign_id', campaignId)
         .order('added_at', { ascending: false }),
       supabase
@@ -95,14 +95,14 @@ export default function CampaignDetailPage() {
     setAdding(false)
   }
 
-  async function removeContact(memberId: string, contactId: string) {
+  async function removeContact(contactId: string) {
     setRemoving(contactId)
-    await supabase.from('campaign_contacts').delete().eq('id', memberId)
+    await supabase.from('campaign_contacts').delete().eq('campaign_id', campaignId).eq('contact_id', contactId)
     await supabase
       .from('campaigns')
       .update({ total_contacts: Math.max(0, (campaign?.total_contacts ?? 1) - 1) })
       .eq('id', campaignId)
-    setMembers((prev) => prev.filter((m) => m.id !== memberId))
+    setMembers((prev) => prev.filter((m) => m.contact_id !== contactId))
     setCampaign((prev) => prev ? { ...prev, total_contacts: Math.max(0, prev.total_contacts - 1) } : prev)
     setRemoving(null)
   }
@@ -225,7 +225,7 @@ export default function CampaignDetailPage() {
                         Compose
                       </Link>
                       <button
-                        onClick={() => removeContact(member.id, member.contact_id)}
+                        onClick={() => removeContact(member.contact_id)}
                         disabled={removing === member.contact_id}
                         className="text-xs text-slate-400 hover:text-red-500 disabled:opacity-40 transition-colors"
                       >
@@ -347,6 +347,4 @@ export default function CampaignDetailPage() {
           </div>
         </div>
       )}
-    </div>
-  )
-}
+    </di
