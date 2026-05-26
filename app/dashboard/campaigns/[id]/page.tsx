@@ -4,8 +4,17 @@ import { useEffect, useState, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import type { Campaign, Contact } from '@/types'
+import type { Campaign, Contact, GenerateRequest, EmailStyle } from '@/types'
 import { STATUS_COLORS, formatRelativeTime } from '@/lib/utils'
+import { EMAIL_STYLES } from '@/types'
+
+const GOAL_OPTIONS = [
+  { value: 'speaker',         label: '🎤 Speaker / Event',      desc: 'Invite them to speak at an Illinois Entrepreneurs event' },
+  { value: 'mentor',          label: '🧭 Mentor / Advisor',     desc: 'Ask them to mentor a UIUC student founder' },
+  { value: 'jobs',            label: '💼 Internship / Jobs',    desc: 'Connect our top students with their team' },
+  { value: 'investor_intro',  label: '💰 Investor Intro',       desc: 'Intro for a student-led startup' },
+  { value: 'personal_career', label: '🙋 Personal Opportunity', desc: 'Internships, mentorship, or opportunities for yourself' },
+] as const
 
 interface CampaignContact {
   campaign_id: string
@@ -29,6 +38,38 @@ export default function CampaignDetailPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [adding, setAdding] = useState(false)
   const [removing, setRemoving] = useState<string | null>(null)
+
+  // Generate panel
+  const [genGoal, setGenGoal] = useState<GenerateRequest['outreach_goal']>('jobs')
+  const [genStyles, setGenStyles] = useState<EmailStyle[]>([])
+  const [genNote, setGenNote] = useState('')
+  const [generating, setGenerating] = useState(false)
+  const [genResult, setGenResult] = useState<{ generated: number; skipped: { name: string; reason: string }[] } | null>(null)
+  const [genError, setGenError] = useState('')
+
+  function toggleGenStyle(s: EmailStyle) {
+    setGenStyles((prev) => prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s])
+  }
+
+  async function generateCampaignEmails() {
+    setGenerating(true)
+    setGenResult(null)
+    setGenError('')
+    try {
+      const res = await fetch(`/api/campaigns/${campaignId}/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ outreach_goal: genGoal, styles: genStyles, custom_note: genNote || undefined }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      setGenResult(data)
+    } catch (e) {
+      setGenError(e instanceof Error ? e.message : 'Generation failed')
+    } finally {
+      setGenerating(false)
+    }
+  }
 
   const load = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser()
@@ -241,106 +282,75 @@ export default function CampaignDetailPage() {
         </div>
       )}
 
-      {/* Add Contacts Modal */}
-      {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div
-            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-            onClick={() => setShowAddModal(false)}
-          />
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
-              <div>
-                <h2 className="font-semibold text-slate-900">Add Contacts</h2>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  {available.length} contact{available.length !== 1 ? 's' : ''} available to add
-                </p>
-              </div>
-              <button
-                onClick={() => setShowAddModal(false)}
-                className="text-slate-400 hover:text-slate-600 transition-colors"
-              >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            <div className="px-6 py-3 border-b border-slate-100">
-              <input
-                autoFocus
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search by name, company, or role…"
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              />
-            </div>
-
-            <div className="flex-1 overflow-y-auto">
-              {filtered.length === 0 ? (
-                <div className="p-8 text-center text-slate-400 text-sm">
-                  {available.length === 0
-                    ? 'All your contacts are already in this campaign.'
-                    : 'No contacts match your search.'}
-                </div>
-              ) : (
-                <div className="divide-y divide-slate-100">
-                  {filtered.map((contact) => (
-                    <label
-                      key={contact.id}
-                      className="flex items-center gap-3 px-6 py-3 hover:bg-slate-50 cursor-pointer transition-colors"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selected.has(contact.id)}
-                        onChange={() => toggleSelect(contact.id)}
-                        className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300"
-                      />
-                      <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0">
-                        <span className="text-indigo-600 font-semibold text-xs">
-                          {contact.name.charAt(0).toUpperCase()}
-                        </span>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-slate-800 text-sm truncate">{contact.name}</p>
-                        <p className="text-xs text-slate-400 truncate">
-                          {[contact.role, contact.company].filter(Boolean).join(' @ ') || contact.email || '—'}
-                        </p>
-                      </div>
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${STATUS_COLORS[contact.status] ?? ''}`}>
-                        {contact.status}
-                      </span>
-                    </label>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-slate-50 rounded-b-2xl">
-              <span className="text-sm text-slate-500">
-                {selected.size > 0 ? `${selected.size} selected` : 'Select contacts to add'}
-              </span>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setShowAddModal(false)}
-                  className="px-4 py-2 border border-slate-200 text-slate-600 text-sm rounded-lg hover:bg-white transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={addContacts}
-                  disabled={selected.size === 0 || adding}
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors"
-                >
-                  {adding ? 'Adding…' : `Add ${selected.size > 0 ? selected.size : ''} Contact${selected.size !== 1 ? 's' : ''}`}
-                </button>
-              </div>
-            </div>
+      {/* Generate Emails Panel */}
+      <div className="mt-6 bg-white rounded-xl border border-slate-200 p-6">
+        <div className="flex items-center gap-3 mb-5">
+          <div className="w-8 h-8 bg-violet-100 rounded-lg flex items-center justify-center flex-shrink-0">
+            <svg className="w-4 h-4 text-violet-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+          </div>
+          <div>
+            <h3 className="font-semibold text-slate-800">Generate Campaign Emails</h3>
+            <p className="text-xs text-slate-500">AI drafts a personalized email for every contact in this campaign</p>
           </div>
         </div>
-      )}
-    </div>
-  )
-}
-                                                                                                                                                                                                              
+
+        {/* Goal */}
+        <div className="mb-4">
+          <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Goal</label>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {GOAL_OPTIONS.map((opt) => (
+              <label
+                key={opt.value}
+                className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                  genGoal === opt.value
+                    ? 'border-indigo-400 bg-indigo-50'
+                    : 'border-slate-200 hover:border-slate-300'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="gen-goal"
+                  value={opt.value}
+                  checked={genGoal === opt.value}
+                  onChange={() => setGenGoal(opt.value as GenerateRequest['outreach_goal'])}
+                  className="mt-0.5 text-indigo-600"
+                />
+                <div>
+                  <p className="text-sm font-medium text-slate-800">{opt.label}</p>
+                  <p className="text-xs text-slate-500">{opt.desc}</p>
+                </div>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        {/* Style tags */}
+        <div className="mb-4">
+          <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
+            Style <span className="font-normal text-slate-400">(optional — pick any)</span>
+          </label>
+          <div className="flex flex-wrap gap-2">
+            {EMAIL_STYLES.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => toggleGenStyle(s.id)}
+                className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-colors ${
+                  genStyles.includes(s.id)
+                    ? 'bg-indigo-600 border-indigo-600 text-white'
+                    : 'border-slate-200 text-slate-600 hover:border-indigo-300 hover:text-indigo-600'
+                }`}
+              >
+                {s.emoji} {s.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Custom note */}
+        <div className="mb-5">
+          <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
+            Context for AI <span className="font-normal text-slate-400">(optional)</span>
+       
