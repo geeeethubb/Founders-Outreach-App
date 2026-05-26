@@ -134,7 +134,7 @@ export default async function ContactDetailPage({ params }: Props) {
         {/* Right: Research + Email history */}
         <div className="col-span-2 space-y-5">
           {/* Research */}
-          <ResearchCard contact={contact} onResearchComplete={() => {}} />
+          <ResearchCard contact={contact} />
 
           {/* Email history */}
           {emails && emails.length > 0 && (

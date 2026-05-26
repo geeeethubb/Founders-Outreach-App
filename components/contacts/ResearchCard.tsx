@@ -6,10 +6,9 @@ import { CATEGORY_COLORS, relevanceLabel, relevanceColor } from '@/lib/utils'
 
 interface Props {
   contact: Contact
-  onResearchComplete: (contact: Contact) => void
 }
 
-export default function ResearchCard({ contact, onResearchComplete }: Props) {
+export default function ResearchCard({ contact }: Props) {
   const [loading, setLoading] = useState(false)
   const [pastedBio, setPastedBio] = useState('')
   const [showPaste, setShowPaste] = useState(false)
