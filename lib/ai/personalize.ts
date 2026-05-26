@@ -120,7 +120,7 @@ export async function generateEmailVariants(
   const userPrompt = buildUserPrompt(contact, research, goalConfig, senderName, req.custom_note)
 
   const response = await openai.chat.completions.create({
-    model: 'gpt-4.1',
+    model: 'gpt-4.5-preview',
     messages: [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: userPrompt },
@@ -164,5 +164,4 @@ function buildUserPrompt(
   customNote?: string
 ): string {
   const parts: string[] = [
-    `Generate 3 email variants for this outreach:`,
-    ``
+    `Generate 3 email variants for this outreach:`
