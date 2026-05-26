@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import type { Campaign } from '@/types'
 import { formatRelativeTime } from '@/lib/utils'
@@ -13,6 +14,7 @@ const CAMPAIGN_PRESETS = [
 ]
 
 export default function CampaignsPage() {
+  const router = useRouter()
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [loading, setLoading] = useState(true)
   const [showCreate, setShowCreate] = useState(false)
@@ -176,7 +178,10 @@ export default function CampaignsPage() {
                   {campaign.total_contacts} contacts
                 </span>
                 <div className="flex gap-2 ml-auto">
-                  <button className="text-xs text-indigo-600 hover:text-indigo-700 font-medium">
+                  <button
+                    onClick={() => router.push(`/dashboard/campaigns/${campaign.id}`)}
+                    className="text-xs text-indigo-600 hover:text-indigo-700 font-medium"
+                  >
                     View contacts
                   </button>
                   <span className="text-slate-200">|</span>

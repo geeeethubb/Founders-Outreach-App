@@ -51,7 +51,7 @@ export async function researchContact(req: ResearchRequest): Promise<ResearchRes
     ],
     response_format: { type: 'json_object' },
     temperature: 0.4,
-    max_tokens: 1200,
+    max_completion_tokens: 1200,
   })
 
   const raw = response.choices[0].message.content ?? '{}'
