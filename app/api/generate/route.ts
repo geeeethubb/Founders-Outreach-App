@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
           sent_at: null,
           resend_message_id: null,
           generation_metadata: {
-            model: 'gpt-4.5-preview',
+            model: 'gpt-5.4',
             prompt_version: '1.0',
             hooks_used: [variant.hook_used],
             hook_type: variant.hook_type,
@@ -86,4 +86,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Generation failed' },
       { status: 500 }
-    
+    )
+  }
+}

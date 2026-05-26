@@ -120,7 +120,7 @@ export async function generateEmailVariants(
   const userPrompt = buildUserPrompt(contact, research, goalConfig, senderName, req.custom_note)
 
   const response = await openai.chat.completions.create({
-    model: 'gpt-4.5-preview',
+    model: 'gpt-5.4',
     messages: [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: userPrompt },
@@ -164,4 +164,44 @@ function buildUserPrompt(
   customNote?: string
 ): string {
   const parts: string[] = [
-    `Generate 3 email variants for this outreach:`
+    `Generate 3 email variants for this outreach:`,
+    ``,
+    `=== RECIPIENT ===`,
+    `Name: ${contact.name}`,
+  ]
+
+  if (contact.company) parts.push(`Company: ${contact.company}`)
+  if (contact.role) parts.push(`Role: ${contact.role}`)
+  if (contact.location) parts.push(`Location: ${contact.location}`)
+
+  parts.push(``, `=== RESEARCH SUMMARY ===`)
+  parts.push(research.summary ?? 'No summary available.')
+
+  if (research.hooks && research.hooks.length > 0) {
+    parts.push(``, `Specific hooks to use:`)
+    research.hooks.forEach((h) => parts.push(`• ${h}`))
+  }
+
+  if (research.shared_context && research.shared_context.length > 0) {
+    parts.push(``, `Shared context / connections:`)
+    research.shared_context.forEach((c) => parts.push(`• ${c}`))
+  }
+
+  parts.push(``, `=== OUTREACH GOAL: ${goal.label} ===`)
+  parts.push(goal.ask_guidance)
+
+  if (research.suggested_ask) {
+    parts.push(``, `Suggested specific ask: ${research.suggested_ask}`)
+  }
+
+  parts.push(``, `=== SENDER ===`)
+  parts.push(`Name: ${senderName}`)
+  parts.push(`Club: Founders: Illinois Entrepreneurs @ UIUC`)
+
+  if (customNote) {
+    parts.push(``, `=== ADDITIONAL CONTEXT ===`)
+    parts.push(customNote)
+  }
+
+  return parts.join('\n')
+}

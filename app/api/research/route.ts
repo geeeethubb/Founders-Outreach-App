@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
       relevance_score: result.relevance_score,
       category: result.category,
       suggested_ask: result.suggested_ask,
-      model_used: 'gpt-4.5-preview',
+      model_used: 'gpt-5.4',
     })
 
     if (dbError) {
@@ -50,4 +50,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Research failed' },
       { status: 500 }
-    
+    )
+  }
+}
