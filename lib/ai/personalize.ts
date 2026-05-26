@@ -1,5 +1,6 @@
 import OpenAI from 'openai'
-import type { Contact, ContactResearch, EmailVariant, GenerateRequest } from '@/types'
+import type { Contact, ContactResearch, EmailVariant, GenerateRequest, EmailStyle } from '@/types'
+import { EMAIL_STYLES } from '@/types'
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
@@ -29,7 +30,8 @@ const GOAL_CONFIGS: Record<
   },
 }
 
-const SYSTEM_PROMPT = `
+function buildSystemPrompt(styles: EmailStyle[]): string {
+  const baseRules = `
 You are an expert cold email writer for Founders: Illinois Entrepreneurs at UIUC.
 
 Write 3 DIFFERENT email variants (A, B, C) for the same outreach goal. Each variant should
@@ -38,14 +40,44 @@ open with a DIFFERENT type of hook:
 - Variant B: Hook on SHARED CONTEXT (mutual connection, school, region, common interest)
 - Variant C: Hook on VALUE PROP FOR THEM (what's in it for them: impact, network, talent pipeline)
 
-Hard rules for every variant:
+Non-negotiable rules for every variant:
 1. NEVER start with "I hope this email finds you well" or "My name is" — those are immediate deletes
 2. NEVER use vague flattery ("I've been following your journey", "inspiring work")
 3. ALWAYS reference something SPECIFIC about the person in the first sentence
-4. Max 130 words per email (tight = respectful of their time)
-5. One clear CTA at the end — no multiple asks
-6. Sign from: [Your Name], Founders: Illinois Entrepreneurs @ UIUC
-7. Subject line: specific, not clickbait, not generic
+4. One clear CTA at the end — no multiple asks
+5. Sign from: [Your Name], Founders: Illinois Entrepreneurs @ UIUC
+6. Subject line: specific, not clickbait, not generic`.trim()
+
+  // Build style instructions section
+  let styleSection = ''
+  if (styles && styles.length > 0) {
+    const styleConfigs = styles
+      .map((s) => EMAIL_STYLES.find((c) => c.id === s))
+      .filter(Boolean)
+
+    const styleInstructions = styleConfigs
+      .map((c) => `• ${c!.label} (${c!.emoji}): ${c!.promptInstruction}`)
+      .join('\n')
+
+    // Word count adjustments based on styles
+    const hasConcise = styles.includes('concise')
+    const hasInformal = styles.includes('informal')
+    const wordLimit = hasConcise ? '60–80 words' : '100–130 words'
+
+    styleSection = `
+
+=== WRITING STYLE INSTRUCTIONS ===
+The user has selected these style preferences. Apply ALL of them simultaneously to every variant:
+
+${styleInstructions}
+
+Word count target for these styles: ${wordLimit}
+These style rules OVERRIDE default tone but do NOT override the hook/personalization requirements above.`
+  } else {
+    styleSection = `\n\nDefault style: conversational but professional, 100–130 words per variant.`
+  }
+
+  const outputFormat = `
 
 Return ONLY valid JSON:
 {
@@ -72,8 +104,10 @@ Return ONLY valid JSON:
       "hook_used": "..."
     }
   ]
+}`
+
+  return baseRules + styleSection + outputFormat
 }
-`.trim()
 
 export async function generateEmailVariants(
   contact: Contact,
@@ -82,17 +116,17 @@ export async function generateEmailVariants(
   senderName: string
 ): Promise<EmailVariant[]> {
   const goalConfig = GOAL_CONFIGS[req.outreach_goal]
-
+  const systemPrompt = buildSystemPrompt(req.styles ?? [])
   const userPrompt = buildUserPrompt(contact, research, goalConfig, senderName, req.custom_note)
 
   const response = await openai.chat.completions.create({
     model: 'gpt-4.1',
     messages: [
-      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'system', content: systemPrompt },
       { role: 'user', content: userPrompt },
     ],
     response_format: { type: 'json_object' },
-    temperature: 0.8, // more creative for email generation
+    temperature: 0.8,
     max_tokens: 1800,
   })
 
@@ -131,43 +165,4 @@ function buildUserPrompt(
 ): string {
   const parts: string[] = [
     `Generate 3 email variants for this outreach:`,
-    ``,
-    `=== RECIPIENT ===`,
-    `Name: ${contact.name}`,
-  ]
-
-  if (contact.company) parts.push(`Company: ${contact.company}`)
-  if (contact.role) parts.push(`Role: ${contact.role}`)
-  if (contact.location) parts.push(`Location: ${contact.location}`)
-
-  parts.push(``, `=== RESEARCH SUMMARY ===`)
-  parts.push(research.summary ?? 'No summary available.')
-
-  if (research.hooks && research.hooks.length > 0) {
-    parts.push(``, `Specific hooks to use:`)
-    research.hooks.forEach((h) => parts.push(`• ${h}`))
-  }
-
-  if (research.shared_context && research.shared_context.length > 0) {
-    parts.push(``, `Shared context / connections:`)
-    research.shared_context.forEach((c) => parts.push(`• ${c}`))
-  }
-
-  parts.push(``, `=== OUTREACH GOAL: ${goal.label} ===`)
-  parts.push(goal.ask_guidance)
-
-  if (research.suggested_ask) {
-    parts.push(``, `Suggested specific ask: ${research.suggested_ask}`)
-  }
-
-  parts.push(``, `=== SENDER ===`)
-  parts.push(`Name: ${senderName}`)
-  parts.push(`Club: Founders: Illinois Entrepreneurs @ UIUC`)
-
-  if (customNote) {
-    parts.push(``, `=== ADDITIONAL CONTEXT ===`)
-    parts.push(customNote)
-  }
-
-  return parts.join('\n')
-}
+    ``

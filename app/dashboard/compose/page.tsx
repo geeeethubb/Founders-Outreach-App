@@ -3,13 +3,14 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import type { Contact, EmailVariant } from '@/types'
+import type { Contact, EmailVariant, EmailStyle } from '@/types'
+import { EMAIL_STYLES } from '@/types'
 
 const GOAL_OPTIONS = [
-  { value: 'speaker', label: '🎤 Speaker / Event', desc: 'Invite them to speak at an Illinois Entrepreneurs event' },
-  { value: 'mentor', label: '🧭 Mentor / Advisor', desc: 'Ask them to mentor a UIUC student founder' },
-  { value: 'jobs', label: '💼 Internship / Jobs', desc: 'Connect our top students with their team' },
-  { value: 'investor_intro', label: '💰 Investor Intro', desc: 'Intro for a student-led startup' },
+  { value: 'speaker',        label: '🎤 Speaker / Event',   desc: 'Invite them to speak at an Illinois Entrepreneurs event' },
+  { value: 'mentor',         label: '🧭 Mentor / Advisor',  desc: 'Ask them to mentor a UIUC student founder' },
+  { value: 'jobs',           label: '💼 Internship / Jobs', desc: 'Connect our top students with their team' },
+  { value: 'investor_intro', label: '💰 Investor Intro',    desc: 'Intro for a student-led startup' },
 ] as const
 
 type Goal = typeof GOAL_OPTIONS[number]['value']
@@ -23,6 +24,7 @@ export default function ComposePage() {
   const [selectedContactId, setSelectedContactId] = useState(preselectedContactId ?? '')
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null)
   const [goal, setGoal] = useState<Goal>('speaker')
+  const [selectedStyles, setSelectedStyles] = useState<EmailStyle[]>([])
   const [customNote, setCustomNote] = useState('')
   const [variants, setVariants] = useState<(EmailVariant & { email_id: string })[]>([])
   const [selectedVariant, setSelectedVariant] = useState(0)
@@ -45,7 +47,6 @@ export default function ComposePage() {
         .from('contacts')
         .select('*, research:contact_research(*)')
         .eq('user_id', user.id)
-        .in('status', ['researched', 'drafted', 'new', 'sent'])
         .order('created_at', { ascending: false })
 
       setContacts((data as Contact[]) ?? [])
@@ -65,13 +66,18 @@ export default function ComposePage() {
     setStep('setup')
   }, [selectedContactId, contacts])
 
-  // Sync editable fields when switching variants
   useEffect(() => {
     if (variants[selectedVariant]) {
       setEditedSubject(variants[selectedVariant].subject)
       setEditedBody(variants[selectedVariant].body)
     }
   }, [selectedVariant, variants])
+
+  function toggleStyle(style: EmailStyle) {
+    setSelectedStyles((prev) =>
+      prev.includes(style) ? prev.filter((s) => s !== style) : [...prev, style]
+    )
+  }
 
   async function generate() {
     if (!selectedContactId) return
@@ -84,6 +90,7 @@ export default function ComposePage() {
         body: JSON.stringify({
           contact_id: selectedContactId,
           outreach_goal: goal,
+          styles: selectedStyles,
           custom_note: customNote || undefined,
         }),
       })
@@ -144,12 +151,7 @@ export default function ComposePage() {
           </p>
           <div className="flex gap-3 justify-center">
             <button
-              onClick={() => {
-                setSendSuccess(false)
-                setStep('setup')
-                setVariants([])
-                setSelectedContactId('')
-              }}
+              onClick={() => { setSendSuccess(false); setStep('setup'); setVariants([]); setSelectedContactId('') }}
               className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors"
             >
               Send Another
@@ -198,10 +200,11 @@ export default function ComposePage() {
         })}
       </div>
 
-      {/* Step 1: Setup */}
+      {/* ── Step 1: Setup ── */}
       {step === 'setup' && (
         <div className="grid grid-cols-2 gap-6">
           <div className="space-y-5">
+
             {/* Contact selector */}
             <div className="bg-white rounded-xl border border-slate-200 p-5">
               <label className="block text-sm font-medium text-slate-700 mb-3">
@@ -219,16 +222,10 @@ export default function ComposePage() {
                   </option>
                 ))}
               </select>
-              {contacts.length === 0 && (
-                <p className="text-xs text-amber-600 mt-2">
-                  No contacts yet.{' '}
-                  <a href="/dashboard/contacts" className="underline">Add one first →</a>
-                </p>
-              )}
               {selectedContact && !selectedContact.research && (
                 <p className="text-xs text-amber-600 mt-2">
-                  ⚠️ This contact hasn't been researched. The email will be less personalized.{' '}
-                  <a href={`/contacts/${selectedContact.id}`} className="underline">Research them first →</a>
+                  ⚠️ Not researched yet — email will be less personalized.{' '}
+                  <a href={`/dashboard/contacts/${selectedContact.id}`} className="underline">Research first →</a>
                 </p>
               )}
             </div>
@@ -236,22 +233,18 @@ export default function ComposePage() {
             {/* Goal selector */}
             <div className="bg-white rounded-xl border border-slate-200 p-5">
               <label className="block text-sm font-medium text-slate-700 mb-3">
-                What's the goal of this outreach?
+                What's the goal?
               </label>
               <div className="space-y-2">
                 {GOAL_OPTIONS.map((opt) => (
                   <label
                     key={opt.value}
                     className={`flex items-start gap-3 p-3 rounded-lg border-2 cursor-pointer transition-colors ${
-                      goal === opt.value
-                        ? 'border-indigo-500 bg-indigo-50'
-                        : 'border-slate-200 hover:border-slate-300'
+                      goal === opt.value ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200 hover:border-slate-300'
                     }`}
                   >
                     <input
-                      type="radio"
-                      name="goal"
-                      value={opt.value}
+                      type="radio" name="goal" value={opt.value}
                       checked={goal === opt.value}
                       onChange={() => setGoal(opt.value)}
                       className="mt-0.5 accent-indigo-600"
@@ -265,6 +258,66 @@ export default function ComposePage() {
               </div>
             </div>
 
+            {/* ── Style tags ── */}
+            <div className="bg-white rounded-xl border border-slate-200 p-5">
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-sm font-medium text-slate-700">
+                  Writing Style
+                </label>
+                {selectedStyles.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedStyles([])}
+                    className="text-xs text-slate-400 hover:text-slate-600 transition-colors"
+                  >
+                    Clear all
+                  </button>
+                )}
+              </div>
+              <p className="text-xs text-slate-400 mb-3">
+                Pick any combination — the AI applies all selected styles at once
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {EMAIL_STYLES.map((style) => {
+                  const active = selectedStyles.includes(style.id)
+                  return (
+                    <button
+                      key={style.id}
+                      type="button"
+                      onClick={() => toggleStyle(style.id)}
+                      title={style.description}
+                      className={`group relative flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border-2 transition-all ${
+                        active
+                          ? 'border-indigo-500 bg-indigo-50 text-indigo-700 shadow-sm'
+                          : 'border-slate-200 text-slate-600 hover:border-indigo-300 hover:text-indigo-600'
+                      }`}
+                    >
+                      <span>{style.emoji}</span>
+                      <span>{style.label}</span>
+                      {active && (
+                        <span className="ml-0.5 text-indigo-400">✓</span>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+              {selectedStyles.length > 0 && (
+                <div className="mt-3 pt-3 border-t border-slate-100">
+                  <p className="text-xs text-slate-500 font-medium mb-1">Active styles:</p>
+                  <div className="space-y-1">
+                    {selectedStyles.map((id) => {
+                      const s = EMAIL_STYLES.find((e) => e.id === id)!
+                      return (
+                        <p key={id} className="text-xs text-slate-500">
+                          {s.emoji} <strong>{s.label}:</strong> {s.description}
+                        </p>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Custom note */}
             <div className="bg-white rounded-xl border border-slate-200 p-5">
               <label className="block text-sm font-medium text-slate-700 mb-2">
@@ -273,7 +326,7 @@ export default function ComposePage() {
               <textarea
                 value={customNote}
                 onChange={(e) => setCustomNote(e.target.value)}
-                placeholder="E.g., 'We're hosting a speaker event Feb 15th', 'The student founder is working on a fintech startup', 'We have 3 strong engineers to introduce'…"
+                placeholder="E.g., 'We're hosting a speaker event Feb 15th', 'The student founder is working on a fintech startup'…"
                 rows={3}
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
               />
@@ -296,10 +349,17 @@ export default function ComposePage() {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                   </svg>
-                  Generating 3 variants…
+                  Generating {selectedStyles.length > 0 ? `(${selectedStyles.length} style${selectedStyles.length > 1 ? 's' : ''} applied)` : '3 variants'}…
                 </>
               ) : (
-                <>✨ Generate AI Email Variants</>
+                <>
+                  ✨ Generate AI Email Variants
+                  {selectedStyles.length > 0 && (
+                    <span className="ml-1 text-indigo-200 text-xs">
+                      · {selectedStyles.map((s) => EMAIL_STYLES.find((e) => e.id === s)?.emoji).join('')}
+                    </span>
+                  )}
+                </>
               )}
             </button>
           </div>
@@ -307,9 +367,7 @@ export default function ComposePage() {
           {/* Right: Contact preview */}
           {selectedContact && (
             <div className="bg-white rounded-xl border border-slate-200 p-5">
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-4">
-                Contact Preview
-              </p>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-4">Contact Preview</p>
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center">
                   <span className="text-indigo-600 font-bold">{selectedContact.name.charAt(0)}</span>
@@ -321,13 +379,10 @@ export default function ComposePage() {
                   </p>
                 </div>
               </div>
-
               {selectedContact.research ? (
                 <div className="space-y-3">
                   {selectedContact.research.summary && (
-                    <p className="text-sm text-slate-600 leading-relaxed">
-                      {selectedContact.research.summary}
-                    </p>
+                    <p className="text-sm text-slate-600 leading-relaxed">{selectedContact.research.summary}</p>
                   )}
                   {selectedContact.research.hooks && selectedContact.research.hooks.length > 0 && (
                     <div>
@@ -345,10 +400,8 @@ export default function ComposePage() {
               ) : (
                 <div className="text-center py-4">
                   <p className="text-sm text-slate-400 mb-2">No research yet</p>
-                  <a
-                    href={`/contacts/${selectedContact.id}`}
-                    className="text-xs text-indigo-600 hover:text-indigo-700"
-                  >
+                  <a href={`/dashboard/contacts/${selectedContact.id}`}
+                    className="text-xs text-indigo-600 hover:text-indigo-700">
                     Run AI research first for better results →
                   </a>
                 </div>
@@ -358,9 +411,30 @@ export default function ComposePage() {
         </div>
       )}
 
-      {/* Step 2: Variants */}
+      {/* ── Step 2: Variants ── */}
       {step === 'variants' && variants.length > 0 && (
         <div className="space-y-5">
+          {/* Active styles badge */}
+          {selectedStyles.length > 0 && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs text-slate-500">Styles applied:</span>
+              {selectedStyles.map((id) => {
+                const s = EMAIL_STYLES.find((e) => e.id === id)!
+                return (
+                  <span key={id} className="inline-flex items-center gap-1 text-xs bg-indigo-50 text-indigo-700 border border-indigo-200 px-2 py-0.5 rounded-full font-medium">
+                    {s.emoji} {s.label}
+                  </span>
+                )
+              })}
+              <button
+                onClick={() => { setStep('setup'); setVariants([]) }}
+                className="ml-auto text-xs text-slate-400 hover:text-slate-600"
+              >
+                ← Back
+              </button>
+            </div>
+          )}
+
           {/* Variant tabs */}
           <div className="flex gap-2">
             {variants.map((v, i) => (
@@ -373,90 +447,4 @@ export default function ComposePage() {
                     : 'border-slate-200 text-slate-600 hover:border-slate-300'
                 }`}
               >
-                <span className="font-bold">Variant {v.label}</span>
-                <span className="text-xs opacity-70 hidden sm:block">
-                  {v.hook_type === 'accomplishment' ? '🏆' : v.hook_type === 'shared_context' ? '🤝' : '💡'}
-                  {v.hook_type.replace('_', ' ')}
-                </span>
-              </button>
-            ))}
-            <button
-              onClick={() => { setStep('setup'); setVariants([]) }}
-              className="ml-auto text-sm text-slate-400 hover:text-slate-600 px-3"
-            >
-              ← Back
-            </button>
-          </div>
-
-          {/* Hook info */}
-          {variants[selectedVariant] && (
-            <div className="bg-blue-50 border border-blue-100 rounded-lg px-4 py-2 text-sm text-blue-700">
-              <strong>Hook used:</strong> {variants[selectedVariant].hook_used}
-            </div>
-          )}
-
-          {/* Editable email */}
-          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-            <div className="px-5 py-4 border-b border-slate-100">
-              <label className="block text-xs font-medium text-slate-500 mb-1">Subject</label>
-              <input
-                value={editedSubject}
-                onChange={(e) => setEditedSubject(e.target.value)}
-                className="w-full text-sm font-medium text-slate-800 focus:outline-none"
-                placeholder="Subject line…"
-              />
-            </div>
-            <div className="p-5">
-              <label className="block text-xs font-medium text-slate-500 mb-2">Body</label>
-              <textarea
-                value={editedBody}
-                onChange={(e) => setEditedBody(e.target.value)}
-                rows={12}
-                className="w-full text-sm text-slate-700 leading-relaxed focus:outline-none resize-none"
-                placeholder="Email body…"
-              />
-              <div className={`text-right text-xs mt-2 ${wordCount > 150 ? 'text-red-500' : 'text-slate-400'}`}>
-                {wordCount} words {wordCount > 150 && '— aim for under 150'}
-              </div>
-            </div>
-          </div>
-
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-lg">
-              {error}
-            </div>
-          )}
-
-          <div className="flex gap-3">
-            <button
-              onClick={generate}
-              disabled={generating}
-              className="px-4 py-2.5 border border-slate-200 text-slate-700 text-sm font-medium rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50"
-            >
-              {generating ? 'Regenerating…' : '↻ Regenerate'}
-            </button>
-            <button
-              onClick={send}
-              disabled={sending || !selectedContact?.email}
-              className="flex-1 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-medium py-2.5 rounded-lg transition-colors"
-            >
-              {sending ? (
-                <>
-                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
-                  Sending…
-                </>
-              ) : !selectedContact?.email ? (
-                '⚠️ Add email address to send'
-              ) : (
-                `Send to ${selectedContact?.name} →`
-              )}
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
+                <span className="font-bold">Variant {v.label}
