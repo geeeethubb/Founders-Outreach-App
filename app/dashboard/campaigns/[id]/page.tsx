@@ -38,7 +38,7 @@ export default function CampaignDetailPage() {
       supabase.from('campaigns').select('*').eq('id', campaignId).single(),
       supabase
         .from('campaign_contacts')
-        .select('campaign_id, contact_id, added_at, contact:contacts(*, research:contact_research(*))') 
+        .select('campaign_id, contact_id, added_at, contact:contacts(*, research:contact_research(*))')
         .eq('campaign_id', campaignId)
         .order('added_at', { ascending: false }),
       supabase
@@ -56,7 +56,6 @@ export default function CampaignDetailPage() {
 
   useEffect(() => { load() }, [load])
 
-  // Contacts not yet in this campaign
   const memberIds = new Set(members.map((m) => m.contact_id))
   const available = allContacts.filter((c) => !memberIds.has(c.id))
   const filtered = available.filter((c) =>
@@ -82,12 +81,10 @@ export default function CampaignDetailPage() {
       contact_id,
     }))
     await supabase.from('campaign_contacts').insert(rows)
-    // update total_contacts count
     await supabase
       .from('campaigns')
       .update({ total_contacts: (campaign?.total_contacts ?? 0) + selected.size })
       .eq('id', campaignId)
-
     setSelected(new Set())
     setSearch('')
     setShowAddModal(false)
@@ -97,7 +94,11 @@ export default function CampaignDetailPage() {
 
   async function removeContact(contactId: string) {
     setRemoving(contactId)
-    await supabase.from('campaign_contacts').delete().eq('campaign_id', campaignId).eq('contact_id', contactId)
+    await supabase
+      .from('campaign_contacts')
+      .delete()
+      .eq('campaign_id', campaignId)
+      .eq('contact_id', contactId)
     await supabase
       .from('campaigns')
       .update({ total_contacts: Math.max(0, (campaign?.total_contacts ?? 1) - 1) })
@@ -187,7 +188,7 @@ export default function CampaignDetailPage() {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {members.map((member) => (
-                <tr key={member.id} className="hover:bg-slate-50 transition-colors">
+                <tr key={member.contact_id} className="hover:bg-slate-50 transition-colors">
                   <td className="px-5 py-3.5">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0">
@@ -243,13 +244,10 @@ export default function CampaignDetailPage() {
       {/* Add Contacts Modal */}
       {showAddModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          {/* Backdrop */}
           <div
             className="absolute inset-0 bg-black/40 backdrop-blur-sm"
             onClick={() => setShowAddModal(false)}
           />
-
-          {/* Modal */}
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col">
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
               <div>
@@ -268,7 +266,6 @@ export default function CampaignDetailPage() {
               </button>
             </div>
 
-            {/* Search */}
             <div className="px-6 py-3 border-b border-slate-100">
               <input
                 autoFocus
@@ -280,7 +277,6 @@ export default function CampaignDetailPage() {
               />
             </div>
 
-            {/* Contact list */}
             <div className="flex-1 overflow-y-auto">
               {filtered.length === 0 ? (
                 <div className="p-8 text-center text-slate-400 text-sm">
@@ -321,12 +317,9 @@ export default function CampaignDetailPage() {
               )}
             </div>
 
-            {/* Footer */}
             <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-slate-50 rounded-b-2xl">
               <span className="text-sm text-slate-500">
-                {selected.size > 0
-                  ? `${selected.size} selected`
-                  : 'Select contacts to add'}
+                {selected.size > 0 ? `${selected.size} selected` : 'Select contacts to add'}
               </span>
               <div className="flex gap-2">
                 <button
@@ -347,4 +340,7 @@ export default function CampaignDetailPage() {
           </div>
         </div>
       )}
-    </di
+    </div>
+  )
+}
+                                                                                                                                                                                                              
