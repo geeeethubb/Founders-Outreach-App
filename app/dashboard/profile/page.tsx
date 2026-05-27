@@ -9,6 +9,7 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'basic' | 'career'>('basic')
 
   const [form, setForm] = useState({
@@ -62,9 +63,10 @@ export default function ProfilePage() {
 
   async function save() {
     setSaving(true)
+    setSaveError(null)
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-    await supabase.from('profiles').upsert({
+    if (!user) { setSaving(false); return }
+    const { error } = await supabase.from('profiles').upsert({
       id: user.id,
       name: form.name || null,
       email: form.email || null,
@@ -80,8 +82,12 @@ export default function ProfilePage() {
       personal_context: form.personal_context || null,
     })
     setSaving(false)
-    setSaved(true)
-    setTimeout(() => setSaved(false), 3000)
+    if (error) {
+      setSaveError(error.message)
+    } else {
+      setSaved(true)
+      setTimeout(() => setSaved(false), 3000)
+    }
   }
 
   const tabs = [
@@ -242,7 +248,12 @@ export default function ProfilePage() {
 
         {/* Save button */}
         <div className="flex items-center justify-between pt-2">
-          <p className="text-xs text-slate-400">Changes are saved to your profile and used immediately by the AI</p>
+          <div>
+            <p className="text-xs text-slate-400">Changes are saved to your profile and used immediately by the AI</p>
+            {saveError && (
+              <p className="text-xs text-red-500 mt-1 font-medium">⚠ Save failed: {saveError}</p>
+            )}
+          </div>
           <button
             onClick={save}
             disabled={saving}
@@ -301,14 +312,4 @@ function TextArea({ label, value, onChange, placeholder, rows }: {
 }) {
   return (
     <div>
-      {label && <label className="block text-xs font-medium text-slate-600 mb-1">{label}</label>}
-      <textarea
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        rows={rows ?? 4}
-        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
-      />
-    </div>
-  )
-}
+      {label && <label className="blo

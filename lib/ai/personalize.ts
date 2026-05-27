@@ -35,23 +35,64 @@ const GOAL_CONFIGS: Record<
   },
 }
 
-function buildSystemPrompt(styles: EmailStyle[]): string {
+function buildSystemPrompt(styles: EmailStyle[], senderProfile?: Profile | null, senderName?: string): string {
+  // Build the dynamic signature block
+  const sigName = senderProfile?.name ?? senderName ?? 'Your Name'
+  const sigLines: string[] = ['Sincerely,', sigName]
+  if (senderProfile?.major) sigLines.push(`${senderProfile.major}, UIUC`)
+  if (senderProfile?.role) sigLines.push(senderProfile.role)
+  else sigLines.push('President @ Founders: Illinois Entrepreneurs')
+  // LinkedIn link — rendered as markdown so plainTextToHtml converts it to a real hyperlink
+  const linkedinUrl = senderProfile?.portfolio_url?.includes('linkedin.com')
+    ? senderProfile.portfolio_url
+    : 'https://www.linkedin.com/in/zuyu-liu-58b2b2241/'
+  sigLines.push(`[LinkedIn](${linkedinUrl})`)
+  const signatureBlock = sigLines.join('\n')
+
   const baseRules = `
 You are an expert cold email writer for Founders: Illinois Entrepreneurs at UIUC.
 
-Write 3 DIFFERENT email variants (A, B, C) for the same outreach goal. Each variant should
+Write 3 DIFFERENT email variants (A, B, C) for the same outreach goal. Each variant must
 open with a DIFFERENT type of hook:
 - Variant A: Hook on a SPECIFIC accomplishment (recent launch, funding, product milestone, press)
 - Variant B: Hook on SHARED CONTEXT (mutual connection, school, region, common interest)
 - Variant C: Hook on VALUE PROP FOR THEM (what's in it for them: impact, network, talent pipeline)
 
-Non-negotiable rules for every variant:
-1. NEVER start with "I hope this email finds you well" or "My name is" — those are immediate deletes
-2. NEVER use vague flattery ("I've been following your journey", "inspiring work")
-3. ALWAYS reference something SPECIFIC about the person in the first sentence
-4. One clear CTA at the end — no multiple asks
-5. Sign from: [Your Name], Founders: Illinois Entrepreneurs @ UIUC
-6. Subject line: specific, not clickbait, not generic`.trim()
+════════════════════════════════════════
+MANDATORY 5-PART EMAIL STRUCTURE
+Every variant must follow this EXACT structure in this EXACT order:
+════════════════════════════════════════
+
+1. GREETING: "Hi [First Name],"
+
+2. OPENING + PURPOSE (1–2 sentences):
+   - Open with the hook (specific accomplishment / shared context / value prop)
+   - Then one sentence stating WHY you're reaching out and WHAT you're looking for
+   - NEVER start with "I hope this email finds you well", "My name is", or vague flattery like "inspiring work"
+
+3. ABOUT THEM (1–2 sentences):
+   - Reference something SPECIFIC from their background, company, or recent work
+   - This shows you did your homework — make it feel personal, not copy-pasted
+
+4. ABOUT THE SENDER (1–2 sentences):
+   - Introduce the sender using relevant experience from their profile (LinkedIn/resume)
+   - Highlight what makes the sender credible or relevant TO THIS SPECIFIC RECIPIENT
+   - Draw a real connection between the sender's background and the recipient's world
+   - Do NOT list a generic bio — pick the most relevant 1–2 things from the sender's background
+
+5. THE ASK (1 sentence):
+   - One clear, specific, low-commitment call to action
+   - No multiple asks
+
+6. SIGNATURE (use exactly this format, do not change):
+${signatureBlock}
+
+════════════════════════════════════════
+Non-negotiable rules:
+- Word count: 120–160 words for the body (excluding subject and signature)
+- Subject line: specific, not clickbait, not generic
+- The signature must appear verbatim at the end of every email body
+════════════════════════════════════════`.trim()
 
   // Build style instructions section
   let styleSection = ''
@@ -66,8 +107,7 @@ Non-negotiable rules for every variant:
 
     // Word count adjustments based on styles
     const hasConcise = styles.includes('concise')
-    const hasInformal = styles.includes('informal')
-    const wordLimit = hasConcise ? '60–80 words' : '100–130 words'
+    const wordLimit = hasConcise ? '90–120 words' : '120–160 words'
 
     styleSection = `
 
@@ -76,10 +116,10 @@ The user has selected these style preferences. Apply ALL of them simultaneously 
 
 ${styleInstructions}
 
-Word count target for these styles: ${wordLimit}
-These style rules OVERRIDE default tone but do NOT override the hook/personalization requirements above.`
+Word count target for body (excluding signature): ${wordLimit}
+These style rules OVERRIDE default tone but do NOT override the 5-part structure or hook requirements above.`
   } else {
-    styleSection = `\n\nDefault style: conversational but professional, 100–130 words per variant.`
+    styleSection = `\n\nDefault style: conversational but professional. Body word count (excluding signature): 120–160 words.`
   }
 
   const outputFormat = `
@@ -105,85 +145,4 @@ Return ONLY valid JSON:
       "label": "C",
       "subject": "...",
       "body": "...",
-      "hook_type": "value_prop",
-      "hook_used": "..."
-    }
-  ]
-}`
-
-  return baseRules + styleSection + outputFormat
-}
-
-export async function generateEmailVariants(
-  contact: Contact,
-  research: ContactResearch,
-  req: GenerateRequest,
-  senderName: string,
-  senderProfile?: Profile | null
-): Promise<EmailVariant[]> {
-  const goalConfig = GOAL_CONFIGS[req.outreach_goal]
-  const systemPrompt = buildSystemPrompt(req.styles ?? [])
-  const userPrompt = buildUserPrompt(contact, research, goalConfig, senderName, req.custom_note, senderProfile)
-
-  const response = await openai.chat.completions.create({
-    model: 'gpt-5.4',
-    messages: [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userPrompt },
-    ],
-    response_format: { type: 'json_object' },
-    temperature: 0.8,
-    max_completion_tokens: 1800,
-  })
-
-  const raw = response.choices[0].message.content ?? '{}'
-
-  try {
-    const parsed = JSON.parse(raw) as {
-      variants: Array<{
-        label: string
-        subject: string
-        body: string
-        hook_type: string
-        hook_used: string
-      }>
-    }
-
-    return parsed.variants.map((v) => ({
-      label: v.label as 'A' | 'B' | 'C',
-      subject: v.subject,
-      body: v.body,
-      hook_type: v.hook_type as EmailVariant['hook_type'],
-      hook_used: v.hook_used,
-      word_count: v.body.split(/\s+/).length,
-    }))
-  } catch {
-    throw new Error('Failed to parse email generation response')
-  }
-}
-
-function buildUserPrompt(
-  contact: Contact,
-  research: ContactResearch,
-  goal: (typeof GOAL_CONFIGS)[keyof typeof GOAL_CONFIGS],
-  senderName: string,
-  customNote?: string,
-  senderProfile?: Profile | null
-): string {
-  const parts: string[] = [
-    `Generate 3 email variants for this outreach:`,
-    ``,
-    `=== RECIPIENT ===`,
-    `Name: ${contact.name}`,
-  ]
-
-  if (contact.company) parts.push(`Company: ${contact.company}`)
-  if (contact.role) parts.push(`Role: ${contact.role}`)
-  if (contact.location) parts.push(`Location: ${contact.location}`)
-
-  parts.push(``, `=== RESEARCH SUMMARY ===`)
-  parts.push(research.summary ?? 'No summary available.')
-
-  if (research.hooks && research.hooks.length > 0) {
-    parts.push(``, `Specific hooks to use:`)
-    r
+      "hook_type": "value_
