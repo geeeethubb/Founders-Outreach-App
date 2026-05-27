@@ -16,7 +16,7 @@ const GOAL_CONFIGS: Record<
   mentor: {
     label: 'Mentor / Advisor',
     ask_guidance:
-      'Ask if they would mentor 1–2 UIUC student founders. The ask: a 30-min introductory call to see if there's a fit, with no long-term commitment implied upfront.',
+      "Ask if they would mentor 1–2 UIUC student founders. The ask: a 30-min introductory call to see if there's a fit, with no long-term commitment implied upfront.",
   },
   jobs: {
     label: 'Internship / Jobs',
