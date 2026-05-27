@@ -1,5 +1,5 @@
 import OpenAI from 'openai'
-import type { Contact, ContactResearch, EmailVariant, GenerateRequest, EmailStyle } from '@/types'
+import type { Contact, ContactResearch, EmailVariant, GenerateRequest, EmailStyle, Profile } from '@/types'
 import { EMAIL_STYLES } from '@/types'
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
@@ -118,11 +118,12 @@ export async function generateEmailVariants(
   contact: Contact,
   research: ContactResearch,
   req: GenerateRequest,
-  senderName: string
+  senderName: string,
+  senderProfile?: Profile | null
 ): Promise<EmailVariant[]> {
   const goalConfig = GOAL_CONFIGS[req.outreach_goal]
   const systemPrompt = buildSystemPrompt(req.styles ?? [])
-  const userPrompt = buildUserPrompt(contact, research, goalConfig, senderName, req.custom_note)
+  const userPrompt = buildUserPrompt(contact, research, goalConfig, senderName, req.custom_note, senderProfile)
 
   const response = await openai.chat.completions.create({
     model: 'gpt-5.4',
@@ -166,7 +167,8 @@ function buildUserPrompt(
   research: ContactResearch,
   goal: (typeof GOAL_CONFIGS)[keyof typeof GOAL_CONFIGS],
   senderName: string,
-  customNote?: string
+  customNote?: string,
+  senderProfile?: Profile | null
 ): string {
   const parts: string[] = [
     `Generate 3 email variants for this outreach:`,
@@ -184,7 +186,4 @@ function buildUserPrompt(
 
   if (research.hooks && research.hooks.length > 0) {
     parts.push(``, `Specific hooks to use:`)
-    research.hooks.forEach((h) => parts.push(`• ${h}`))
-  }
-
-  if (research.shared_context && r
+    r

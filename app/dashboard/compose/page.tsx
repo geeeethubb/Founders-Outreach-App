@@ -22,9 +22,14 @@ export default function ComposePage() {
   const preselectedContactId = searchParams.get('contact')
 
   const [contacts, setContacts] = useState<Contact[]>([])
-  const [selectedContactId, setSelectedContactId] = useState(preselectedContactId ?? '')
-  const [selectedContact, setSelectedContact] = useState<Contact | null>(null)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(
+    preselectedContactId ? new Set([preselectedContactId]) : new Set()
+  )
+  const [contactSearch, setContactSearch] = useState('')
   const [goal, setGoal] = useState<Goal>('speaker')
+  // single-contact helpers (kept for the 1-contact variant review flow)
+  const selectedContactId = selectedIds.size === 1 ? [...selectedIds][0] : ''
+  const selectedContact = contacts.find((c) => c.id === selectedContactId) ?? null
   const [selectedStyles, setSelectedStyles] = useState<EmailStyle[]>([])
   const [customNote, setCustomNote] = useState('')
   const [variants, setVariants] = useState<(EmailVariant & { email_id: string })[]>([])
@@ -43,29 +48,15 @@ export default function ComposePage() {
     async function load() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
-
       const { data } = await supabase
         .from('contacts')
         .select('*, research:contact_research(*)')
         .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-
+        .order('name')
       setContacts((data as Contact[]) ?? [])
-
-      if (preselectedContactId) {
-        const c = (data as Contact[])?.find((c) => c.id === preselectedContactId)
-        if (c) setSelectedContact(c)
-      }
     }
     load()
   }, [])
-
-  useEffect(() => {
-    const c = contacts.find((c) => c.id === selectedContactId)
-    setSelectedContact(c ?? null)
-    setVariants([])
-    setStep('setup')
-  }, [selectedContactId, contacts])
 
   useEffect(() => {
     if (variants[selectedVariant]) {
@@ -80,26 +71,54 @@ export default function ComposePage() {
     )
   }
 
+  function toggleContact(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+    setVariants([])
+    setStep('setup')
+  }
+
   async function generate() {
-    if (!selectedContactId) return
+    if (selectedIds.size === 0) return
     setGenerating(true)
     setError('')
     try {
-      const res = await fetch('/api/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contact_id: selectedContactId,
-          outreach_goal: goal,
-          styles: selectedStyles,
-          custom_note: customNote || undefined,
-        }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error)
-      setVariants(data.variants)
-      setSelectedVariant(0)
-      setStep('variants')
+      if (selectedIds.size === 1) {
+        // Single contact — full 3-variant review flow
+        const res = await fetch('/api/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contact_id: selectedContactId,
+            outreach_goal: goal,
+            styles: selectedStyles,
+            custom_note: customNote || undefined,
+          }),
+        })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error)
+        setVariants(data.variants)
+        setSelectedVariant(0)
+        setStep('variants')
+      } else {
+        // Multiple contacts — bulk draft to Drafts page
+        const res = await fetch('/api/generate-multi', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contact_ids: [...selectedIds],
+            outreach_goal: goal,
+            styles: selectedStyles,
+            custom_note: customNote || undefined,
+          }),
+        })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error)
+        router.push(`/dashboard/drafts?generated=${data.generated}`)
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Generation failed')
     } finally {
@@ -206,24 +225,76 @@ export default function ComposePage() {
         <div className="grid grid-cols-2 gap-6">
           <div className="space-y-5">
 
-            {/* Contact selector */}
+            {/* Contact checklist */}
             <div className="bg-white rounded-xl border border-slate-200 p-5">
-              <label className="block text-sm font-medium text-slate-700 mb-3">
-                Who are you reaching out to?
-              </label>
-              <select
-                value={selectedContactId}
-                onChange={(e) => setSelectedContactId(e.target.value)}
-                className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
-              >
-                <option value="">Select a contact…</option>
-                {contacts.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}{c.company ? ` — ${c.company}` : ''}{!c.research ? ' (not researched)' : ''}
-                  </option>
-                ))}
-              </select>
-              {selectedContact && !selectedContact.research && (
+              <div className="flex items-center justify-between mb-3">
+                <label className="block text-sm font-medium text-slate-700">
+                  Who are you reaching out to?
+                </label>
+                {selectedIds.size > 0 && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-medium text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">
+                      {selectedIds.size} selected
+                    </span>
+                    <button
+                      onClick={() => setSelectedIds(new Set())}
+                      className="text-xs text-slate-400 hover:text-slate-600"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                )}
+              </div>
+              {/* Search */}
+              <input
+                type="text"
+                value={contactSearch}
+                onChange={(e) => setContactSearch(e.target.value)}
+                placeholder="Search contacts…"
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 mb-2"
+              />
+              {/* List */}
+              <div className="max-h-52 overflow-y-auto divide-y divide-slate-50 border border-slate-100 rounded-lg">
+                {contacts
+                  .filter((c) =>
+                    contactSearch === '' ||
+                    c.name.toLowerCase().includes(contactSearch.toLowerCase()) ||
+                    (c.company ?? '').toLowerCase().includes(contactSearch.toLowerCase())
+                  )
+                  .map((c) => (
+                    <label
+                      key={c.id}
+                      className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-slate-50 transition-colors ${
+                        selectedIds.has(c.id) ? 'bg-indigo-50' : ''
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(c.id)}
+                        onChange={() => toggleContact(c.id)}
+                        className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-slate-800 truncate">{c.name}</p>
+                        <p className="text-xs text-slate-400 truncate">
+                          {[c.role, c.company].filter(Boolean).join(' @ ') || '—'}
+                        </p>
+                      </div>
+                      {!c.research && (
+                        <span className="text-xs text-amber-500 flex-shrink-0">no research</span>
+                      )}
+                    </label>
+                  ))}
+                {contacts.length === 0 && (
+                  <p className="px-3 py-4 text-sm text-slate-400 text-center">No contacts yet</p>
+                )}
+              </div>
+              {selectedIds.size > 1 && (
+                <p className="text-xs text-indigo-600 mt-2">
+                  ✦ {selectedIds.size} contacts selected — emails will be drafted for all and sent to your Drafts inbox
+                </p>
+              )}
+              {selectedContact && !selectedContact.research && selectedIds.size === 1 && (
                 <p className="text-xs text-amber-600 mt-2">
                   ⚠️ Not researched yet — email will be less personalized.{' '}
                   <a href={`/dashboard/contacts/${selectedContact.id}`} className="underline">Research first →</a>
@@ -341,7 +412,7 @@ export default function ComposePage() {
 
             <button
               onClick={generate}
-              disabled={!selectedContactId || generating}
+              disabled={selectedIds.size === 0 || generating}
               className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-medium py-3 rounded-xl transition-colors"
             >
               {generating ? (
@@ -452,84 +523,4 @@ export default function ComposePage() {
                 <span className="text-xs opacity-70 hidden sm:block">
                   {v.hook_type === 'accomplishment' ? '🏆' : v.hook_type === 'shared_context' ? '🤝' : '💡'}
                   {' '}{v.hook_type.replace('_', ' ')}
-                </span>
-              </button>
-            ))}
-            {selectedStyles.length === 0 && (
-              <button
-                onClick={() => { setStep('setup'); setVariants([]) }}
-                className="ml-auto text-sm text-slate-400 hover:text-slate-600 px-3"
-              >
-                ← Back
-              </button>
-            )}
-          </div>
-
-          {/* Hook info */}
-          {variants[selectedVariant] && (
-            <div className="bg-blue-50 border border-blue-100 rounded-lg px-4 py-2 text-sm text-blue-700">
-              <strong>Hook used:</strong> {variants[selectedVariant].hook_used}
-            </div>
-          )}
-
-          {/* Editable email */}
-          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-            <div className="px-5 py-4 border-b border-slate-100">
-              <label className="block text-xs font-medium text-slate-500 mb-1">Subject</label>
-              <input
-                value={editedSubject}
-                onChange={(e) => setEditedSubject(e.target.value)}
-                className="w-full text-sm font-medium text-slate-800 focus:outline-none"
-              />
-            </div>
-            <div className="p-5">
-              <label className="block text-xs font-medium text-slate-500 mb-2">Body</label>
-              <textarea
-                value={editedBody}
-                onChange={(e) => setEditedBody(e.target.value)}
-                rows={12}
-                className="w-full text-sm text-slate-700 leading-relaxed focus:outline-none resize-none"
-              />
-              <div className={`text-right text-xs mt-2 ${wordCount > 150 ? 'text-red-500' : 'text-slate-400'}`}>
-                {wordCount} words {wordCount > 150 && '— aim for under 150'}
-              </div>
-            </div>
-          </div>
-
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-lg">{error}</div>
-          )}
-
-          <div className="flex gap-3">
-            <button
-              onClick={generate}
-              disabled={generating}
-              className="px-4 py-2.5 border border-slate-200 text-slate-700 text-sm font-medium rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50"
-            >
-              {generating ? 'Regenerating…' : '↻ Regenerate'}
-            </button>
-            <button
-              onClick={send}
-              disabled={sending || !selectedContact?.email}
-              className="flex-1 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-medium py-2.5 rounded-lg transition-colors"
-            >
-              {sending ? (
-                <>
-                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
-                  Sending…
-                </>
-              ) : !selectedContact?.email ? (
-                '⚠️ Add email address to send'
-              ) : (
-                `Send to ${selectedContact?.name} →`
-              )}
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
+                

@@ -139,6 +139,13 @@ export interface Profile {
   company: string | null
   role: string | null
   goals: string[] | null
+  // Personal context for AI-assisted career outreach
+  linkedin_bio_text: string | null
+  resume_text: string | null
+  portfolio_url: string | null
+  personal_context: string | null
+  graduation_year: string | null
+  major: string | null
   created_at: string
 }
 
@@ -326,13 +333,4 @@ export interface SendRequest {
   schedule_at?: string
 }
 
-// ─── UI State Types ───────────────────────────────────────────────────────────
-
-export interface DashboardStats {
-  total_contacts: number
-  researched: number
-  emails_sent: number
-  replies: number
-  meetings: number
-  reply_rate: number
-}
+// ─── UI State Types ──────────────────────────────────

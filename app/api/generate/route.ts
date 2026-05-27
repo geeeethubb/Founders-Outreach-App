@@ -44,7 +44,8 @@ export async function POST(request: NextRequest) {
       contact,
       contact.research,
       body,
-      senderName
+      senderName,
+      profile
     )
 
     // Persist all variants as draft emails
