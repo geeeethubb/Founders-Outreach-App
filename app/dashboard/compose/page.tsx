@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import type { Contact, EmailVariant, EmailStyle } from '@/types'
+import type { Contact, EmailVariant, EmailStyle, Template } from '@/types'
 import { EMAIL_STYLES } from '@/types'
 
 const GOAL_OPTIONS = [
@@ -15,6 +15,7 @@ const GOAL_OPTIONS = [
 ] as const
 
 type Goal = typeof GOAL_OPTIONS[number]['value']
+type Mode = 'template' | 'fresh'
 
 export default function ComposePage() {
   const searchParams = useSearchParams()
@@ -22,14 +23,19 @@ export default function ComposePage() {
   const preselectedContactId = searchParams.get('contact')
 
   const [contacts, setContacts] = useState<Contact[]>([])
+  const [templates, setTemplates] = useState<Template[]>([])
   const [selectedIds, setSelectedIds] = useState<Set<string>>(
     preselectedContactId ? new Set([preselectedContactId]) : new Set()
   )
   const [contactSearch, setContactSearch] = useState('')
   const [goal, setGoal] = useState<Goal>('speaker')
-  // single-contact helpers (kept for the 1-contact variant review flow)
+  const [mode, setMode] = useState<Mode>('template')
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('')
+
+  // single-contact helpers
   const selectedContactId = selectedIds.size === 1 ? [...selectedIds][0] : ''
   const selectedContact = contacts.find((c) => c.id === selectedContactId) ?? null
+
   const [selectedStyles, setSelectedStyles] = useState<EmailStyle[]>([])
   const [customNote, setCustomNote] = useState('')
   const [variants, setVariants] = useState<(EmailVariant & { email_id: string })[]>([])
@@ -41,6 +47,7 @@ export default function ComposePage() {
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
   const [sendSuccess, setSendSuccess] = useState(false)
+  const [sentContactName, setSentContactName] = useState('')
 
   const supabase = createClient()
 
@@ -48,12 +55,15 @@ export default function ComposePage() {
     async function load() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
-      const { data } = await supabase
-        .from('contacts')
-        .select('*, research:contact_research(*)')
-        .eq('user_id', user.id)
-        .order('name')
-      setContacts((data as Contact[]) ?? [])
+      const [{ data: contactData }, { data: templateData }] = await Promise.all([
+        supabase.from('contacts').select('*, research:contact_research(*)').eq('user_id', user.id).order('name'),
+        supabase.from('templates').select('*').eq('user_id', user.id).eq('is_active', true).order('created_at', { ascending: false }),
+      ])
+      setContacts((contactData as Contact[]) ?? [])
+      setTemplates((templateData as Template[]) ?? [])
+      if (templateData && templateData.length > 0) {
+        setSelectedTemplateId(templateData[0].id)
+      }
     }
     load()
   }, [])
@@ -83,19 +93,23 @@ export default function ComposePage() {
 
   async function generate() {
     if (selectedIds.size === 0) return
+    if (mode === 'template' && !selectedTemplateId) {
+      setError('Please select a template first, or switch to Generate Fresh mode.')
+      return
+    }
     setGenerating(true)
     setError('')
     try {
       if (selectedIds.size === 1) {
-        // Single contact — full 3-variant review flow
         const res = await fetch('/api/generate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             contact_id: selectedContactId,
             outreach_goal: goal,
-            styles: selectedStyles,
+            styles: mode === 'fresh' ? selectedStyles : undefined,
             custom_note: customNote || undefined,
+            template_id: mode === 'template' ? selectedTemplateId : undefined,
           }),
         })
         const data = await res.json()
@@ -104,15 +118,15 @@ export default function ComposePage() {
         setSelectedVariant(0)
         setStep('variants')
       } else {
-        // Multiple contacts — bulk draft to Drafts page
         const res = await fetch('/api/generate-multi', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             contact_ids: [...selectedIds],
             outreach_goal: goal,
-            styles: selectedStyles,
+            styles: mode === 'fresh' ? selectedStyles : undefined,
             custom_note: customNote || undefined,
+            template_id: mode === 'template' ? selectedTemplateId : undefined,
           }),
         })
         const data = await res.json()
@@ -129,7 +143,7 @@ export default function ComposePage() {
   async function send() {
     if (!selectedContact || !variants[selectedVariant]) return
     if (!selectedContact.email) {
-      setError("This contact doesn't have an email address yet. Add it on their profile page.")
+      setError("This contact doesn't have an email address. Add it on their profile page.")
       return
     }
     setSending(true)
@@ -148,6 +162,7 @@ export default function ComposePage() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
+      setSentContactName(selectedContact.name)
       setSendSuccess(true)
       setStep('send')
     } catch (e) {
@@ -158,6 +173,7 @@ export default function ComposePage() {
   }
 
   const wordCount = editedBody.split(/\s+/).filter(Boolean).length
+  const selectedTemplate = templates.find((t) => t.id === selectedTemplateId)
 
   if (sendSuccess) {
     return (
@@ -166,12 +182,11 @@ export default function ComposePage() {
           <div className="text-5xl mb-4">🚀</div>
           <h2 className="text-2xl font-semibold text-slate-900 mb-2">Email Sent!</h2>
           <p className="text-slate-500 mb-6">
-            Your outreach to <strong>{selectedContact?.name}</strong> is on its way.
-            You'll be notified when they open or reply.
+            Your outreach to <strong>{sentContactName}</strong> is on its way.
           </p>
           <div className="flex gap-3 justify-center">
             <button
-              onClick={() => { setSendSuccess(false); setStep('setup'); setVariants([]); setSelectedContactId('') }}
+              onClick={() => { setSendSuccess(false); setStep('setup'); setVariants([]); setSelectedIds(new Set()) }}
               className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors"
             >
               Send Another
@@ -192,28 +207,22 @@ export default function ComposePage() {
     <div className="p-8 max-w-5xl">
       <div className="mb-6">
         <h1 className="text-2xl font-semibold text-slate-900">Compose Outreach</h1>
-        <p className="text-slate-500 text-sm mt-1">
-          AI-powered, personalized emails for your Illinois Entrepreneurs outreach
-        </p>
+        <p className="text-slate-500 text-sm mt-1">AI-powered, personalized emails for your outreach</p>
       </div>
 
       {/* Step indicator */}
       <div className="flex items-center gap-2 mb-8">
-        {['Setup', 'AI Variants', 'Review & Send'].map((label, i) => {
+        {['Setup', mode === 'template' ? 'Preview & Edit' : 'AI Variants', 'Review & Send'].map((label, i) => {
           const steps = ['setup', 'variants', 'send']
           const current = steps.indexOf(step)
           return (
             <div key={label} className="flex items-center gap-2">
               <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${
-                i < current ? 'bg-indigo-600 text-white' :
-                i === current ? 'bg-indigo-600 text-white' :
-                'bg-slate-200 text-slate-500'
+                i <= current ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-500'
               }`}>
                 {i < current ? '✓' : i + 1}
               </div>
-              <span className={`text-sm ${i === current ? 'font-medium text-slate-800' : 'text-slate-400'}`}>
-                {label}
-              </span>
+              <span className={`text-sm ${i === current ? 'font-medium text-slate-800' : 'text-slate-400'}`}>{label}</span>
               {i < 2 && <div className="w-8 h-px bg-slate-200 mx-1" />}
             </div>
           )
@@ -228,24 +237,16 @@ export default function ComposePage() {
             {/* Contact checklist */}
             <div className="bg-white rounded-xl border border-slate-200 p-5">
               <div className="flex items-center justify-between mb-3">
-                <label className="block text-sm font-medium text-slate-700">
-                  Who are you reaching out to?
-                </label>
+                <label className="block text-sm font-medium text-slate-700">Who are you reaching out to?</label>
                 {selectedIds.size > 0 && (
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-medium text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">
                       {selectedIds.size} selected
                     </span>
-                    <button
-                      onClick={() => setSelectedIds(new Set())}
-                      className="text-xs text-slate-400 hover:text-slate-600"
-                    >
-                      Clear
-                    </button>
+                    <button onClick={() => setSelectedIds(new Set())} className="text-xs text-slate-400 hover:text-slate-600">Clear</button>
                   </div>
                 )}
               </div>
-              {/* Search */}
               <input
                 type="text"
                 value={contactSearch}
@@ -253,74 +254,33 @@ export default function ComposePage() {
                 placeholder="Search contacts…"
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 mb-2"
               />
-              {/* List */}
               <div className="max-h-52 overflow-y-auto divide-y divide-slate-50 border border-slate-100 rounded-lg">
                 {contacts
-                  .filter((c) =>
-                    contactSearch === '' ||
-                    c.name.toLowerCase().includes(contactSearch.toLowerCase()) ||
-                    (c.company ?? '').toLowerCase().includes(contactSearch.toLowerCase())
-                  )
+                  .filter((c) => contactSearch === '' || c.name.toLowerCase().includes(contactSearch.toLowerCase()) || (c.company ?? '').toLowerCase().includes(contactSearch.toLowerCase()))
                   .map((c) => (
-                    <label
-                      key={c.id}
-                      className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-slate-50 transition-colors ${
-                        selectedIds.has(c.id) ? 'bg-indigo-50' : ''
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.has(c.id)}
-                        onChange={() => toggleContact(c.id)}
-                        className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300"
-                      />
+                    <label key={c.id} className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-slate-50 transition-colors ${selectedIds.has(c.id) ? 'bg-indigo-50' : ''}`}>
+                      <input type="checkbox" checked={selectedIds.has(c.id)} onChange={() => toggleContact(c.id)} className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300" />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-slate-800 truncate">{c.name}</p>
-                        <p className="text-xs text-slate-400 truncate">
-                          {[c.role, c.company].filter(Boolean).join(' @ ') || '—'}
-                        </p>
+                        <p className="text-xs text-slate-400 truncate">{[c.role, c.company].filter(Boolean).join(' @ ') || '—'}</p>
                       </div>
-                      {!c.research && (
-                        <span className="text-xs text-amber-500 flex-shrink-0">no research</span>
-                      )}
+                      {!c.research && <span className="text-xs text-amber-500 flex-shrink-0">no research</span>}
                     </label>
                   ))}
-                {contacts.length === 0 && (
-                  <p className="px-3 py-4 text-sm text-slate-400 text-center">No contacts yet</p>
-                )}
+                {contacts.length === 0 && <p className="px-3 py-4 text-sm text-slate-400 text-center">No contacts yet</p>}
               </div>
               {selectedIds.size > 1 && (
-                <p className="text-xs text-indigo-600 mt-2">
-                  ✦ {selectedIds.size} contacts selected — emails will be drafted for all and sent to your Drafts inbox
-                </p>
-              )}
-              {selectedContact && !selectedContact.research && selectedIds.size === 1 && (
-                <p className="text-xs text-amber-600 mt-2">
-                  ⚠️ Not researched yet — email will be less personalized.{' '}
-                  <a href={`/dashboard/contacts/${selectedContact.id}`} className="underline">Research first →</a>
-                </p>
+                <p className="text-xs text-indigo-600 mt-2">✦ {selectedIds.size} contacts — drafts will be saved to Draft Emails</p>
               )}
             </div>
 
             {/* Goal selector */}
             <div className="bg-white rounded-xl border border-slate-200 p-5">
-              <label className="block text-sm font-medium text-slate-700 mb-3">
-                What's the goal?
-              </label>
+              <label className="block text-sm font-medium text-slate-700 mb-3">What's the goal?</label>
               <div className="space-y-2">
                 {GOAL_OPTIONS.map((opt) => (
-                  <label
-                    key={opt.value}
-                    className={`flex items-start gap-3 p-3 rounded-lg border-2 cursor-pointer transition-colors ${
-                      goal === opt.value ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200 hover:border-slate-300'
-                    }`}
-                  >
-                    <input
-                      type="radio" name="goal" value={opt.value}
-                      checked={goal === opt.value}
-                      onChange={() => setGoal(opt.value)}
-                      className="mt-0.5 accent-indigo-600"
-                    />
+                  <label key={opt.value} className={`flex items-start gap-3 p-3 rounded-lg border-2 cursor-pointer transition-colors ${goal === opt.value ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200 hover:border-slate-300'}`}>
+                    <input type="radio" name="goal" value={opt.value} checked={goal === opt.value} onChange={() => setGoal(opt.value)} className="mt-0.5 accent-indigo-600" />
                     <div>
                       <p className="text-sm font-medium text-slate-800">{opt.label}</p>
                       <p className="text-xs text-slate-500">{opt.desc}</p>
@@ -330,59 +290,78 @@ export default function ComposePage() {
               </div>
             </div>
 
-            {/* ── Style tags ── */}
+            {/* ── Mode toggle ── */}
             <div className="bg-white rounded-xl border border-slate-200 p-5">
-              <div className="flex items-center justify-between mb-1">
-                <label className="block text-sm font-medium text-slate-700">
-                  Writing Style
-                </label>
-                {selectedStyles.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setSelectedStyles([])}
-                    className="text-xs text-slate-400 hover:text-slate-600 transition-colors"
-                  >
-                    Clear all
-                  </button>
-                )}
+              <label className="block text-sm font-medium text-slate-700 mb-3">How should the AI write this?</label>
+              <div className="flex gap-2 mb-4">
+                <button
+                  onClick={() => setMode('template')}
+                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg border-2 text-sm font-medium transition-colors ${mode === 'template' ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-600 hover:border-slate-300'}`}
+                >
+                  🎨 Use My Template
+                </button>
+                <button
+                  onClick={() => setMode('fresh')}
+                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg border-2 text-sm font-medium transition-colors ${mode === 'fresh' ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-600 hover:border-slate-300'}`}
+                >
+                  ✨ Generate Fresh
+                </button>
               </div>
-              <p className="text-xs text-slate-400 mb-3">
-                Pick any combination — the AI applies all selected styles at once
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {EMAIL_STYLES.map((style) => {
-                  const active = selectedStyles.includes(style.id)
-                  return (
-                    <button
-                      key={style.id}
-                      type="button"
-                      onClick={() => toggleStyle(style.id)}
-                      title={style.description}
-                      className={`group relative flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border-2 transition-all ${
-                        active
-                          ? 'border-indigo-500 bg-indigo-50 text-indigo-700 shadow-sm'
-                          : 'border-slate-200 text-slate-600 hover:border-indigo-300 hover:text-indigo-600'
-                      }`}
-                    >
-                      <span>{style.emoji}</span>
-                      <span>{style.label}</span>
-                      {active && (
-                        <span className="ml-0.5 text-indigo-400">✓</span>
-                      )}
-                    </button>
-                  )
-                })}
-              </div>
-              {selectedStyles.length > 0 && (
-                <div className="mt-3 pt-3 border-t border-slate-100">
-                  <p className="text-xs text-slate-500 font-medium mb-1">Active styles:</p>
-                  <div className="space-y-1">
-                    {selectedStyles.map((id) => {
-                      const s = EMAIL_STYLES.find((e) => e.id === id)!
+
+              {/* Template picker */}
+              {mode === 'template' && (
+                <div>
+                  {templates.length === 0 ? (
+                    <div className="text-center py-3 border border-dashed border-slate-200 rounded-lg">
+                      <p className="text-sm text-slate-400 mb-1">No templates yet</p>
+                      <a href="/dashboard/templates" className="text-xs text-indigo-600 hover:text-indigo-700 font-medium">
+                        Create your first template →
+                      </a>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {templates.map((t) => (
+                        <label key={t.id} className={`flex items-start gap-3 p-3 rounded-lg border-2 cursor-pointer transition-colors ${selectedTemplateId === t.id ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200 hover:border-slate-300'}`}>
+                          <input type="radio" name="template" value={t.id} checked={selectedTemplateId === t.id} onChange={() => setSelectedTemplateId(t.id)} className="mt-0.5 accent-indigo-600" />
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-slate-800">{t.name}</p>
+                            {t.subject_template && <p className="text-xs text-slate-400 truncate">Subject: {t.subject_template}</p>}
+                            {(() => {
+                              const count = (t.body_template?.match(/\[[^\]]+\]/g) ?? []).length
+                              return count > 0 ? (
+                                <span className="text-xs text-indigo-500">{count} AI placeholder{count !== 1 ? 's' : ''}</span>
+                              ) : null
+                            })()}
+                          </div>
+                        </label>
+                      ))}
+                      <a href="/dashboard/templates" className="block text-xs text-center text-slate-400 hover:text-indigo-600 mt-1 transition-colors">
+                        + Manage templates
+                      </a>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Style tags for fresh mode */}
+              {mode === 'fresh' && (
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs text-slate-500">Pick any combination of writing styles</p>
+                    {selectedStyles.length > 0 && (
+                      <button type="button" onClick={() => setSelectedStyles([])} className="text-xs text-slate-400 hover:text-slate-600">Clear all</button>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {EMAIL_STYLES.map((style) => {
+                      const active = selectedStyles.includes(style.id)
                       return (
-                        <p key={id} className="text-xs text-slate-500">
-                          {s.emoji} <strong>{s.label}:</strong> {s.description}
-                        </p>
+                        <button key={style.id} type="button" onClick={() => toggleStyle(style.id)} title={style.description}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border-2 transition-all ${active ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-600 hover:border-indigo-300'}`}>
+                          <span>{style.emoji}</span>
+                          <span>{style.label}</span>
+                          {active && <span className="ml-0.5 text-indigo-400">✓</span>}
+                        </button>
                       )
                     })}
                   </div>
@@ -398,21 +377,17 @@ export default function ComposePage() {
               <textarea
                 value={customNote}
                 onChange={(e) => setCustomNote(e.target.value)}
-                placeholder="E.g., 'We're hosting a speaker event Feb 15th', 'The student founder is working on a fintech startup'…"
+                placeholder="Anything extra the AI should know for this outreach…"
                 rows={3}
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
               />
             </div>
 
-            {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-lg">
-                {error}
-              </div>
-            )}
+            {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-lg">{error}</div>}
 
             <button
               onClick={generate}
-              disabled={selectedIds.size === 0 || generating}
+              disabled={selectedIds.size === 0 || generating || (mode === 'template' && !selectedTemplateId)}
               className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-medium py-3 rounded-xl transition-colors"
             >
               {generating ? (
@@ -421,106 +396,59 @@ export default function ComposePage() {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                   </svg>
-                  Generating {selectedStyles.length > 0 ? `(${selectedStyles.length} style${selectedStyles.length > 1 ? 's' : ''} applied)` : '3 variants'}…
+                  {mode === 'template' ? 'Filling template…' : 'Generating variants…'}
                 </>
+              ) : mode === 'template' ? (
+                <>🎨 Fill Template for {selectedIds.size > 0 ? `${selectedIds.size} contact${selectedIds.size > 1 ? 's' : ''}` : '…'}</>
               ) : (
-                <>
-                  ✨ Generate AI Email Variants
-                  {selectedStyles.length > 0 && (
-                    <span className="ml-1 text-indigo-200 text-xs">
-                      · {selectedStyles.map((s) => EMAIL_STYLES.find((e) => e.id === s)?.emoji).join('')}
-                    </span>
-                  )}
-                </>
+                <>✨ Generate AI Email Variants</>
               )}
             </button>
           </div>
 
-          {/* Right: Contact preview */}
-          {selectedContact && (
-            <div className="bg-white rounded-xl border border-slate-200 p-5">
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-4">Contact Preview</p>
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center">
-                  <span className="text-indigo-600 font-bold">{selectedContact.name.charAt(0)}</span>
+          {/* Right: Contact or template preview */}
+          <div className="space-y-4">
+            {selectedContact && (
+              <div className="bg-white rounded-xl border border-slate-200 p-5">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-4">Contact Preview</p>
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center">
+                    <span className="text-indigo-600 font-bold">{selectedContact.name.charAt(0)}</span>
+                  </div>
+                  <div>
+                    <p className="font-semibold text-slate-800">{selectedContact.name}</p>
+                    <p className="text-slate-500 text-xs">{[selectedContact.role, selectedContact.company].filter(Boolean).join(' @ ')}</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="font-semibold text-slate-800">{selectedContact.name}</p>
-                  <p className="text-slate-500 text-xs">
-                    {[selectedContact.role, selectedContact.company].filter(Boolean).join(' @ ')}
-                  </p>
-                </div>
+                {selectedContact.research ? (
+                  <div className="space-y-2">
+                    {selectedContact.research.summary && <p className="text-sm text-slate-600 leading-relaxed">{selectedContact.research.summary}</p>}
+                    {selectedContact.research.hooks && selectedContact.research.hooks.length > 0 && (
+                      <div>
+                        <p className="text-xs font-medium text-slate-500 mb-1">Top talking points:</p>
+                        <ul className="space-y-1">
+                          {selectedContact.research.hooks.slice(0, 3).map((h, i) => (
+                            <li key={i} className="text-xs text-slate-600 flex gap-2"><span className="text-indigo-400">•</span> {h}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-sm text-slate-400">No research yet — <a href={`/dashboard/contacts/${selectedContact.id}`} className="text-indigo-600 underline">run research first</a></p>
+                )}
               </div>
-              {selectedContact.research ? (
-                <div className="space-y-3">
-                  {selectedContact.research.summary && (
-                    <p className="text-sm text-slate-600 leading-relaxed">{selectedContact.research.summary}</p>
-                  )}
-                  {selectedContact.research.hooks && selectedContact.research.hooks.length > 0 && (
-                    <div>
-                      <p className="text-xs font-medium text-slate-500 mb-1">Top talking points:</p>
-                      <ul className="space-y-1">
-                        {selectedContact.research.hooks.slice(0, 3).map((h, i) => (
-                          <li key={i} className="text-xs text-slate-600 flex gap-2">
-                            <span className="text-indigo-400">•</span> {h}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="text-center py-4">
-                  <p className="text-sm text-slate-400 mb-2">No research yet</p>
-                  <a href={`/dashboard/contacts/${selectedContact.id}`}
-                    className="text-xs text-indigo-600 hover:text-indigo-700">
-                    Run AI research first for better results →
-                  </a>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
+            )}
 
-      {/* ── Step 2: Variants ── */}
-      {step === 'variants' && variants.length > 0 && (
-        <div className="space-y-5">
-          {/* Active styles badge */}
-          {selectedStyles.length > 0 && (
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs text-slate-500">Styles applied:</span>
-              {selectedStyles.map((id) => {
-                const s = EMAIL_STYLES.find((e) => e.id === id)!
-                return (
-                  <span key={id} className="inline-flex items-center gap-1 text-xs bg-indigo-50 text-indigo-700 border border-indigo-200 px-2 py-0.5 rounded-full font-medium">
-                    {s.emoji} {s.label}
-                  </span>
-                )
-              })}
-              <button
-                onClick={() => { setStep('setup'); setVariants([]) }}
-                className="ml-auto text-xs text-slate-400 hover:text-slate-600"
-              >
-                ← Back
-              </button>
-            </div>
-          )}
-
-          {/* Variant tabs */}
-          <div className="flex gap-2">
-            {variants.map((v, i) => (
-              <button
-                key={v.label}
-                onClick={() => setSelectedVariant(i)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border-2 transition-colors ${
-                  selectedVariant === i
-                    ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-                    : 'border-slate-200 text-slate-600 hover:border-slate-300'
-                }`}
-              >
-                <span className="font-bold">Variant {v.label}</span>
-                <span className="text-xs opacity-70 hidden sm:block">
-                  {v.hook_type === 'accomplishment' ? '🏆' : v.hook_type === 'shared_context' ? '🤝' : '💡'}
-                  {' '}{v.hook_type.replace('_', ' ')}
-                
+            {mode === 'template' && selectedTemplate && (
+              <div className="bg-white rounded-xl border border-slate-200 p-5">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Template Preview</p>
+                <p className="font-medium text-slate-800 text-sm mb-2">{selectedTemplate.name}</p>
+                {selectedTemplate.subject_template && (
+                  <p className="text-xs text-slate-500 mb-2">Subject: {selectedTemplate.subject_template}</p>
+                )}
+                <pre className="text-xs text-slate-600 leading-relaxed whitespace-pre-wrap font-sans bg-slate-50 rounded-lg p-3 max-h-48 overflow-y-auto">
+                  {selectedTemplate.body_template}
+                </pre>
+                <div className="mt-2">
+                  {(selectedTemplate.body_templ

@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import type { Campaign, Contact, GenerateRequest, EmailStyle } from '@/types'
+import type { Campaign, Contact, GenerateRequest, EmailStyle, Template } from '@/types'
 import { STATUS_COLORS, formatRelativeTime } from '@/lib/utils'
 import { EMAIL_STYLES } from '@/types'
 
@@ -46,12 +46,19 @@ export default function CampaignDetailPage() {
   const [generating, setGenerating] = useState(false)
   const [genResult, setGenResult] = useState<{ generated: number; skipped: { name: string; reason: string }[] } | null>(null)
   const [genError, setGenError] = useState('')
+  const [genMode, setGenMode] = useState<'template' | 'fresh'>('template')
+  const [genTemplateId, setGenTemplateId] = useState<string>('')
+  const [templates, setTemplates] = useState<Template[]>([])
 
   function toggleGenStyle(s: EmailStyle) {
     setGenStyles((prev) => prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s])
   }
 
   async function generateCampaignEmails() {
+    if (genMode === 'template' && !genTemplateId) {
+      setGenError('Please select a template first.')
+      return
+    }
     setGenerating(true)
     setGenResult(null)
     setGenError('')
@@ -59,7 +66,12 @@ export default function CampaignDetailPage() {
       const res = await fetch(`/api/campaigns/${campaignId}/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ outreach_goal: genGoal, styles: genStyles, custom_note: genNote || undefined }),
+        body: JSON.stringify({
+          outreach_goal: genGoal,
+          styles: genMode === 'fresh' ? genStyles : undefined,
+          custom_note: genNote || undefined,
+          template_id: genMode === 'template' ? genTemplateId : undefined,
+        }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
@@ -75,7 +87,7 @@ export default function CampaignDetailPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { router.push('/login'); return }
 
-    const [{ data: camp }, { data: mems }, { data: contacts }] = await Promise.all([
+    const [{ data: camp }, { data: mems }, { data: contacts }, { data: tmplData }] = await Promise.all([
       supabase.from('campaigns').select('*').eq('id', campaignId).single(),
       supabase
         .from('campaign_contacts')
@@ -87,11 +99,19 @@ export default function CampaignDetailPage() {
         .select('*, research:contact_research(*)')
         .eq('user_id', user.id)
         .order('name'),
+      supabase
+        .from('templates')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('is_active', true)
+        .order('created_at', { ascending: false }),
     ])
 
     setCampaign(camp)
     setMembers((mems ?? []) as unknown as CampaignContact[])
     setAllContacts((contacts ?? []) as Contact[])
+    setTemplates((tmplData as Template[]) ?? [])
+    if (tmplData && tmplData.length > 0) setGenTemplateId(tmplData[0].id)
     setLoading(false)
   }, [campaignId])
 
@@ -326,31 +346,9 @@ export default function CampaignDetailPage() {
           </div>
         </div>
 
-        {/* Style tags */}
+        {/* Mode toggle */}
         <div className="mb-4">
-          <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
-            Style <span className="font-normal text-slate-400">(optional — pick any)</span>
-          </label>
-          <div className="flex flex-wrap gap-2">
-            {EMAIL_STYLES.map((s) => (
-              <button
-                key={s.id}
-                type="button"
-                onClick={() => toggleGenStyle(s.id)}
-                className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-colors ${
-                  genStyles.includes(s.id)
-                    ? 'bg-indigo-600 border-indigo-600 text-white'
-                    : 'border-slate-200 text-slate-600 hover:border-indigo-300 hover:text-indigo-600'
-                }`}
-              >
-                {s.emoji} {s.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Custom note */}
-        <div className="mb-5">
-          <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
-            Context for AI <span className="font-normal text-slate-400">(optional)</span>
-       
+          <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Email Source</label>
+          <div className="flex gap-2 mb-3">
+            <button onClick={() => setGenMode('template')}
+              className={`flex-1 py-2 rounded-lg border-2 text-sm font-medium transition-colors ${genMode === 'template' 

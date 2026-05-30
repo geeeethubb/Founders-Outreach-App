@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { generateEmailVariants } from '@/lib/ai/personalize'
+import { fillEmailTemplate } from '@/lib/ai/fill-template'
 import { getProfile } from '@/lib/supabase/queries'
 import type { GenerateRequest } from '@/types'
 
@@ -18,6 +19,7 @@ export async function POST(
       outreach_goal: GenerateRequest['outreach_goal']
       styles?: GenerateRequest['styles']
       custom_note?: string
+      template_id?: string
     }
 
     if (!body.outreach_goal) {
@@ -37,24 +39,59 @@ export async function POST(
     const profile = await getProfile(user.id)
     const senderName = profile?.name ?? user.email?.split('@')[0] ?? 'A UIUC Student'
 
+    // Load template if provided
+    let template: { id: string; name: string; subject_template: string | null; body_template: string } | null = null
+    if (body.template_id) {
+      const { data } = await supabase
+        .from('templates')
+        .select('*')
+        .eq('id', body.template_id)
+        .eq('user_id', user.id)
+        .single()
+      template = data
+    }
+
     const generated: { contact_id: string; email_id: string }[] = []
     const skipped: { contact_id: string; name: string; reason: string }[] = []
 
     for (const row of rows) {
       const contact = row.contact as any
       if (!contact) { skipped.push({ contact_id: row.contact_id, name: '?', reason: 'Contact not found' }); continue }
-      if (!contact.research) { skipped.push({ contact_id: row.contact_id, name: contact.name, reason: 'No research yet' }); continue }
 
       try {
-        const variants = await generateEmailVariants(
-          contact,
-          contact.research,
-          { contact_id: row.contact_id, outreach_goal: body.outreach_goal, styles: body.styles, custom_note: body.custom_note },
-          senderName
-        )
+        let subject: string
+        let emailBody: string
+        let templateId: string | null = null
 
-        // Pick accomplishment hook first, fall back to first variant
-        const best = variants.find((v) => v.hook_type === 'accomplishment') ?? variants[0]
+        if (template) {
+          // Template mode — fill placeholders per contact
+          const filled = await fillEmailTemplate(
+            template,
+            contact,
+            contact.research ?? null,
+            senderName,
+            profile
+          )
+          subject = filled.subject
+          emailBody = filled.body
+          templateId = template.id
+        } else {
+          // Fresh mode — require research
+          if (!contact.research) {
+            skipped.push({ contact_id: row.contact_id, name: contact.name, reason: 'No research yet' })
+            continue
+          }
+          const variants = await generateEmailVariants(
+            contact,
+            contact.research,
+            { contact_id: row.contact_id, outreach_goal: body.outreach_goal, styles: body.styles, custom_note: body.custom_note },
+            senderName,
+            profile
+          )
+          const best = variants.find((v) => v.hook_type === 'accomplishment') ?? variants[0]
+          subject = best.subject
+          emailBody = best.body
+        }
 
         const { data: email } = await supabase
           .from('emails')
@@ -62,41 +99,6 @@ export async function POST(
             user_id: user.id,
             contact_id: row.contact_id,
             campaign_id: campaignId,
-            subject: best.subject,
-            body: best.body,
-            variant_label: best.label,
-            status: 'draft',
-            scheduled_for: null,
-            sent_at: null,
-            resend_message_id: null,
-            generation_metadata: {
-              model: 'gpt-5.4',
-              prompt_version: '1.0',
-              hooks_used: [best.hook_used],
-              hook_type: best.hook_type,
-              word_count: best.word_count,
-              outreach_goal: body.outreach_goal,
-            },
-          })
-          .select('id')
-          .single()
-
-        if (email) generated.push({ contact_id: row.contact_id, email_id: email.id })
-      } catch (e) {
-        skipped.push({
-          contact_id: row.contact_id,
-          name: contact.name,
-          reason: e instanceof Error ? e.message : 'Generation failed',
-        })
-      }
-    }
-
-    return NextResponse.json({ success: true, generated: generated.length, skipped })
-  } catch (error) {
-    console.error('Campaign generate error:', error)
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed' },
-      { status: 500 }
-    )
-  }
-}
+            template_id: templateId,
+            subject,
+            body: emailBody,
