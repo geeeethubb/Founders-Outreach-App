@@ -317,4 +317,49 @@ export default function ContactsPage() {
                     {contact.research?.category ? (
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${CATEGORY_COLORS[contact.research.category] ?? 'bg-gray-100 text-gray-600'}`}>
                         {contact.research.category}
-        
+                      </span>
+                    ) : <span className="text-xs text-slate-300">—</span>}
+                  </td>
+                  <td className="px-4 py-3.5">
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[contact.status] ?? 'bg-gray-100 text-gray-600'}`}>
+                      {contact.status}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3.5">
+                    {contact.research?.relevance_score != null ? (
+                      <span className={`text-sm font-medium ${relevanceColor(contact.research.relevance_score)}`}>
+                        {relevanceLabel(contact.research.relevance_score)}
+                      </span>
+                    ) : <span className="text-xs text-slate-300">Not researched</span>}
+                  </td>
+                  <td className="px-4 py-3.5 text-xs text-slate-400">{formatRelativeTime(contact.created_at)}</td>
+                  <td className="px-4 py-3.5">
+                    <div className="flex items-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Link href={`/dashboard/contacts/${contact.id}`}
+                        className="text-xs text-indigo-600 hover:text-indigo-700 font-medium">
+                        Open →
+                      </Link>
+                      <AddToCampaignButton contactId={contact.id} contactName={contact.name} variant="icon" />
+                      <button onClick={() => handleDelete(contact.id, contact.name)}
+                        disabled={deletingId === contact.id}
+                        className="text-xs text-slate-300 hover:text-red-400 transition-colors disabled:opacity-50"
+                        title="Delete contact">
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {showModal && (
+        <AddContactModal userId={userId} onClose={() => setShowModal(false)} />
+      )}
+    </div>
+  )
+}
