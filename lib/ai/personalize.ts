@@ -35,20 +35,7 @@ const GOAL_CONFIGS: Record<
   },
 }
 
-function buildSystemPrompt(styles: EmailStyle[], senderProfile?: Profile | null, senderName?: string): string {
-  // Build the dynamic signature block
-  const sigName = senderProfile?.name ?? senderName ?? 'Your Name'
-  const sigLines: string[] = ['Sincerely,', sigName]
-  if (senderProfile?.major) sigLines.push(`${senderProfile.major}, UIUC`)
-  if (senderProfile?.role) sigLines.push(senderProfile.role)
-  else sigLines.push('President @ Founders: Illinois Entrepreneurs')
-  // LinkedIn link — rendered as markdown so plainTextToHtml converts it to a real hyperlink
-  const linkedinUrl = senderProfile?.portfolio_url?.includes('linkedin.com')
-    ? senderProfile.portfolio_url
-    : 'https://www.linkedin.com/in/zuyu-liu-58b2b2241/'
-  sigLines.push(`[LinkedIn](${linkedinUrl})`)
-  const signatureBlock = sigLines.join('\n')
-
+function buildSystemPrompt(styles: EmailStyle[]): string {
   const baseRules = `
 You are an expert cold email writer for Founders: Illinois Entrepreneurs at UIUC.
 
@@ -84,14 +71,12 @@ Every variant must follow this EXACT structure in this EXACT order:
    - One clear, specific, low-commitment call to action
    - No multiple asks
 
-6. SIGNATURE (use exactly this format, do not change):
-${signatureBlock}
+Do NOT add a signature — the sender will add their own.
 
 ════════════════════════════════════════
 Non-negotiable rules:
-- Word count: 120–160 words for the body (excluding subject and signature)
+- Word count: 120–160 words for the body (excluding subject line)
 - Subject line: specific, not clickbait, not generic
-- The signature must appear verbatim at the end of every email body
 ════════════════════════════════════════`.trim()
 
   // Build style instructions section
@@ -116,10 +101,10 @@ The user has selected these style preferences. Apply ALL of them simultaneously 
 
 ${styleInstructions}
 
-Word count target for body (excluding signature): ${wordLimit}
+Word count target for body: ${wordLimit}
 These style rules OVERRIDE default tone but do NOT override the 5-part structure or hook requirements above.`
   } else {
-    styleSection = `\n\nDefault style: conversational but professional. Body word count (excluding signature): 120–160 words.`
+    styleSection = `\n\nDefault style: conversational but professional. Body word count: 120–160 words.`
   }
 
   const outputFormat = `
@@ -145,4 +130,38 @@ Return ONLY valid JSON:
       "label": "C",
       "subject": "...",
       "body": "...",
-      "hook_type": "value_
+      "hook_type": "value_prop",
+      "hook_used": "..."
+    }
+  ]
+}`
+
+  return baseRules + styleSection + outputFormat
+}
+
+export async function generateEmailVariants(
+  contact: Contact,
+  research: ContactResearch,
+  req: GenerateRequest,
+  senderName: string,
+  senderProfile?: Profile | null
+): Promise<EmailVariant[]> {
+  const goalConfig = GOAL_CONFIGS[req.outreach_goal]
+  const systemPrompt = buildSystemPrompt(req.styles ?? [])
+  const userPrompt = buildUserPrompt(contact, research, goalConfig, senderName, req.custom_note, senderProfile)
+
+  const response = await openai.chat.completions.create({
+    model: 'gpt-5.4',
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ],
+    response_format: { type: 'json_object' },
+    temperature: 0.8,
+    max_completion_tokens: 1800,
+  })
+
+  const raw = response.choices[0].message.content ?? '{}'
+
+  try {
+    const 
