@@ -36,8 +36,6 @@ async function triggerResearch(contactId: string) {
 
 export default function AddContactModal({ userId, onClose }: Props) {
   const [mode, setMode] = useState<Mode>('linkedin')
-
-  // Single LinkedIn import
   const [linkedinUrl, setLinkedinUrl] = useState('')
   const [importing, setImporting] = useState(false)
   const [importError, setImportError] = useState('')
@@ -45,8 +43,6 @@ export default function AddContactModal({ userId, onClose }: Props) {
   const [enriched, setEnriched] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
-
-  // Bulk import
   const [bulkText, setBulkText] = useState('')
   const [bulkResults, setBulkResults] = useState<BulkResult[]>([])
   const [bulkRunning, setBulkRunning] = useState(false)
@@ -63,11 +59,23 @@ export default function AddContactModal({ userId, onClose }: Props) {
     }))
   }
 
-  // ── Single import ─────────────────────────────────────────────────────────
+  async function checkDuplicate(linkedin_url: string): Promise<{ id: string; name: string } | null> {
+    if (!linkedin_url.trim()) return null
+    const { data } = await supabase
+      .from('contacts')
+      .select('id, name')
+      .eq('user_id', userId)
+      .eq('linkedin_url', linkedin_url.trim())
+      .maybeSingle()
+    return data ?? null
+  }
+
   async function handleImport() {
     if (!linkedinUrl.trim()) return
     setImporting(true); setImportError('')
     try {
+      const dupe = await checkDuplicate(linkedinUrl.trim())
+      if (dupe) { setImportError(`Already in your contacts as "${dupe.name}".`); return }
       const res = await fetch('/api/enrich', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -90,40 +98,22 @@ export default function AddContactModal({ userId, onClose }: Props) {
     }
   }
 
-  async function checkDuplicate(linkedin_url: string): Promise<{ id: string; name: string } | null> {
-    if (!linkedin_url.trim()) return null
-    const { data } = await supabase
-      .from('contacts')
-      .select('id, name')
-      .eq('user_id', userId)
-      .eq('linkedin_url', linkedin_url.trim())
-      .maybeSingle()
-    return data ?? null
-  }
-
   async function handleSave(e: React.FormEvent) {
     e.preventDefault()
     if (!form.name.trim()) return
     setSaving(true); setSaveError('')
-
-    // Duplicate check
     if (form.linkedin_url.trim()) {
       const dupe = await checkDuplicate(form.linkedin_url.trim())
       if (dupe) {
         setSaveError(`Already in your contacts as "${dupe.name}" — open their profile to edit.`)
-        setSaving(false)
-        return
+        setSaving(false); return
       }
     }
-
     const { data, error } = await supabase.from('contacts').insert({
       user_id: userId,
-      name: form.name.trim(),
-      email: form.email.trim() || null,
-      company: form.company.trim() || null,
-      role: form.role.trim() || null,
-      location: form.location.trim() || null,
-      linkedin_url: form.linkedin_url.trim() || null,
+      name: form.name.trim(), email: form.email.trim() || null,
+      company: form.company.trim() || null, role: form.role.trim() || null,
+      location: form.location.trim() || null, linkedin_url: form.linkedin_url.trim() || null,
       twitter_handle: form.twitter_handle.trim() || null,
       tags: form.tags, notes: form.notes.trim() || null,
       status: 'new', source: enriched ? 'apollo' : 'manual',
@@ -133,28 +123,20 @@ export default function AddContactModal({ userId, onClose }: Props) {
     onClose(); router.refresh(); router.push(`/dashboard/contacts/${data.id}`)
   }
 
-  // ── Bulk import ───────────────────────────────────────────────────────────
   function parseBulkUrls(): string[] {
-    return bulkText
-      .split(/[\n,]/)
-      .map((s) => s.trim())
-      .filter((s) => s.includes('linkedin.com/in/'))
+    return bulkText.split(/[\n,]/).map((s) => s.trim()).filter((s) => s.includes('linkedin.com/in/'))
   }
 
   async function handleBulkEnrich() {
     const urls = parseBulkUrls()
     if (urls.length === 0) return
-    setBulkRunning(true)
-    setBulkDone(false)
-    const initial: BulkResult[] = urls.map((url) => ({ url, status: 'pending' }))
-    setBulkResults(initial)
-
+    setBulkRunning(true); setBulkDone(false)
+    setBulkResults(urls.map((url) => ({ url, status: 'pending' })))
     for (let i = 0; i < urls.length; i++) {
       setBulkResults((prev) => prev.map((r, idx) => idx === i ? { ...r, status: 'loading' } : r))
       try {
         const res = await fetch('/api/enrich', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ linkedin_url: urls[i] }),
         })
         const data = await res.json()
@@ -162,24 +144,18 @@ export default function AddContactModal({ userId, onClose }: Props) {
         const c = data.contact
         setBulkResults((prev) => prev.map((r, idx) => idx === i ? {
           ...r, status: 'found',
-          contact: {
-            name: c.name ?? '', email: c.email ?? '', company: c.company ?? '',
-            role: c.role ?? '', location: c.location ?? '',
-            linkedin_url: c.linkedin_url ?? urls[i],
-            twitter_handle: '', tags: [], notes: '',
-          },
+          contact: { name: c.name ?? '', email: c.email ?? '', company: c.company ?? '',
+            role: c.role ?? '', location: c.location ?? '', linkedin_url: c.linkedin_url ?? urls[i],
+            twitter_handle: '', tags: [], notes: '' },
         } : r))
       } catch (e) {
         setBulkResults((prev) => prev.map((r, idx) => idx === i ? {
-          ...r, status: 'error',
-          error: e instanceof Error ? e.message : 'Failed',
+          ...r, status: 'error', error: e instanceof Error ? e.message : 'Failed',
         } : r))
       }
-      // Small delay to avoid rate limits
       if (i < urls.length - 1) await new Promise((r) => setTimeout(r, 400))
     }
-    setBulkRunning(false)
-    setBulkDone(true)
+    setBulkRunning(false); setBulkDone(true)
   }
 
   async function handleBulkSave() {
@@ -187,34 +163,39 @@ export default function AddContactModal({ userId, onClose }: Props) {
     if (found.length === 0) return
     setBulkSaving(true)
     const savedIds: string[] = []
-    let skipped = 0
     for (const r of found) {
       const c = r.contact!
-      // Skip duplicates
       if (c.linkedin_url.trim()) {
         const dupe = await checkDuplicate(c.linkedin_url.trim())
-        if (dupe) { skipped++; continue }
+        if (dupe) continue
       }
       const { data } = await supabase.from('contacts').insert({
-        user_id: userId,
-        name: c.name.trim(),
-        email: c.email.trim() || null,
-        company: c.company.trim() || null,
-        role: c.role.trim() || null,
-        location: c.location.trim() || null,
-        linkedin_url: c.linkedin_url.trim() || null,
-        tags: [], notes: null,
-        status: 'new', source: 'apollo',
+        user_id: userId, name: c.name.trim(), email: c.email.trim() || null,
+        company: c.company.trim() || null, role: c.role.trim() || null,
+        location: c.location.trim() || null, linkedin_url: c.linkedin_url.trim() || null,
+        tags: [], notes: null, status: 'new', source: 'apollo',
       }).select().single()
       if (data?.id) savedIds.push(data.id)
     }
     for (const id of savedIds) triggerResearch(id)
-    setBulkSaving(false)
-    onClose()
-    router.refresh()
+    setBulkSaving(false); onClose(); router.refresh()
   }
 
-  // ── Enriched review screen ────────────────────────────────────────────────
+  const spinnerSvg = (
+    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+    </svg>
+  )
+
+  const closeBtn = (
+    <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
+      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+      </svg>
+    </button>
+  )
+
   if (enriched) {
     return (
       <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -224,13 +205,11 @@ export default function AddContactModal({ userId, onClose }: Props) {
               <div className="w-2 h-2 rounded-full bg-green-500" />
               <h2 className="font-semibold text-slate-900">Contact found — review & save</h2>
             </div>
-            <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-            </button>
+            {closeBtn}
           </div>
           <form onSubmit={handleSave} className="px-6 py-5 space-y-4">
             <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-3 text-sm text-green-700">
-              ✓ Pulled from Apollo — edit anything before saving. AI research starts automatically.
+              Pulled from Apollo — edit anything before saving. AI research starts automatically.
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -272,13 +251,13 @@ export default function AddContactModal({ userId, onClose }: Props) {
             </div>
             <div>
               <label className="block text-xs font-medium text-slate-600 mb-1">Notes</label>
-              <textarea value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} placeholder="How you found them, why you want to connect…" rows={2} className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none" />
+              <textarea value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} rows={2} className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none" />
             </div>
             {saveError && <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2 rounded-lg">{saveError}</div>}
             <div className="flex gap-3 pt-2">
-              <button type="button" onClick={() => setEnriched(false)} className="flex-1 py-2.5 border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-slate-50 transition-colors">← Back</button>
+              <button type="button" onClick={() => setEnriched(false)} className="flex-1 py-2.5 border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-slate-50 transition-colors">Back</button>
               <button type="submit" disabled={saving} className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors">
-                {saving ? 'Saving…' : 'Save & Start Research'}
+                {saving ? 'Saving...' : 'Save & Start Research'}
               </button>
             </div>
           </form>
@@ -290,13 +269,10 @@ export default function AddContactModal({ userId, onClose }: Props) {
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto">
-        {/* Header + tabs */}
         <div className="px-6 pt-5 pb-4 border-b border-slate-100">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-semibold text-slate-900">Add Contact</h2>
-            <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-            </button>
+            {closeBtn}
           </div>
           <div className="flex rounded-lg border border-slate-200 p-1 gap-1">
             {(['linkedin', 'bulk', 'manual'] as Mode[]).map((m) => (
@@ -308,7 +284,6 @@ export default function AddContactModal({ userId, onClose }: Props) {
           </div>
         </div>
 
-        {/* ── Single LinkedIn ── */}
         {mode === 'linkedin' && (
           <div className="px-6 py-6 space-y-5">
             <div className="text-center">
@@ -327,33 +302,26 @@ export default function AddContactModal({ userId, onClose }: Props) {
             {importError && <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2 rounded-lg">{importError}</div>}
             <button onClick={handleImport} disabled={importing || !linkedinUrl.trim()}
               className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2">
-              {importing ? (<><svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>Looking up…</>) : 'Import Contact'}
+              {importing ? <>{spinnerSvg}Looking up...</> : 'Import Contact'}
             </button>
             <p className="text-center text-xs text-slate-400">Uses 1 Apollo credit per lookup</p>
           </div>
         )}
 
-        {/* ── Bulk import ── */}
         {mode === 'bulk' && (
           <div className="px-6 py-5 space-y-4">
             {!bulkDone ? (
               <>
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">
-                    LinkedIn URLs <span className="text-slate-400 font-normal">— one per line (or comma-separated)</span>
+                    LinkedIn URLs <span className="text-slate-400 font-normal">one per line</span>
                   </label>
-                  <textarea
-                    value={bulkText}
-                    onChange={(e) => setBulkText(e.target.value)}
-                    placeholder={`https://linkedin.com/in/samaltman\nhttps://linkedin.com/in/sama\nhttps://linkedin.com/in/elonmusk`}
-                    rows={6}
-                    disabled={bulkRunning}
-                    className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none font-mono disabled:opacity-50"
-                  />
-                  <p className="text-xs text-slate-400 mt-1">{parseBulkUrls().length} valid URL{parseBulkUrls().length !== 1 ? 's' : ''} detected · Uses 1 Apollo credit each</p>
+                  <textarea value={bulkText} onChange={(e) => setBulkText(e.target.value)}
+                    placeholder={"https://linkedin.com/in/samaltman\nhttps://linkedin.com/in/elonmusk"}
+                    rows={6} disabled={bulkRunning}
+                    className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none font-mono disabled:opacity-50" />
+                  <p className="text-xs text-slate-400 mt-1">{parseBulkUrls().length} valid URL{parseBulkUrls().length !== 1 ? 's' : ''} detected</p>
                 </div>
-
-                {/* Progress */}
                 {bulkResults.length > 0 && (
                   <div className="space-y-1.5 max-h-48 overflow-y-auto">
                     {bulkResults.map((r, i) => (
@@ -362,4 +330,118 @@ export default function AddContactModal({ userId, onClose }: Props) {
                         {r.status === 'pending' && <div className="w-3.5 h-3.5 rounded-full border border-slate-300 flex-shrink-0" />}
                         {r.status === 'found' && <svg className="w-3.5 h-3.5 text-green-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>}
                         {(r.status === 'not_found' || r.status === 'error') && <svg className="w-3.5 h-3.5 text-red-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>}
-                        <span className="truncate text-slate-500">{r.url.replace('https://www.linkedin.com/in/', '').replace('htt
+                        <span className="truncate text-slate-500">{r.url.replace('https://www.linkedin.com/in/', '').replace('https://linkedin.com/in/', '')}</span>
+                        {r.status === 'found' && <span className="text-green-600 font-medium flex-shrink-0">{r.contact?.name}</span>}
+                        {r.status === 'error' && <span className="text-red-400 flex-shrink-0">{r.error}</span>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <button onClick={handleBulkEnrich} disabled={bulkRunning || parseBulkUrls().length === 0}
+                  className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2">
+                  {bulkRunning ? <>{spinnerSvg}Looking up {bulkResults.filter(r => r.status !== 'pending' && r.status !== 'loading').length}/{bulkResults.length}...</> : `Look Up ${parseBulkUrls().length} Contact${parseBulkUrls().length !== 1 ? 's' : ''}`}
+                </button>
+              </>
+            ) : (
+              <div className="space-y-4">
+                <div className="grid grid-cols-3 gap-3 text-center">
+                  <div className="bg-green-50 rounded-lg p-3">
+                    <p className="text-2xl font-bold text-green-600">{bulkResults.filter(r => r.status === 'found').length}</p>
+                    <p className="text-xs text-green-700 mt-0.5">Found</p>
+                  </div>
+                  <div className="bg-red-50 rounded-lg p-3">
+                    <p className="text-2xl font-bold text-red-400">{bulkResults.filter(r => r.status === 'error').length}</p>
+                    <p className="text-xs text-red-500 mt-0.5">Not found</p>
+                  </div>
+                  <div className="bg-slate-50 rounded-lg p-3">
+                    <p className="text-2xl font-bold text-slate-600">{bulkResults.length}</p>
+                    <p className="text-xs text-slate-500 mt-0.5">Total</p>
+                  </div>
+                </div>
+                <div className="space-y-1 max-h-48 overflow-y-auto">
+                  {bulkResults.filter(r => r.status === 'found').map((r, i) => (
+                    <div key={i} className="flex items-center gap-2 text-xs bg-green-50 rounded px-2 py-1.5">
+                      <svg className="w-3.5 h-3.5 text-green-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                      <span className="font-medium text-slate-700">{r.contact?.name}</span>
+                      {r.contact?.company && <span className="text-slate-400">@ {r.contact.company}</span>}
+                      {r.contact?.email && <span className="text-indigo-600 ml-auto">{r.contact.email}</span>}
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-slate-400 text-center">AI research starts automatically for all saved contacts</p>
+                <div className="flex gap-3">
+                  <button onClick={() => { setBulkDone(false); setBulkResults([]); setBulkText('') }}
+                    className="flex-1 py-2.5 border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-slate-50 transition-colors">
+                    Start over
+                  </button>
+                  <button onClick={handleBulkSave} disabled={bulkSaving || bulkResults.filter(r => r.status === 'found').length === 0}
+                    className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors">
+                    {bulkSaving ? 'Saving...' : `Save ${bulkResults.filter(r => r.status === 'found').length} & Start Research`}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {mode === 'manual' && (
+          <form onSubmit={handleSave} className="px-6 py-5 space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Full Name *</label>
+                <input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="Sam Altman" required className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Email</label>
+                <input type="email" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} placeholder="sam@openai.com" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Company</label>
+                <input value={form.company} onChange={(e) => setForm((f) => ({ ...f, company: e.target.value }))} placeholder="OpenAI" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Role</label>
+                <input value={form.role} onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))} placeholder="CEO" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Location</label>
+                <input value={form.location} onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))} placeholder="San Francisco, CA" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Twitter / X</label>
+                <input value={form.twitter_handle} onChange={(e) => setForm((f) => ({ ...f, twitter_handle: e.target.value }))} placeholder="@samaltman" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">LinkedIn URL</label>
+              <input value={form.linkedin_url} onChange={(e) => setForm((f) => ({ ...f, linkedin_url: e.target.value }))} placeholder="https://linkedin.com/in/samaltman" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-2">Tags</label>
+              <div className="flex flex-wrap gap-2">
+                {COMMON_TAGS.map((tag) => (
+                  <button key={tag} type="button" onClick={() => toggleTag(tag)} className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${form.tags.includes(tag) ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-slate-200 text-slate-600 hover:border-indigo-300'}`}>{tag}</button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Notes</label>
+              <textarea value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} rows={2} className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none" />
+            </div>
+            {saveError && <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2 rounded-lg">{saveError}</div>}
+            <div className="flex gap-3 pt-2">
+              <button type="button" onClick={onClose} className="flex-1 py-2.5 border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-slate-50 transition-colors">Cancel</button>
+              <button type="submit" disabled={saving} className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors">
+                {saving ? 'Adding...' : 'Add Contact'}
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+    </div>
+  )
+}
