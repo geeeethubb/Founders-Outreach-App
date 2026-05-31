@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { researchContact } from '@/lib/ai/research'
-import { upsertResearch, updateContactStatus } from '@/lib/supabase/queries'
+import { upsertResearch, updateContactStatus, getProfile } from '@/lib/supabase/queries'
 import type { ResearchRequest } from '@/types'
 
 export async function POST(request: NextRequest) {
@@ -12,6 +12,9 @@ export async function POST(request: NextRequest) {
 
     const body = (await request.json()) as Partial<ResearchRequest> & { contact_id: string }
     if (!body.contact_id) return NextResponse.json({ error: 'contact_id is required' }, { status: 400 })
+
+    // Fetch sender profile for relevance calibration
+    const senderProfile = await getProfile(user.id)
 
     let req: ResearchRequest
     if (!body.name) {
@@ -28,9 +31,10 @@ export async function POST(request: NextRequest) {
         role: contact.role ?? undefined,
         linkedin_url: contact.linkedin_url ?? undefined,
         pasted_bio: body.pasted_bio,
+        senderProfile,
       }
     } else {
-      req = body as ResearchRequest
+      req = { ...body as ResearchRequest, senderProfile }
     }
 
     await updateContactStatus(body.contact_id, 'researching')

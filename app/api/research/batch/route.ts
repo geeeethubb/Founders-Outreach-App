@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { researchContact } from '@/lib/ai/research'
-import { upsertResearch, updateContactStatus } from '@/lib/supabase/queries'
+import { upsertResearch, updateContactStatus, getProfile } from '@/lib/supabase/queries'
 
-export const maxDuration = 300 // Vercel: allow up to 5 min for batch
+export const maxDuration = 300
 
 export async function POST() {
   try {
@@ -11,7 +11,6 @@ export async function POST() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    // Find all contacts still at 'new' (research never triggered or failed)
     const { data: contacts } = await supabase
       .from('contacts')
       .select('id, name, company, role, linkedin_url')
@@ -21,6 +20,9 @@ export async function POST() {
     if (!contacts || contacts.length === 0) {
       return NextResponse.json({ queued: 0, completed: 0 })
     }
+
+    // Fetch sender profile once for all contacts
+    const senderProfile = await getProfile(user.id)
 
     let completed = 0
     const errors: string[] = []
@@ -35,6 +37,7 @@ export async function POST() {
           company: contact.company ?? undefined,
           role: contact.role ?? undefined,
           linkedin_url: contact.linkedin_url ?? undefined,
+          senderProfile,
         })
 
         await upsertResearch({
@@ -51,23 +54,15 @@ export async function POST() {
         await updateContactStatus(contact.id, 'researched')
         completed++
       } catch (e) {
-        // Reset status so it can be retried
         await updateContactStatus(contact.id, 'new').catch(() => {})
         errors.push(`${contact.name}: ${e instanceof Error ? e.message : 'failed'}`)
         console.error('Batch research error for', contact.name, e)
       }
     }
 
-    return NextResponse.json({
-      queued: contacts.length,
-      completed,
-      errors: errors.length > 0 ? errors : undefined,
-    })
+    return NextResponse.json({ queued: contacts.length, completed, errors: errors.length > 0 ? errors : undefined })
   } catch (error) {
     console.error('Batch research error:', error)
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Failed' }, { status: 500 })
   }
 }

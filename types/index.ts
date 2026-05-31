@@ -293,6 +293,15 @@ export interface ResearchRequest {
   role?: string
   linkedin_url?: string
   pasted_bio?: string   // user can paste raw LinkedIn text
+  senderProfile?: {
+    name?: string | null
+    role?: string | null
+    major?: string | null
+    bio?: string | null
+    graduation_year?: string | null
+    linkedin_bio_text?: string | null
+    personal_context?: string | null
+  } | null
 }
 
 export interface ResearchResult {
@@ -333,13 +342,4 @@ export interface SendRequest {
   schedule_at?: string
 }
 
-// ─── UI State Types ───────────────────────────────────────────────────────────
-
-export interface DashboardStats {
-  total_contacts: number
-  researched: number
-  emails_sent: number
-  replies: number
-  meetings: number
-  reply_rate: number
-}
+// ─── UI State Types ─────────────────────────────────
