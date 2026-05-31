@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import type { Contact, EmailVariant, EmailStyle, Template } from '@/types'
@@ -18,6 +18,14 @@ type Goal = typeof GOAL_OPTIONS[number]['value']
 type Mode = 'template' | 'fresh'
 
 export default function ComposePage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-sm text-slate-500">Loading compose...</div>}>
+      <ComposeContent />
+    </Suspense>
+  )
+}
+
+function ComposeContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const preselectedContactId = searchParams.get('contact')
