@@ -90,10 +90,32 @@ export default function AddContactModal({ userId, onClose }: Props) {
     }
   }
 
+  async function checkDuplicate(linkedin_url: string): Promise<{ id: string; name: string } | null> {
+    if (!linkedin_url.trim()) return null
+    const { data } = await supabase
+      .from('contacts')
+      .select('id, name')
+      .eq('user_id', userId)
+      .eq('linkedin_url', linkedin_url.trim())
+      .maybeSingle()
+    return data ?? null
+  }
+
   async function handleSave(e: React.FormEvent) {
     e.preventDefault()
     if (!form.name.trim()) return
     setSaving(true); setSaveError('')
+
+    // Duplicate check
+    if (form.linkedin_url.trim()) {
+      const dupe = await checkDuplicate(form.linkedin_url.trim())
+      if (dupe) {
+        setSaveError(`Already in your contacts as "${dupe.name}" — open their profile to edit.`)
+        setSaving(false)
+        return
+      }
+    }
+
     const { data, error } = await supabase.from('contacts').insert({
       user_id: userId,
       name: form.name.trim(),
@@ -165,8 +187,14 @@ export default function AddContactModal({ userId, onClose }: Props) {
     if (found.length === 0) return
     setBulkSaving(true)
     const savedIds: string[] = []
+    let skipped = 0
     for (const r of found) {
       const c = r.contact!
+      // Skip duplicates
+      if (c.linkedin_url.trim()) {
+        const dupe = await checkDuplicate(c.linkedin_url.trim())
+        if (dupe) { skipped++; continue }
+      }
       const { data } = await supabase.from('contacts').insert({
         user_id: userId,
         name: c.name.trim(),
@@ -180,7 +208,6 @@ export default function AddContactModal({ userId, onClose }: Props) {
       }).select().single()
       if (data?.id) savedIds.push(data.id)
     }
-    // Fire research for all saved contacts
     for (const id of savedIds) triggerResearch(id)
     setBulkSaving(false)
     onClose()
@@ -335,14 +362,4 @@ export default function AddContactModal({ userId, onClose }: Props) {
                         {r.status === 'pending' && <div className="w-3.5 h-3.5 rounded-full border border-slate-300 flex-shrink-0" />}
                         {r.status === 'found' && <svg className="w-3.5 h-3.5 text-green-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>}
                         {(r.status === 'not_found' || r.status === 'error') && <svg className="w-3.5 h-3.5 text-red-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>}
-                        <span className="truncate text-slate-500">{r.url.replace('https://www.linkedin.com/in/', '').replace('https://linkedin.com/in/', '')}</span>
-                        {r.status === 'found' && <span className="text-green-600 font-medium flex-shrink-0">{r.contact?.name}</span>}
-                        {r.status === 'error' && <span className="text-red-400 flex-shrink-0">{r.error}</span>}
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                <button onClick={handleBulkEnrich} disabled={bulkRunning || parseBulkUrls().length === 0}
-                  className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2">
-                  {bulkRunning ? (<><svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className
+                        <span className="truncate text-slate-500">{r.url.replace('https://www.linkedin.com/in/', '').replace('htt
