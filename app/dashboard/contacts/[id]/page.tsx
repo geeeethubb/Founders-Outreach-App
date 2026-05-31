@@ -3,6 +3,7 @@ import { getContact } from '@/lib/supabase/queries'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import ResearchCard from '@/components/contacts/ResearchCard'
+import EditContactButton from '@/components/contacts/EditContactButton'
 import { STATUS_COLORS, formatRelativeTime } from '@/lib/utils'
 
 interface Props {
@@ -45,12 +46,13 @@ export default async function ContactDetailPage({ params }: Props) {
                   {contact.name.charAt(0).toUpperCase()}
                 </span>
               </div>
-              <div>
+              <div className="flex-1 min-w-0">
                 <h1 className="font-semibold text-slate-900">{contact.name}</h1>
                 <p className="text-slate-500 text-sm">
                   {[contact.role, contact.company].filter(Boolean).join(' @ ')}
                 </p>
               </div>
+              <EditContactButton contact={contact} />
             </div>
 
             <div className="space-y-2 text-sm">
@@ -165,14 +167,4 @@ export default async function ContactDetailPage({ params }: Props) {
                       'bg-blue-100 text-blue-700'
                     }`}>
                       {email.status}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  )
-}
+                  

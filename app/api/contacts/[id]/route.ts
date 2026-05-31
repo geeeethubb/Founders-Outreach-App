@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
-export async function DELETE(
-  _request: NextRequest,
+export async function PUT(
+  request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
@@ -10,19 +10,20 @@ export async function DELETE(
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const id = params.id
+    const body = await request.json()
 
-    // emails table has no ON DELETE CASCADE so we must delete children manually
-    // 1. Delete email events tied to this contact's emails
-    const { data: emailRows } = await supabase
-      .from('emails')
-      .select('id')
-      .eq('contact_id', id)
-
-    if (emailRows && emailRows.length > 0) {
-      const emailIds = emailRows.map((e) => e.id)
-      await supabase.from('email_events').delete().in('email_id', emailIds)
-    }
-
-    // 2. Delete emails
-    await supabase.from('emails')
+    const { data, error } = await supabase
+      .from('contacts')
+      .update({
+        name: body.name,
+        email: body.email || null,
+        company: body.company || null,
+        role: body.role || null,
+        location: body.location || null,
+        linkedin_url: body.linkedin_url || null,
+        twitter_handle: body.twitter_handle || null,
+        notes: body.notes || null,
+        tags: body.tags ?? [],
+      })
+      .eq('id', params.id)
+      .eq('user_id', user
