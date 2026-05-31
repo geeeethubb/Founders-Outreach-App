@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import AddContactModal from '@/components/contacts/AddContactModal'
+import AddToCampaignButton from '@/components/contacts/AddToCampaignButton'
 import { formatRelativeTime, STATUS_COLORS, CATEGORY_COLORS, relevanceLabel, relevanceColor } from '@/lib/utils'
 import type { Contact } from '@/types'
 
@@ -301,6 +302,7 @@ export default function ContactsPage() {
                         className="text-xs text-indigo-600 hover:text-indigo-700 font-medium">
                         Open →
                       </Link>
+                      <AddToCampaignButton contactId={contact.id} contactName={contact.name} variant="icon" />
                       <button onClick={() => handleDelete(contact.id, contact.name)}
                         disabled={deletingId === contact.id}
                         className="text-xs text-slate-300 hover:text-red-400 transition-colors disabled:opacity-50"
@@ -313,14 +315,4 @@ export default function ContactsPage() {
                   </td>
                 </tr>
               ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {showModal && (
-        <AddContactModal userId={userId} onClose={() => setShowModal(false)} />
-      )}
-    </div>
-  )
-}
+      
