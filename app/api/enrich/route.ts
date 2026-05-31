@@ -44,14 +44,15 @@ export async function POST(request: NextRequest) {
     }
 
     // Call Apollo People Match
-    const apolloRes = await fetch('https://api.apollo.io/api/v1/people/match', {
+    // Apollo v1 requires api_key in the request body (not as a header)
+    const apolloRes = await fetch('https://api.apollo.io/v1/people/match', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Cache-Control': 'no-cache',
-        'X-Api-Key': APOLLO_API_KEY,
       },
       body: JSON.stringify({
+        api_key: APOLLO_API_KEY,
         linkedin_url,
         reveal_personal_emails: true,
         reveal_phone_number: false,
@@ -62,7 +63,7 @@ export async function POST(request: NextRequest) {
       const text = await apolloRes.text()
       console.error('Apollo error:', apolloRes.status, text)
       return NextResponse.json(
-        { error: `Apollo returned ${apolloRes.status}` },
+        { error: `Apollo returned ${apolloRes.status} — check your API key or plan limits` },
         { status: 502 }
       )
     }
@@ -102,8 +103,4 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Enrich error:', error)
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Enrichment failed' },
-      { status: 500 }
-    )
-  }
-}
+      { err
