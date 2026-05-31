@@ -19,6 +19,22 @@ export default function ContactsPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const supabase = createClient()
 
+  useEffect(() => {
+    async function load() {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      setUserId(user.id)
+      const { data } = await supabase
+        .from('contacts')
+        .select('*, research:contact_research(*)')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+      setContacts((data as Contact[]) ?? [])
+      setLoading(false)
+    }
+    load()
+  }, [])
+
   async function handleDelete(id: string, name: string) {
     if (!confirm(`Delete ${name}? This also removes all their emails and research.`)) return
     setDeletingId(id)
@@ -26,24 +42,6 @@ export default function ContactsPage() {
     setContacts((prev) => prev.filter((c) => c.id !== id))
     setDeletingId(null)
   }
-
-  useEffect(() => {
-    async function load() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-      setUserId(user.id)
-
-      const { data } = await supabase
-        .from('contacts')
-        .select('*, research:contact_research(*)')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-
-      setContacts((data as Contact[]) ?? [])
-      setLoading(false)
-    }
-    load()
-  }, [])
 
   const filtered = contacts.filter((c) => {
     const matchesSearch =
@@ -58,14 +56,13 @@ export default function ContactsPage() {
   if (loading) {
     return (
       <div className="p-8 flex items-center justify-center min-h-64">
-        <div className="text-slate-400 text-sm">Loading contacts…</div>
+        <div className="text-slate-400 text-sm">Loading contacts...</div>
       </div>
     )
   }
 
   return (
     <div className="p-8">
-      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-semibold text-slate-900">Contacts</h1>
@@ -82,7 +79,6 @@ export default function ContactsPage() {
         </button>
       </div>
 
-      {/* Filters */}
       <div className="flex gap-3 mb-6">
         <div className="flex-1 relative">
           <svg className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -91,7 +87,7 @@ export default function ContactsPage() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by name, company, role…"
+            placeholder="Search by name, company, role..."
             className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
         </div>
@@ -107,14 +103,11 @@ export default function ContactsPage() {
         </select>
       </div>
 
-      {/* Table */}
       {filtered.length === 0 ? (
         <div className="bg-white rounded-xl border-2 border-dashed border-slate-200 p-12 text-center">
           <div className="text-3xl mb-3">👥</div>
           <p className="font-medium text-slate-700 mb-1">No contacts yet</p>
-          <p className="text-slate-400 text-sm mb-4">
-            Add YC founders, SF operators, mentors, or investors you want to reach.
-          </p>
+          <p className="text-slate-400 text-sm mb-4">Add founders, operators, mentors, or investors you want to reach.</p>
           <button
             onClick={() => setShowModal(true)}
             className="bg-indigo-600 text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors"
@@ -201,4 +194,21 @@ export default function ContactsPage() {
                         title="Delete contact"
                       >
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {showModal && (
+        <AddContactModal userId={userId} onClose={() => setShowModal(false)} />
+      )}
+    </div>
+  )
+}
