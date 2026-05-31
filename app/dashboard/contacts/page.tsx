@@ -17,6 +17,8 @@ export default function ContactsPage() {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [researchingAll, setResearchingAll] = useState(false)
+  const [researchQueued, setResearchQueued] = useState<number | null>(null)
   const supabase = createClient()
 
   useEffect(() => {
@@ -29,11 +31,41 @@ export default function ContactsPage() {
         .select('*, research:contact_research(*)')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
-      setContacts((data as Contact[]) ?? [])
+      const loaded = (data as Contact[]) ?? []
+      setContacts(loaded)
       setLoading(false)
+
+      // Auto-trigger research for any contacts still at 'new'
+      const unresearched = loaded.filter((c) => c.status === 'new')
+      if (unresearched.length > 0) {
+        fetch('/api/research/batch', { method: 'POST' }).catch(() => {})
+      }
     }
     load()
   }, [])
+
+  async function handleResearchAll() {
+    setResearchingAll(true)
+    setResearchQueued(null)
+    try {
+      const res = await fetch('/api/research/batch', { method: 'POST' })
+      const data = await res.json()
+      setResearchQueued(data.queued ?? 0)
+      // Reload contacts after a short delay so statuses update
+      setTimeout(async () => {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) return
+        const { data: fresh } = await supabase
+          .from('contacts')
+          .select('*, research:contact_research(*)')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+        setContacts((fresh as Contact[]) ?? [])
+      }, 3000)
+    } finally {
+      setResearchingAll(false)
+    }
+  }
 
   async function handleDelete(id: string, name: string) {
     if (!confirm(`Delete ${name}? This also removes all their emails and research.`)) return
@@ -53,6 +85,8 @@ export default function ContactsPage() {
     return matchesSearch && matchesStatus
   })
 
+  const unresearchedCount = contacts.filter((c) => c.status === 'new').length
+
   if (loading) {
     return (
       <div className="p-8 flex items-center justify-center min-h-64">
@@ -68,15 +102,46 @@ export default function ContactsPage() {
           <h1 className="text-2xl font-semibold text-slate-900">Contacts</h1>
           <p className="text-slate-500 text-sm mt-1">{contacts.length} people in your pipeline</p>
         </div>
-        <button
-          onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2.5 rounded-lg transition-colors"
-        >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-          </svg>
-          Add Contact
-        </button>
+        <div className="flex items-center gap-3">
+          {unresearchedCount > 0 && (
+            <button
+              onClick={handleResearchAll}
+              disabled={researchingAll}
+              className="flex items-center gap-2 border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-sm font-medium px-4 py-2.5 rounded-lg transition-colors disabled:opacity-50"
+            >
+              {researchingAll ? (
+                <>
+                  <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                  </svg>
+                  Queuing...
+                </>
+              ) : (
+                <>
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                  </svg>
+                  Research {unresearchedCount} unresearched
+                </>
+              )}
+            </button>
+          )}
+          {researchQueued !== null && (
+            <span className="text-xs text-green-600 font-medium">
+              {researchQueued > 0 ? `Queued ${researchQueued} — check back in ~${researchQueued * 30}s` : 'All caught up!'}
+            </span>
+          )}
+          <button
+            onClick={() => setShowModal(true)}
+            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2.5 rounded-lg transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+            </svg>
+            Add Contact
+          </button>
+        </div>
       </div>
 
       <div className="flex gap-3 mb-6">
