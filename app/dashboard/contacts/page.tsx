@@ -16,7 +16,16 @@ export default function ContactsPage() {
   const [userId, setUserId] = useState('')
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   const supabase = createClient()
+
+  async function handleDelete(id: string, name: string) {
+    if (!confirm(`Delete ${name}? This also removes all their emails and research.`)) return
+    setDeletingId(id)
+    await fetch(`/api/contacts/${id}`, { method: 'DELETE' })
+    setContacts((prev) => prev.filter((c) => c.id !== id))
+    setDeletingId(null)
+  }
 
   useEffect(() => {
     async function load() {
@@ -171,23 +180,6 @@ export default function ContactsPage() {
                     {formatRelativeTime(contact.created_at)}
                   </td>
                   <td className="px-4 py-3.5">
-                    <Link
-                      href={`/dashboard/contacts/${contact.id}`}
-                      className="text-xs text-indigo-600 opacity-0 group-hover:opacity-100 hover:text-indigo-700 font-medium transition-opacity"
-                    >
-                      Open →
-                    </Link>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {showModal && (
-        <AddContactModal userId={userId} onClose={() => setShowModal(false)} />
-      )}
-    </div>
-  )
-}
+                    <div className="flex items-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Link
+                        href={`/dashboard
