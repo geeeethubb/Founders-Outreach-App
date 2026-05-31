@@ -166,4 +166,8 @@ export default async function ContactDetailPage({ params }: Props) {
               </div>
             </div>
           )}
-    
+        </div>
+      </div>
+    </div>
+  )
+}

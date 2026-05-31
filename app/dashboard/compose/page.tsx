@@ -209,7 +209,7 @@ function ComposeContent() {
         </div>
       </div>
     )
-  
+  }
 
   return (
     <div className="p-8 max-w-5xl">
