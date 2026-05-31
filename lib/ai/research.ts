@@ -6,57 +6,59 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 const CLUB_CONTEXT = `
 Founders: Illinois Entrepreneurs is the premier entrepreneurship club at the University of
 Illinois at Urbana-Champaign (UIUC). The club connects ambitious UIUC students with the
-startup ecosystem — top founders, investors, and operators. UIUC is a top-5 engineering
-school and has produced notable tech founders including Max Levchin (PayPal), Marc Andreessen
-(Netscape/a16z), and the founders of Yelp and YouTube.
+startup ecosystem — top founders, investors, and operators.
 `.trim()
 
 function buildSystemPrompt(senderProfile?: ResearchRequest['senderProfile']): string {
-  // Build sender context for relevance calibration
   const senderLines: string[] = []
   if (senderProfile?.name) senderLines.push(`Name: ${senderProfile.name}`)
   if (senderProfile?.role) senderLines.push(`Role: ${senderProfile.role}`)
   if (senderProfile?.major) senderLines.push(`Major: ${senderProfile.major}`)
   if (senderProfile?.graduation_year) senderLines.push(`Graduation: ${senderProfile.graduation_year}`)
   if (senderProfile?.bio) senderLines.push(`Bio: ${senderProfile.bio}`)
-  if (senderProfile?.linkedin_bio_text) senderLines.push(`LinkedIn: ${senderProfile.linkedin_bio_text.slice(0, 800)}`)
-  if (senderProfile?.personal_context) senderLines.push(`Personal context: ${senderProfile.personal_context}`)
+  if (senderProfile?.linkedin_bio_text) senderLines.push(`LinkedIn: ${senderProfile.linkedin_bio_text.slice(0, 600)}`)
+  if (senderProfile?.personal_context) senderLines.push(`Context: ${senderProfile.personal_context}`)
 
   const senderSection = senderLines.length > 0
-    ? `\n\nSENDER PROFILE (the person who will be reaching out):\n${senderLines.join('\n')}`
+    ? `\nSENDER (who will send the outreach):\n${senderLines.join('\n')}`
     : ''
 
   const relevanceGuidance = senderLines.length > 0
-    ? `relevance_score: Score 0–1 based on how valuable this contact is SPECIFICALLY to the sender above.
-       Consider: Does this person's work align with the sender's goals? Could they offer mentorship, jobs, investment, or speaking relevant to the sender's background?
-       0.9+ = highly relevant (direct overlap with sender's goals/industry/stage)
-       0.7–0.9 = strong fit (relevant domain, could add real value)
-       0.5–0.7 = moderate fit (interesting but indirect connection)
-       below 0.5 = weak fit for this specific sender`
-    : `relevance_score: 0.9+ = major YC founder / well-known SF operator, 0.7+ = solid startup person, 0.5+ = interesting but less established`
+    ? `relevance_score: 0–1 based on how valuable this contact is TO THE SENDER specifically.
+       0.9+ = strong direct overlap with sender's goals/industry
+       0.7–0.9 = relevant domain, real value
+       0.5–0.7 = moderate fit
+       below 0.5 = weak fit`
+    : `relevance_score: 0.9+ = major well-known founder/investor, 0.7+ = solid startup person, below 0.5 = limited info`
 
-  return `You are a world-class research analyst for ${CLUB_CONTEXT}${senderSection}
+  return `You are a research analyst for ${CLUB_CONTEXT}${senderSection}
 
-Your job: given information about a professional, produce a structured research summary that
-will power a highly personalized cold outreach email. The email should feel like it was written
-by someone who actually knows the person's work — not a generic form letter.
+Your job: produce a research summary to power personalized cold outreach. You must be ACCURATE.
 
-Return ONLY valid JSON matching this exact schema:
+════════════════════════════════════════
+ANTI-HALLUCINATION RULES — NON-NEGOTIABLE:
+════════════════════════════════════════
+1. ONLY include facts you are HIGHLY CONFIDENT are true. If you are not sure, OMIT IT.
+2. DO NOT invent or guess: funding amounts, YC batches, product names, launch dates, press mentions, tweets, or talks unless you are certain they are real.
+3. If you have limited knowledge about this person, say so honestly in the summary — e.g. "Limited public information available; known as [role] at [company]."
+4. hooks must be VERIFIABLE, SPECIFIC facts — not vague statements like "impressive background" or invented details.
+5. If you cannot find 3 real hooks, return fewer. An empty hooks array is better than fabricated hooks.
+6. shared_context: only include genuine overlaps you're confident about. If none, return an empty array.
+7. suggested_ask: base it only on what you actually know about them. Do not assume things.
+════════════════════════════════════════
+
+Return ONLY valid JSON:
 {
-  "summary": "3–5 sentence narrative: who they are, what they've built, why they're notable",
-  "hooks": ["3–5 specific, recent, memorable things about them"],
-  "shared_context": ["2–4 connections to UIUC, Illinois, Big Ten, Midwest, CS/engineering culture, or the sender's background"],
+  "summary": "2–4 sentences: who they are and what they do. If limited info, say so honestly.",
+  "hooks": ["Only real, specific, verifiable facts you are confident about. Fewer is better than fabricated."],
+  "shared_context": ["Only genuine confirmed overlaps with UIUC/Illinois/sender background. Empty array if none."],
   "relevance_score": 0.0,
   "category": "speaker|mentor|recruiter|investor|peer|partner",
-  "suggested_ask": "One specific, reasonable ask tailored to this person and the sender's goals"
+  "suggested_ask": "One reasonable ask based only on what you actually know about this person"
 }
 
-Rules:
-- hooks must be SPECIFIC (company name, product, funding round, talk title — not generic)
-- shared_context should be genuine overlaps; if there are none, say so honestly
-- ${relevanceGuidance}
-- category logic: prominent founder → speaker/mentor; startup hiring → recruiter; VC/angel → investor
-- suggested_ask must match what makes sense for the sender to ask`.trim()
+${relevanceGuidance}
+Category: prominent founder/exec → speaker/mentor; VC/angel → investor; startup hiring → recruiter; peer-level → peer`.trim()
 }
 
 export async function researchContact(req: ResearchRequest): Promise<ResearchResult> {
@@ -70,8 +72,8 @@ export async function researchContact(req: ResearchRequest): Promise<ResearchRes
       { role: 'user', content: userContent },
     ],
     response_format: { type: 'json_object' },
-    temperature: 0.4,
-    max_completion_tokens: 1200,
+    temperature: 0.1, // very low — prioritise accuracy over creativity
+    max_completion_tokens: 1000,
   })
 
   const raw = response.choices[0].message.content ?? '{}'
@@ -95,7 +97,7 @@ export async function researchContact(req: ResearchRequest): Promise<ResearchRes
 
 function buildUserPrompt(req: ResearchRequest): string {
   const parts: string[] = [
-    `Research this professional for personalized outreach:`,
+    `Research this person for outreach:`,
     `Name: ${req.name}`,
   ]
 
@@ -104,15 +106,15 @@ function buildUserPrompt(req: ResearchRequest): string {
   if (req.linkedin_url) parts.push(`LinkedIn: ${req.linkedin_url}`)
 
   if (req.pasted_bio) {
-    parts.push(`\n--- PASTED BIO / LINKEDIN TEXT (use this as primary source) ---`)
+    parts.push(`\n--- PASTED PROFILE (treat as ground truth) ---`)
     parts.push(req.pasted_bio.slice(0, 3000))
-    parts.push(`--- END PASTED BIO ---`)
+    parts.push(`--- END PROFILE ---`)
+    parts.push(`\nBase your research ONLY on the pasted profile above. Do not add outside information.`)
   } else {
-    parts.push(`\nUse your training knowledge about this person. Focus on:`)
-    parts.push(`- Their company, product, and notable accomplishments`)
-    parts.push(`- Any YC batch, funding rounds, press coverage`)
-    parts.push(`- Recent launches, talks, or writings`)
-    parts.push(`- Any connection to UIUC, Illinois, Big Ten schools, or Midwest`)
+    parts.push(`\nIMPORTANT: Only include information you are genuinely confident is accurate for this specific person.`)
+    parts.push(`If this is a less-known person, be honest about the limited information rather than fabricating details.`)
+    parts.push(`Focus on: confirmed company/role, any well-documented accomplishments, verified background.`)
+    parts.push(`Do NOT guess at: funding amounts, YC batches, specific products, or recent events unless certain.`)
   }
 
   return parts.join('\n')
