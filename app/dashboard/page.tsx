@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getDashboardStats, getContacts } from '@/lib/supabase/queries'
 import Link from 'next/link'
 import { formatRelativeTime, STATUS_COLORS } from '@/lib/utils'
+import type { Contact } from '@/types'
 
 export default async function DashboardPage() {
   const supabase = createClient()
@@ -101,7 +102,7 @@ export default async function DashboardPage() {
             </Link>
           </div>
           <div className="divide-y divide-slate-50">
-            {recentContacts.map((contact) => (
+            {recentContacts.map((contact: Contact) => (
               <Link
                 key={contact.id}
                 href={`/dashboard/contacts/${contact.id}`}
