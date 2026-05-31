@@ -10,20 +10,19 @@ export async function DELETE(
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    // Delete cascades to emails and research via FK constraints
-    const { error } = await supabase
-      .from('contacts')
-      .delete()
-      .eq('id', params.id)
-      .eq('user_id', user.id) // safety: only own contacts
+    const id = params.id
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    // emails table has no ON DELETE CASCADE so we must delete children manually
+    // 1. Delete email events tied to this contact's emails
+    const { data: emailRows } = await supabase
+      .from('emails')
+      .select('id')
+      .eq('contact_id', id)
 
-    return NextResponse.json({ success: true })
-  } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Delete failed' },
-      { status: 500 }
-    )
-  }
-}
+    if (emailRows && emailRows.length > 0) {
+      const emailIds = emailRows.map((e) => e.id)
+      await supabase.from('email_events').delete().in('email_id', emailIds)
+    }
+
+    // 2. Delete emails
+    await supabase.from('emails')
