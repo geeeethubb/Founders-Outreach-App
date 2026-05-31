@@ -351,4 +351,223 @@ export default function CampaignDetailPage() {
           <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Email Source</label>
           <div className="flex gap-2 mb-3">
             <button onClick={() => setGenMode('template')}
-              className={`flex-1 py-2 rounded-lg border-2 text-sm font-medium transition-colors ${genMode === 'template' 
+              className={`flex-1 py-2 rounded-lg border-2 text-sm font-medium transition-colors ${genMode === 'template' ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-600 hover:border-slate-300'}`}>
+              🎨 Use Template
+            </button>
+            <button onClick={() => setGenMode('fresh')}
+              className={`flex-1 py-2 rounded-lg border-2 text-sm font-medium transition-colors ${genMode === 'fresh' ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-600 hover:border-slate-300'}`}>
+              ✨ Generate Fresh
+            </button>
+          </div>
+
+          {genMode === 'template' && (
+            templates.length === 0 ? (
+              <div className="text-center py-3 border border-dashed border-slate-200 rounded-lg">
+                <p className="text-sm text-slate-400 mb-1">No templates yet</p>
+                <a href="/dashboard/templates" className="text-xs text-indigo-600 hover:text-indigo-700 font-medium">Create a template →</a>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {templates.map((t) => (
+                  <label key={t.id} className={`flex items-start gap-3 p-3 rounded-lg border-2 cursor-pointer transition-colors ${genTemplateId === t.id ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200 hover:border-slate-300'}`}>
+                    <input type="radio" name="gen-template" value={t.id} checked={genTemplateId === t.id} onChange={() => setGenTemplateId(t.id)} className="mt-0.5 accent-indigo-600" />
+                    <div>
+                      <p className="text-sm font-medium text-slate-800">{t.name}</p>
+                      {(() => {
+                        const count = (t.body_template?.match(/\[[^\]]+\]/g) ?? []).length
+                        return count > 0 ? <span className="text-xs text-indigo-500">{count} AI placeholder{count !== 1 ? 's' : ''}</span> : null
+                      })()}
+                    </div>
+                  </label>
+                ))}
+              </div>
+            )
+          )}
+
+          {genMode === 'fresh' && (
+            <div>
+              <p className="text-xs text-slate-400 mb-2">Optional style tags</p>
+              <div className="flex flex-wrap gap-2">
+                {EMAIL_STYLES.map((s) => (
+                  <button key={s.id} type="button" onClick={() => toggleGenStyle(s.id)}
+                    className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-colors ${genStyles.includes(s.id) ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-slate-200 text-slate-600 hover:border-indigo-300 hover:text-indigo-600'}`}>
+                    {s.emoji} {s.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Custom note */}
+        <div className="mb-5">
+          <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
+            Context for AI <span className="font-normal text-slate-400">(optional)</span>
+          </label>
+          <textarea
+            value={genNote}
+            onChange={(e) => setGenNote(e.target.value)}
+            placeholder="e.g. Event is March 15th, 80 students attending. Looking for founders with AI / B2B SaaS experience."
+            rows={2}
+            className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+          />
+        </div>
+
+        {/* Error */}
+        {genError && (
+          <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2 rounded-lg mb-4">
+            {genError}
+          </div>
+        )}
+
+        {/* Success result */}
+        {genResult && (
+          <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-3 mb-4">
+            <p className="text-sm font-medium text-green-800">
+              ✅ {genResult.generated} email{genResult.generated !== 1 ? 's' : ''} drafted
+              {genResult.skipped.length > 0 && ` · ${genResult.skipped.length} skipped (no research)`}
+            </p>
+            {genResult.skipped.length > 0 && (
+              <p className="text-xs text-green-700 mt-1">
+                Skipped: {genResult.skipped.map((s) => s.name).join(', ')} — run AI Research on their profiles first
+              </p>
+            )}
+            <Link href="/dashboard/drafts" className="text-xs font-semibold text-green-700 underline mt-1 inline-block">
+              Review drafts →
+            </Link>
+          </div>
+        )}
+
+        <div className="flex items-center justify-between">
+          <p className="text-xs text-slate-400">
+            {members.length === 0
+              ? 'Add contacts to this campaign first'
+              : `Will generate for ${members.length} contact${members.length !== 1 ? 's' : ''} · contacts without research are skipped`}
+          </p>
+          <button
+            onClick={generateCampaignEmails}
+            disabled={generating || members.length === 0}
+            className="flex items-center gap-2 bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white text-sm font-medium px-5 py-2.5 rounded-lg transition-colors"
+          >
+            {generating ? (
+              <>
+                <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                Generating ({members.length})…
+              </>
+            ) : (
+              <>
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+                Generate Emails
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+
+      {/* Add Contacts Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            onClick={() => setShowAddModal(false)}
+          />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+              <div>
+                <h2 className="font-semibold text-slate-900">Add Contacts</h2>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  {available.length} contact{available.length !== 1 ? 's' : ''} available to add
+                </p>
+              </div>
+              <button
+                onClick={() => setShowAddModal(false)}
+                className="text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="px-6 py-3 border-b border-slate-100">
+              <input
+                autoFocus
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search by name, company, or role…"
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
+
+            <div className="flex-1 overflow-y-auto">
+              {filtered.length === 0 ? (
+                <div className="p-8 text-center text-slate-400 text-sm">
+                  {available.length === 0
+                    ? 'All your contacts are already in this campaign.'
+                    : 'No contacts match your search.'}
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-100">
+                  {filtered.map((contact) => (
+                    <label
+                      key={contact.id}
+                      className="flex items-center gap-3 px-6 py-3 hover:bg-slate-50 cursor-pointer transition-colors"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selected.has(contact.id)}
+                        onChange={() => toggleSelect(contact.id)}
+                        className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300"
+                      />
+                      <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0">
+                        <span className="text-indigo-600 font-semibold text-xs">
+                          {contact.name.charAt(0).toUpperCase()}
+                        </span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-slate-800 text-sm truncate">{contact.name}</p>
+                        <p className="text-xs text-slate-400 truncate">
+                          {[contact.role, contact.company].filter(Boolean).join(' @ ') || contact.email || '—'}
+                        </p>
+                      </div>
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${STATUS_COLORS[contact.status] ?? ''}`}>
+                        {contact.status}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-slate-50 rounded-b-2xl">
+              <span className="text-sm text-slate-500">
+                {selected.size > 0 ? `${selected.size} selected` : 'Select contacts to add'}
+              </span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowAddModal(false)}
+                  className="px-4 py-2 border border-slate-200 text-slate-600 text-sm rounded-lg hover:bg-white transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={addContacts}
+                  disabled={selected.size === 0 || adding}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors"
+                >
+                  {adding ? 'Adding…' : `Add ${selected.size > 0 ? selected.size : ''} Contact${selected.size !== 1 ? 's' : ''}`}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

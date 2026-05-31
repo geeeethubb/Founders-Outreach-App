@@ -312,4 +312,14 @@ function TextArea({ label, value, onChange, placeholder, rows }: {
 }) {
   return (
     <div>
-      {label && <label className="blo
+      {label && <label className="block text-xs font-medium text-slate-600 mb-1">{label}</label>}
+      <textarea
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        rows={rows ?? 4}
+        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+      />
+    </div>
+  )
+}

@@ -102,3 +102,39 @@ export async function POST(
             template_id: templateId,
             subject,
             body: emailBody,
+            variant_label: 'A',
+            status: 'draft',
+            scheduled_for: null,
+            sent_at: null,
+            resend_message_id: null,
+            generation_metadata: {
+              model: 'gpt-5.4',
+              prompt_version: template ? '2.0' : '1.0',
+              hooks_used: [],
+              hook_type: 'accomplishment',
+              word_count: emailBody.split(/\s+/).length,
+              outreach_goal: body.outreach_goal,
+            },
+          })
+          .select('id')
+          .single()
+
+        if (email) generated.push({ contact_id: row.contact_id, email_id: email.id })
+      } catch (e) {
+        skipped.push({
+          contact_id: row.contact_id,
+          name: contact.name,
+          reason: e instanceof Error ? e.message : 'Generation failed',
+        })
+      }
+    }
+
+    return NextResponse.json({ success: true, generated: generated.length, skipped })
+  } catch (error) {
+    console.error('Campaign generate error:', error)
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Failed' },
+      { status: 500 }
+    )
+  }
+}

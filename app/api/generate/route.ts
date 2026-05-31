@@ -73,4 +73,69 @@ export async function POST(request: NextRequest) {
           label: 'A',
           subject: filled.subject,
           body: filled.body,
-   
+          hook_type: 'accomplishment',
+          hook_used: `Template: ${template.name}`,
+          word_count: filled.body.split(/\s+/).length,
+          email_id: savedEmail.id,
+        }],
+      })
+    }
+
+    // ── Fresh generate mode (A/B/C variants) ─────────────────────────────────
+    if (!contact.research) {
+      return NextResponse.json(
+        { error: 'Contact has not been researched yet. Run research first.' },
+        { status: 400 }
+      )
+    }
+
+    const variants = await generateEmailVariants(
+      contact,
+      contact.research,
+      body,
+      senderName,
+      profile
+    )
+
+    const savedEmails = await Promise.all(
+      variants.map((variant) =>
+        createEmail({
+          user_id: user.id,
+          contact_id: body.contact_id,
+          campaign_id: null,
+          template_id: null,
+          subject: variant.subject,
+          body: variant.body,
+          variant_label: variant.label,
+          status: 'draft',
+          scheduled_for: null,
+          sent_at: null,
+          resend_message_id: null,
+          generation_metadata: {
+            model: 'gpt-5.4',
+            prompt_version: '1.0',
+            hooks_used: [variant.hook_used],
+            hook_type: variant.hook_type,
+            word_count: variant.word_count,
+            outreach_goal: body.outreach_goal,
+          },
+        })
+      )
+    )
+
+    return NextResponse.json({
+      success: true,
+      mode: 'fresh',
+      variants: variants.map((v, i) => ({
+        ...v,
+        email_id: savedEmails[i].id,
+      })),
+    })
+  } catch (error) {
+    console.error('Generate error:', error)
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Generation failed' },
+      { status: 500 }
+    )
+  }
+}

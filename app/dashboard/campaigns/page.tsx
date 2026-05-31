@@ -204,4 +204,21 @@ export default function CampaignsPage() {
                   </button>
                   <span className="text-slate-200">|</span>
                   <button
-                    onClick={asy
+                    onClick={async () => {
+                      if (!confirm(`Delete "${campaign.name}"? This cannot be undone.`)) return
+                      await supabase.from('campaigns').delete().eq('id', campaign.id)
+                      setCampaigns((c) => c.filter((x) => x.id !== campaign.id))
+                    }}
+                    className="text-xs text-red-400 hover:text-red-600"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}

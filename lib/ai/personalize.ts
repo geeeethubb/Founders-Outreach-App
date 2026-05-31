@@ -164,4 +164,99 @@ export async function generateEmailVariants(
   const raw = response.choices[0].message.content ?? '{}'
 
   try {
-    const 
+    const parsed = JSON.parse(raw) as {
+      variants: Array<{
+        label: string
+        subject: string
+        body: string
+        hook_type: string
+        hook_used: string
+      }>
+    }
+
+    return parsed.variants.map((v) => ({
+      label: v.label as 'A' | 'B' | 'C',
+      subject: v.subject,
+      body: v.body,
+      hook_type: v.hook_type as EmailVariant['hook_type'],
+      hook_used: v.hook_used,
+      word_count: v.body.split(/\s+/).length,
+    }))
+  } catch {
+    throw new Error('Failed to parse email generation response')
+  }
+}
+
+function buildUserPrompt(
+  contact: Contact,
+  research: ContactResearch,
+  goal: (typeof GOAL_CONFIGS)[keyof typeof GOAL_CONFIGS],
+  senderName: string,
+  customNote?: string,
+  senderProfile?: Profile | null
+): string {
+  const parts: string[] = [
+    `Generate 3 email variants for this outreach:`,
+    ``,
+    `=== RECIPIENT ===`,
+    `Name: ${contact.name}`,
+  ]
+
+  if (contact.company) parts.push(`Company: ${contact.company}`)
+  if (contact.role) parts.push(`Role: ${contact.role}`)
+  if (contact.location) parts.push(`Location: ${contact.location}`)
+
+  parts.push(``, `=== RESEARCH SUMMARY ===`)
+  parts.push(research.summary ?? 'No summary available.')
+
+  if (research.hooks && research.hooks.length > 0) {
+    parts.push(``, `Specific hooks to use:`)
+    research.hooks.forEach((h) => parts.push(`• ${h}`))
+  }
+
+  if (research.shared_context && research.shared_context.length > 0) {
+    parts.push(``, `Shared context / connections:`)
+    research.shared_context.forEach((c) => parts.push(`• ${c}`))
+  }
+
+  parts.push(``, `=== OUTREACH GOAL: ${goal.label} ===`)
+  parts.push(goal.ask_guidance)
+
+  if (research.suggested_ask) {
+    parts.push(``, `Suggested specific ask: ${research.suggested_ask}`)
+  }
+
+  parts.push(``, `=== SENDER ===`)
+  parts.push(`Name: ${senderName}`)
+  parts.push(`Club: Founders: Illinois Entrepreneurs @ UIUC`)
+
+  if (senderProfile) {
+    if (senderProfile.role) parts.push(`Role: ${senderProfile.role}`)
+    if (senderProfile.major) parts.push(`Major: ${senderProfile.major}`)
+    if (senderProfile.graduation_year) parts.push(`Graduation: ${senderProfile.graduation_year}`)
+    if (senderProfile.bio) parts.push(`Bio: ${senderProfile.bio}`)
+
+    if (senderProfile.linkedin_bio_text || senderProfile.resume_text || senderProfile.personal_context || senderProfile.portfolio_url) {
+      parts.push(``, `=== SENDER BACKGROUND ===`)
+      parts.push(`Use the most RELEVANT 1–2 facts from the sender's background for Part 4 (About Sender).`)
+      parts.push(`Pick what directly connects to THIS recipient's world — not a generic summary.`)
+      if (senderProfile.portfolio_url) parts.push(`Portfolio/LinkedIn: ${senderProfile.portfolio_url}`)
+      if (senderProfile.linkedin_bio_text) {
+        parts.push(`LinkedIn About:\n${senderProfile.linkedin_bio_text.slice(0, 1500)}`)
+      }
+      if (senderProfile.resume_text) {
+        parts.push(`Resume:\n${senderProfile.resume_text.slice(0, 2000)}`)
+      }
+      if (senderProfile.personal_context) {
+        parts.push(`Additional context: ${senderProfile.personal_context}`)
+      }
+    }
+  }
+
+  if (customNote) {
+    parts.push(``, `=== ADDITIONAL CONTEXT ===`)
+    parts.push(customNote)
+  }
+
+  return parts.join('\n')
+}

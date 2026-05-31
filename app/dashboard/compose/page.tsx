@@ -451,4 +451,83 @@ export default function ComposePage() {
                   {selectedTemplate.body_template}
                 </pre>
                 <div className="mt-2">
-                  {(selectedTemplate.body_templ
+                  {(selectedTemplate.body_template?.match(/\[[^\]]+\]/g) ?? []).map((p, i) => (
+                    <span key={i} className="inline-block text-xs bg-indigo-50 text-indigo-600 border border-indigo-200 px-1.5 py-0.5 rounded mr-1 mb-1 font-mono">{p}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Step 2: Variants / Preview ── */}
+      {step === 'variants' && variants.length > 0 && (
+        <div className="space-y-5">
+          <div className="flex items-center gap-3">
+            {mode === 'template' ? (
+              <div className="flex items-center gap-2 text-sm text-slate-600">
+                <span className="bg-indigo-100 text-indigo-700 text-xs font-medium px-2.5 py-1 rounded-full">🎨 {selectedTemplate?.name}</span>
+                <span className="text-slate-400 text-xs">filled for {selectedContact?.name}</span>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                {variants.map((v, i) => (
+                  <button key={v.label} onClick={() => setSelectedVariant(i)}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border-2 transition-colors ${selectedVariant === i ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-600 hover:border-slate-300'}`}>
+                    <span className="font-bold">Variant {v.label}</span>
+                    <span className="text-xs opacity-70 hidden sm:block">
+                      {v.hook_type === 'accomplishment' ? '🏆' : v.hook_type === 'shared_context' ? '🤝' : '💡'} {v.hook_type.replace('_', ' ')}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+            <button onClick={() => { setStep('setup'); setVariants([]) }} className="ml-auto text-sm text-slate-400 hover:text-slate-600">← Back</button>
+          </div>
+
+          {mode === 'fresh' && variants[selectedVariant] && (
+            <div className="bg-blue-50 border border-blue-100 rounded-lg px-4 py-2 text-sm text-blue-700">
+              <strong>Hook used:</strong> {variants[selectedVariant].hook_used}
+            </div>
+          )}
+
+          {/* Editable email */}
+          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-100">
+              <label className="block text-xs font-medium text-slate-500 mb-1">Subject</label>
+              <input value={editedSubject} onChange={(e) => setEditedSubject(e.target.value)} className="w-full text-sm font-medium text-slate-800 focus:outline-none" />
+            </div>
+            <div className="p-5">
+              <label className="block text-xs font-medium text-slate-500 mb-2">Body</label>
+              <textarea
+                value={editedBody}
+                onChange={(e) => setEditedBody(e.target.value)}
+                rows={14}
+                className="w-full text-sm text-slate-700 leading-relaxed focus:outline-none resize-none"
+              />
+              <div className={`text-right text-xs mt-2 ${wordCount > 180 ? 'text-red-500' : 'text-slate-400'}`}>
+                {wordCount} words {wordCount > 180 && '— consider trimming'}
+              </div>
+            </div>
+          </div>
+
+          {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-lg">{error}</div>}
+
+          <div className="flex gap-3">
+            <button onClick={generate} disabled={generating}
+              className="px-4 py-2.5 border border-slate-200 text-slate-700 text-sm font-medium rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50">
+              {generating ? 'Regenerating…' : '↻ Regenerate'}
+            </button>
+            <button onClick={send} disabled={sending || !selectedContact?.email}
+              className="flex-1 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-medium py-2.5 rounded-lg transition-colors">
+              {sending ? (
+                <><svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>Sending…</>
+              ) : !selectedContact?.email ? '⚠️ Add email to send' : `Send to ${selectedContact?.name} →`}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
