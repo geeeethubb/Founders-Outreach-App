@@ -44,13 +44,12 @@ export default function LoginPage() {
       <div className="w-full max-w-md">
         {/* Logo / Brand */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center gap-2 mb-4">
-            <div className="w-9 h-9 bg-indigo-500 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-lg">F</span>
-            </div>
-            <span className="text-white font-semibold text-lg">Outreach OS</span>
+          <div className="inline-flex flex-col items-center gap-3 mb-2">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo.png" alt="OutreachOS" className="w-16 h-16 object-contain" />
+            <span className="text-white font-bold text-2xl tracking-tight">OutreachOS</span>
           </div>
-          <p className="text-slate-400 text-sm">Founders: Illinois Entrepreneurs</p>
+          <p className="text-slate-400 text-sm">AI-powered cold outreach</p>
         </div>
 
         <div className="bg-white rounded-2xl shadow-xl p-8">
@@ -59,7 +58,7 @@ export default function LoginPage() {
           </h1>
           <p className="text-slate-500 text-sm mb-6">
             {mode === 'login'
-              ? 'Sign in to your Outreach OS account'
+              ? 'Sign in to your OutreachOS account'
               : 'Start building meaningful relationships'}
           </p>
 
@@ -73,7 +72,7 @@ export default function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                placeholder="you@illinois.edu"
+                placeholder="you@example.com"
                 className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
               />
             </div>

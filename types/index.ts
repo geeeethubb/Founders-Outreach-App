@@ -144,6 +144,8 @@ export interface Profile {
   resume_text: string | null
   portfolio_url: string | null
   personal_context: string | null
+  target_roles: string | null
+  supplementary_materials: string | null
   graduation_year: string | null
   major: string | null
   created_at: string
@@ -180,6 +182,7 @@ export interface ContactResearch {
   hooks: string[] | null
   shared_context: string[] | null
   relevance_score: number | null
+  fit_reason: string | null
   category: OutreachCategory | null
   suggested_ask: string | null
   researched_at: string
@@ -296,11 +299,16 @@ export interface ResearchRequest {
   senderProfile?: {
     name?: string | null
     role?: string | null
+    company?: string | null
     major?: string | null
     bio?: string | null
     graduation_year?: string | null
     linkedin_bio_text?: string | null
+    resume_text?: string | null
+    portfolio_url?: string | null
     personal_context?: string | null
+    target_roles?: string | null
+    supplementary_materials?: string | null
   } | null
 }
 
@@ -309,6 +317,7 @@ export interface ResearchResult {
   hooks: string[]
   shared_context: string[]
   relevance_score: number
+  fit_reason: string
   category: OutreachCategory
   suggested_ask: string
 }

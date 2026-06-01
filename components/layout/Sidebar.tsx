@@ -95,12 +95,13 @@ export default function Sidebar() {
       {/* Brand */}
       <div className="px-5 pt-6 pb-4">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 bg-indigo-500 rounded-lg flex items-center justify-center flex-shrink-0">
-            <span className="text-white font-bold text-sm">F</span>
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden bg-slate-800">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo.png" alt="OutreachOS" className="w-8 h-8 object-contain" />
           </div>
           <div>
-            <p className="text-white font-semibold text-sm leading-tight">Outreach OS</p>
-            <p className="text-slate-500 text-xs leading-tight">Illinois Entrepreneurs</p>
+            <p className="text-white font-semibold text-sm leading-tight">OutreachOS</p>
+            <p className="text-slate-500 text-xs leading-tight">AI Outreach Platform</p>
           </div>
         </div>
       </div>

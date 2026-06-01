@@ -138,7 +138,7 @@ export default function ResearchCard({ contact }: Props) {
               )}
               {research.relevance_score != null && (
                 <span className={`font-medium ${relevanceColor(research.relevance_score)}`}>
-                  {relevanceLabel(research.relevance_score)} relevance
+                  {relevanceLabel(research.relevance_score)} fit for you
                 </span>
               )}
             </p>
@@ -152,6 +152,16 @@ export default function ResearchCard({ contact }: Props) {
           {loading ? 'Re-researching…' : '↻ Re-research'}
         </button>
       </div>
+
+      {/* Why this fits you */}
+      {research.fit_reason && (
+        <div className="bg-slate-50 border border-slate-200 rounded-lg px-4 py-3">
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">
+            Why this fits you
+          </p>
+          <p className="text-sm text-slate-700 leading-relaxed">{research.fit_reason}</p>
+        </div>
+      )}
 
       {/* Summary */}
       <div>

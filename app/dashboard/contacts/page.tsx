@@ -13,8 +13,8 @@ const CATEGORIES = ['speaker', 'mentor', 'recruiter', 'investor', 'peer', 'partn
 const SORT_OPTIONS = [
   { value: 'added_desc', label: 'Newest first' },
   { value: 'added_asc', label: 'Oldest first' },
-  { value: 'relevance_desc', label: 'Relevance: High → Low' },
-  { value: 'relevance_asc', label: 'Relevance: Low → High' },
+  { value: 'relevance_desc', label: 'Fit: High → Low' },
+  { value: 'relevance_asc', label: 'Fit: Low → High' },
   { value: 'name_asc', label: 'Name: A → Z' },
 ]
 
@@ -287,7 +287,7 @@ export default function ContactsPage() {
                 <th className="text-left px-6 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide">Person</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide">Category</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide">Status</th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide">Relevance</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide">Fit for you</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide">Added</th>
                 <th className="px-4 py-3"></th>
               </tr>
@@ -327,7 +327,10 @@ export default function ContactsPage() {
                   </td>
                   <td className="px-4 py-3.5">
                     {contact.research?.relevance_score != null ? (
-                      <span className={`text-sm font-medium ${relevanceColor(contact.research.relevance_score)}`}>
+                      <span
+                        className={`text-sm font-medium ${relevanceColor(contact.research.relevance_score)} ${contact.research.fit_reason ? 'cursor-help' : ''}`}
+                        title={contact.research.fit_reason ?? undefined}
+                      >
                         {relevanceLabel(contact.research.relevance_score)}
                       </span>
                     ) : <span className="text-xs text-slate-300">Not researched</span>}

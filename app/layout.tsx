@@ -2,8 +2,8 @@ import type { Metadata } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'Outreach OS — Founders Illinois',
-  description: 'AI-powered relationship outreach for Founders: Illinois Entrepreneurs',
+  title: 'OutreachOS',
+  description: 'AI-powered cold outreach platform',
 }
 
 export default function RootLayout({

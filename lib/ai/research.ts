@@ -12,28 +12,64 @@ startup ecosystem — top founders, investors, and operators.
 function buildSystemPrompt(senderProfile?: ResearchRequest['senderProfile']): string {
   const senderLines: string[] = []
   if (senderProfile?.name) senderLines.push(`Name: ${senderProfile.name}`)
-  if (senderProfile?.role) senderLines.push(`Role: ${senderProfile.role}`)
+  if (senderProfile?.role) senderLines.push(`Current role: ${senderProfile.role}`)
+  if (senderProfile?.company) senderLines.push(`Company/club: ${senderProfile.company}`)
   if (senderProfile?.major) senderLines.push(`Major: ${senderProfile.major}`)
   if (senderProfile?.graduation_year) senderLines.push(`Graduation: ${senderProfile.graduation_year}`)
+  if (senderProfile?.target_roles) senderLines.push(`WHAT THEY ARE LOOKING FOR (most important): ${senderProfile.target_roles}`)
   if (senderProfile?.bio) senderLines.push(`Bio: ${senderProfile.bio}`)
-  if (senderProfile?.linkedin_bio_text) senderLines.push(`LinkedIn: ${senderProfile.linkedin_bio_text.slice(0, 600)}`)
-  if (senderProfile?.personal_context) senderLines.push(`Context: ${senderProfile.personal_context}`)
+  if (senderProfile?.personal_context) senderLines.push(`Personal context: ${senderProfile.personal_context}`)
+  if (senderProfile?.linkedin_bio_text) senderLines.push(`LinkedIn About: ${senderProfile.linkedin_bio_text.slice(0, 1200)}`)
+  if (senderProfile?.resume_text) senderLines.push(`Résumé:\n${senderProfile.resume_text.slice(0, 2500)}`)
+  if (senderProfile?.supplementary_materials) senderLines.push(`Supplementary materials: ${senderProfile.supplementary_materials.slice(0, 1000)}`)
+  if (senderProfile?.portfolio_url) senderLines.push(`Portfolio: ${senderProfile.portfolio_url}`)
+
+  // We only have a real basis for fit-based scoring if the sender told us about
+  // themselves beyond a bare name/role. Otherwise we fall back to prominence.
+  const hasRichProfile = Boolean(
+    senderProfile?.target_roles ||
+    senderProfile?.resume_text ||
+    senderProfile?.linkedin_bio_text ||
+    senderProfile?.personal_context
+  )
 
   const senderSection = senderLines.length > 0
-    ? `\nSENDER (who will send the outreach):\n${senderLines.join('\n')}`
+    ? `\nSENDER (the person doing the outreach — score fit RELATIVE TO THIS PERSON):\n${senderLines.join('\n')}`
     : ''
 
-  const relevanceGuidance = senderLines.length > 0
-    ? `relevance_score: 0–1 based on how valuable this contact is TO THE SENDER specifically.
-       0.9+ = strong direct overlap with sender's goals/industry
-       0.7–0.9 = relevant domain, real value
-       0.5–0.7 = moderate fit
-       below 0.5 = weak fit`
-    : `relevance_score: 0.9+ = major well-known founder/investor, 0.7+ = solid startup person, below 0.5 = limited info`
+  const relevanceGuidance = hasRichProfile
+    ? `relevance_score (0–1) — FIT TO THE SENDER, NOT FAME:
+This score measures how useful this specific contact is for advancing the SENDER's actual
+goals, skills, industry, and target roles described above. It is NOT a measure of how famous,
+senior, or impressive the contact is.
+
+CRITICAL — read carefully:
+• A famous CEO / well-known founder whose domain has NOTHING to do with the sender's path
+  scores LOW (e.g. 0.2–0.4). Fame is not fit.
+• A lesser-known person who directly matches the sender's target roles, industry, skills, or
+  the kind of opportunity the sender is seeking scores HIGH.
+• Anchor the score on overlap with "WHAT THEY ARE LOOKING FOR" and the sender's résumé/skills.
+
+Tiers:
+  0.85–1.0 = strong, direct fit — works in the sender's target industry/role, could plausibly
+             hire/mentor/advise/collaborate with the sender on exactly what they're pursuing.
+  0.6–0.85 = real, relevant adjacency — related field or transferable value to the sender.
+  0.4–0.6  = loose/indirect fit — some connection but not central to the sender's goals.
+  below 0.4 = weak fit — impressive person, but little relevance to THIS sender's path.
+
+fit_reason: ONE sentence, concrete, explaining the score in terms of the sender's goals/skills
+(e.g. "Leads growth at a Series B fintech — directly matches your PM-at-fintech target and your
+payments project." or "Prominent biotech founder, but unrelated to your AI/SWE focus.").`
+    : `relevance_score (0–1): the sender's profile is sparse, so fall back to general prominence —
+0.9+ = major well-known founder/investor, 0.7+ = solid startup operator, below 0.5 = limited info.
+fit_reason: state that fit could not be personalized and that the score reflects general
+prominence — e.g. "Scored on general prominence; complete your profile (résumé + what you're
+looking for) for a fit-based ranking."`
 
   return `You are a research analyst for ${CLUB_CONTEXT}${senderSection}
 
-Your job: produce a research summary to power personalized cold outreach. You must be ACCURATE.
+Your job: produce a research summary to power personalized cold outreach, and a FIT score that
+tells the sender how relevant this contact is TO THEM. You must be ACCURATE.
 
 ════════════════════════════════════════
 ANTI-HALLUCINATION RULES — NON-NEGOTIABLE:
@@ -45,6 +81,7 @@ ANTI-HALLUCINATION RULES — NON-NEGOTIABLE:
 5. If you cannot find 3 real hooks, return fewer. An empty hooks array is better than fabricated hooks.
 6. shared_context: only include genuine overlaps you're confident about. If none, return an empty array.
 7. suggested_ask: base it only on what you actually know about them. Do not assume things.
+8. fit_reason: explain fit honestly based on the sender info above. Do not fabricate overlaps.
 ════════════════════════════════════════
 
 Return ONLY valid JSON:
@@ -53,6 +90,7 @@ Return ONLY valid JSON:
   "hooks": ["Only real, specific, verifiable facts you are confident about. Fewer is better than fabricated."],
   "shared_context": ["Only genuine confirmed overlaps with UIUC/Illinois/sender background. Empty array if none."],
   "relevance_score": 0.0,
+  "fit_reason": "One sentence explaining the score in terms of the sender's goals/skills.",
   "category": "speaker|mentor|recruiter|investor|peer|partner",
   "suggested_ask": "One reasonable ask based only on what you actually know about this person"
 }
@@ -87,6 +125,7 @@ export async function researchContact(req: ResearchRequest): Promise<ResearchRes
       relevance_score: typeof parsed.relevance_score === 'number'
         ? Math.max(0, Math.min(1, parsed.relevance_score))
         : 0.5,
+      fit_reason: parsed.fit_reason ?? '',
       category: (parsed.category as OutreachCategory) ?? 'peer',
       suggested_ask: parsed.suggested_ask ?? '',
     }
