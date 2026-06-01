@@ -7,6 +7,15 @@ import type { SendRequest } from '@/types'
 // Rate limiting constants — adjust as you scale
 const MAX_EMAILS_PER_DAY = 20
 
+// Sender allowlist — locks down public sign-up so only approved accounts can
+// actually send mail. Everything currently sends from one shared Gmail
+// (GMAIL_USER), so without this any registered user would send as that account.
+// Configure via ALLOWED_SENDERS (comma-separated emails); defaults to the owner.
+const ALLOWED_SENDERS = (process.env.ALLOWED_SENDERS ?? 'zuyu.alex06@gmail.com')
+  .split(',')
+  .map((e) => e.trim().toLowerCase())
+  .filter(Boolean)
+
 export async function POST(request: NextRequest) {
   try {
     const supabase = createClient()
@@ -14,6 +23,16 @@ export async function POST(request: NextRequest) {
 
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Sending is restricted to allowlisted accounts. All mail goes out from a
+    // single shared Gmail, so non-owner sends would impersonate the owner and
+    // damage their sender reputation. Block them here.
+    if (!user.email || !ALLOWED_SENDERS.includes(user.email.toLowerCase())) {
+      return NextResponse.json(
+        { error: 'Sending is restricted to the platform owner on this deployment.' },
+        { status: 403 }
+      )
     }
 
     const body = (await request.json()) as SendRequest
