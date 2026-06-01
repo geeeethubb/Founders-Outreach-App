@@ -342,4 +342,15 @@ export interface SendRequest {
   schedule_at?: string
 }
 
+// ─── Dashboard Stats ──────────────────────────────────────────────────────────
+
+export interface DashboardStats {
+  total_contacts: number
+  researched: number
+  emails_sent: number
+  replies: number
+  meetings: number
+  reply_rate: number
+}
+
 // ─── UI State Types ─────────────────────────────────
