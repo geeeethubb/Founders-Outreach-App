@@ -5,7 +5,7 @@ import { updateEmailStatus, updateContactStatus } from '@/lib/supabase/queries'
 import type { SendRequest } from '@/types'
 
 // Rate limiting constants — adjust as you scale
-const MAX_EMAILS_PER_DAY = 20
+const MAX_EMAILS_PER_DAY = 500
 
 // Sender allowlist — locks down public sign-up so only approved accounts can
 // actually send mail. Everything currently sends from one shared Gmail

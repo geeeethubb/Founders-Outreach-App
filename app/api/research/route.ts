@@ -46,7 +46,6 @@ export async function POST(request: NextRequest) {
       hooks: result.hooks,
       shared_context: result.shared_context,
       relevance_score: result.relevance_score,
-      fit_reason: result.fit_reason,
       category: result.category,
       suggested_ask: result.suggested_ask,
       model_used: 'gpt-5.4',

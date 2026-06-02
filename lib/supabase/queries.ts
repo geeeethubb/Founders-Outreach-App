@@ -71,7 +71,7 @@ export async function upsertResearch(research: {
   hooks: string[]
   shared_context: string[]
   relevance_score: number
-  fit_reason: string
+  fit_reason?: string
   category: string
   suggested_ask: string
   model_used: string
