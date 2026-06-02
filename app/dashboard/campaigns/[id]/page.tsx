@@ -73,9 +73,23 @@ export default function CampaignDetailPage() {
           template_id: genMode === 'template' ? genTemplateId : undefined,
         }),
       })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error)
-      setGenResult(data)
+      // The server can run for minutes on large campaigns. If it's killed
+      // (timeout) or hits a gateway error, the body is an HTML/text error page,
+      // not JSON — guard the parse so it surfaces a clear message instead of
+      // a cryptic "Unexpected token 'A'…".
+      const raw = await res.text()
+      let data: { generated?: number; skipped?: { name: string; reason: string }[]; error?: string }
+      try {
+        data = JSON.parse(raw)
+      } catch {
+        throw new Error(
+          res.ok
+            ? 'The server returned an unexpected response. Some drafts may have been created — check Drafts.'
+            : `Generation failed (HTTP ${res.status}). The request may have timed out; any drafts created so far are in Drafts.`
+        )
+      }
+      if (!res.ok) throw new Error(data.error || `Generation failed (HTTP ${res.status})`)
+      setGenResult(data as { generated: number; skipped: { name: string; reason: string }[] })
     } catch (e) {
       setGenError(e instanceof Error ? e.message : 'Generation failed')
     } finally {

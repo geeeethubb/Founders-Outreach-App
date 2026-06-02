@@ -5,6 +5,11 @@ import { fillEmailTemplate } from '@/lib/ai/fill-template'
 import { getProfile } from '@/lib/supabase/queries'
 import type { GenerateRequest } from '@/types'
 
+// Generating an email per contact is many sequential OpenAI calls; give the
+// function room so large campaigns don't get killed mid-loop (which truncates
+// the HTTP response and surfaces client-side as "Unexpected token" on res.json()).
+export const maxDuration = 300
+
 export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
