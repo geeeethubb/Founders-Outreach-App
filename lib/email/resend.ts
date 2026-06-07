@@ -70,7 +70,7 @@ function plainTextToHtml(text: string): string {
     const placeholder = `\x00LINK${linkPlaceholders.length}\x00`
     linkPlaceholders.push({
       placeholder,
-      html: `<a href="${url}" style="color:#4f46e5;text-decoration:none">${linkText}</a>`,
+      html: `<a href="${url}" style="color:#1a73e8;text-decoration:underline">${linkText}</a>`,
     })
     return placeholder
   })
@@ -86,16 +86,20 @@ function plainTextToHtml(text: string): string {
     processedText = processedText.replace(placeholder, html)
   }
 
+  // Render like a normal, hand-written Gmail message: left-aligned, no centered
+  // page container, no large padding. Just paragraphs in a plain text block.
   const paragraphs = processedText
     .split('\n\n')
-    .map((p) => `<p style="margin:0 0 16px 0;line-height:1.6">${p.replace(/\n/g, '<br>')}</p>`)
+    .map((p) => `<p style="margin:0 0 14px 0">${p.replace(/\n/g, '<br>')}</p>`)
     .join('\n')
 
   return `<!DOCTYPE html>
 <html>
-<head><meta charset="utf-8"></head>
-<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:15px;color:#1a1a1a;max-width:600px;margin:0 auto;padding:32px 16px">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="margin:0;padding:0">
+<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.5;color:#222">
 ${paragraphs}
+</div>
 </body>
 </html>`
 }
