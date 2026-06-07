@@ -16,22 +16,36 @@ export default function LoginPage() {
   const router = useRouter()
   const supabase = createClient()
 
+  // Accepts any normal address — gmail.com, .edu, subdomains, plus-tags, etc.
+  // We do NOT restrict to specific domains. This mirrors what Supabase accepts,
+  // so the client check and the backend agree.
+  const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    setLoading(true)
     setError('')
     setMessage('')
 
+    // Trim first: autofill / copy-paste often add stray whitespace, which
+    // Supabase rejects as "invalid format" even for perfectly valid addresses.
+    const cleanEmail = email.trim()
+    if (!EMAIL_REGEX.test(cleanEmail)) {
+      setError('Please enter a valid email address')
+      return
+    }
+
+    setLoading(true)
+
     if (mode === 'signup') {
       const { error } = await supabase.auth.signUp({
-        email,
+        email: cleanEmail,
         password,
         options: { emailRedirectTo: `${window.location.origin}/dashboard` },
       })
       if (error) setError(error.message)
       else setMessage('Check your email to confirm your account!')
     } else {
-      const { error } = await supabase.auth.signInWithPassword({ email, password })
+      const { error } = await supabase.auth.signInWithPassword({ email: cleanEmail, password })
       if (error) setError(error.message)
       else router.push('/dashboard')
     }
