@@ -209,6 +209,7 @@ export interface Email {
   body: string | null
   variant_label: 'A' | 'B' | 'C' | null
   status: EmailStatus
+  reply_to_email_id: string | null
   scheduled_for: string | null
   sent_at: string | null
   resend_message_id: string | null
@@ -261,11 +262,14 @@ export interface Message {
   created_at: string
 }
 
+export type TemplateType = 'initial' | 'followup'
+
 export interface Template {
   id: string
   user_id: string
   name: string | null
   category: OutreachCategory | null
+  type: TemplateType
   subject_template: string | null
   body_template: string | null
   variables: string[] | null

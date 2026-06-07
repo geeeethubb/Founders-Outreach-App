@@ -49,6 +49,7 @@ export default function CampaignDetailPage() {
   const [genMode, setGenMode] = useState<'template' | 'fresh'>('template')
   const [genTemplateId, setGenTemplateId] = useState<string>('')
   const [templates, setTemplates] = useState<Template[]>([])
+  const [emailedMap, setEmailedMap] = useState<Map<string, { count: number; lastSentAt: string }>>(new Map())
 
   function toggleGenStyle(s: EmailStyle) {
     setGenStyles((prev) => prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s])
@@ -101,7 +102,7 @@ export default function CampaignDetailPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { router.push('/login'); return }
 
-    const [{ data: camp }, { data: mems }, { data: contacts }, { data: tmplData }] = await Promise.all([
+    const [{ data: camp }, { data: mems }, { data: contacts }, { data: tmplData }, { data: sentData }] = await Promise.all([
       supabase.from('campaigns').select('*').eq('id', campaignId).single(),
       supabase
         .from('campaign_contacts')
@@ -119,6 +120,7 @@ export default function CampaignDetailPage() {
         .eq('user_id', user.id)
         .eq('is_active', true)
         .order('created_at', { ascending: false }),
+      supabase.from('emails').select('contact_id, sent_at').eq('user_id', user.id).eq('status', 'sent'),
     ])
 
     setCampaign(camp)
@@ -126,6 +128,20 @@ export default function CampaignDetailPage() {
     setAllContacts((contacts ?? []) as Contact[])
     setTemplates((tmplData as Template[]) ?? [])
     if (tmplData && tmplData.length > 0) setGenTemplateId(tmplData[0].id)
+
+    const map = new Map<string, { count: number; lastSentAt: string }>()
+    for (const row of (sentData as { contact_id: string; sent_at: string | null }[]) ?? []) {
+      if (!row.contact_id) continue
+      const existing = map.get(row.contact_id)
+      const sentAt = row.sent_at ?? ''
+      if (existing) {
+        existing.count += 1
+        if (sentAt > existing.lastSentAt) existing.lastSentAt = sentAt
+      } else {
+        map.set(row.contact_id, { count: 1, lastSentAt: sentAt })
+      }
+    }
+    setEmailedMap(map)
     setLoading(false)
   }, [campaignId])
 
@@ -386,7 +402,12 @@ export default function CampaignDetailPage() {
                   <label key={t.id} className={`flex items-start gap-3 p-3 rounded-lg border-2 cursor-pointer transition-colors ${genTemplateId === t.id ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200 hover:border-slate-300'}`}>
                     <input type="radio" name="gen-template" value={t.id} checked={genTemplateId === t.id} onChange={() => setGenTemplateId(t.id)} className="mt-0.5 accent-indigo-600" />
                     <div>
-                      <p className="text-sm font-medium text-slate-800">{t.name}</p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-sm font-medium text-slate-800">{t.name}</p>
+                        {t.type === 'followup' && (
+                          <span className="text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded-full">↩ Follow-up</span>
+                        )}
+                      </div>
                       {(() => {
                         const count = (t.body_template?.match(/\[[^\]]+\]/g) ?? []).length
                         return count > 0 ? <span className="text-xs text-indigo-500">{count} AI placeholder{count !== 1 ? 's' : ''}</span> : null
@@ -456,6 +477,11 @@ export default function CampaignDetailPage() {
           <p className="text-xs text-slate-400">
             {members.length === 0
               ? 'Add contacts to this campaign first'
+              : genMode === 'template' && templates.find((t) => t.id === genTemplateId)?.type === 'followup'
+              ? (() => {
+                  const eligible = members.filter((m) => emailedMap.has(m.contact_id)).length
+                  return `Follow-up · ${eligible} of ${members.length} already emailed will get a threaded reply; the rest are skipped`
+                })()
               : `Will generate for ${members.length} contact${members.length !== 1 ? 's' : ''} · contacts without research are skipped`}
           </p>
           <button
@@ -550,6 +576,14 @@ export default function CampaignDetailPage() {
                           {[contact.role, contact.company].filter(Boolean).join(' @ ') || contact.email || '—'}
                         </p>
                       </div>
+                      {emailedMap.has(contact.id) && (
+                        <span
+                          title={`Already emailed${emailedMap.get(contact.id)!.lastSentAt ? ` · last ${formatRelativeTime(emailedMap.get(contact.id)!.lastSentAt)}` : ''}`}
+                          className="text-[11px] px-1.5 py-0.5 rounded-full font-medium flex-shrink-0 text-emerald-700 bg-emerald-50 border border-emerald-200 whitespace-nowrap"
+                        >
+                          ✓ emailed
+                        </span>
+                      )}
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${STATUS_COLORS[contact.status] ?? ''}`}>
                         {contact.status}
                       </span>

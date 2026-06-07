@@ -121,6 +121,28 @@ export async function getEmails(userId: string): Promise<Email[]> {
   return (data ?? []) as Email[]
 }
 
+/**
+ * Most recent email actually sent to a contact — used to thread a follow-up
+ * onto the original message (Re: subject + In-Reply-To / References headers).
+ */
+export async function getLatestSentEmail(contactId: string): Promise<{
+  id: string
+  subject: string | null
+  body: string | null
+  resend_message_id: string | null
+} | null> {
+  const supabase = createClient()
+  const { data } = await supabase
+    .from('emails')
+    .select('id, subject, body, resend_message_id')
+    .eq('contact_id', contactId)
+    .eq('status', 'sent')
+    .order('sent_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  return data
+}
+
 export async function createEmail(
   email: Omit<Email, 'id' | 'created_at'>
 ) {

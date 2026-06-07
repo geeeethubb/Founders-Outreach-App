@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { generateEmailVariants } from '@/lib/ai/personalize'
-import { fillEmailTemplate } from '@/lib/ai/fill-template'
+import { buildEmailFromTemplate } from '@/lib/ai/fill-template'
 import { getContact, getProfile, createEmail } from '@/lib/supabase/queries'
 import type { GenerateRequest } from '@/types'
 
@@ -36,23 +36,31 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Template not found' }, { status: 404 })
       }
 
-      const filled = await fillEmailTemplate(
+      const built = await buildEmailFromTemplate({
         template,
         contact,
-        contact.research ?? null,
+        research: contact.research ?? null,
         senderName,
-        profile
-      )
+        senderProfile: profile,
+      })
+
+      if (!built.ok) {
+        return NextResponse.json(
+          { error: `${built.reason} — send an initial email to ${contact.name} first.` },
+          { status: 400 }
+        )
+      }
 
       const savedEmail = await createEmail({
         user_id: user.id,
         contact_id: body.contact_id,
         campaign_id: null,
         template_id: body.template_id,
-        subject: filled.subject,
-        body: filled.body,
+        subject: built.subject,
+        body: built.body,
         variant_label: 'A',
         status: 'draft',
+        reply_to_email_id: built.replyToEmailId,
         scheduled_for: null,
         sent_at: null,
         resend_message_id: null,
@@ -61,7 +69,7 @@ export async function POST(request: NextRequest) {
           prompt_version: '2.0',
           hooks_used: [],
           hook_type: 'accomplishment',
-          word_count: filled.body.split(/\s+/).length,
+          word_count: built.body.split(/\s+/).length,
           outreach_goal: body.outreach_goal,
         },
       })
@@ -71,11 +79,11 @@ export async function POST(request: NextRequest) {
         mode: 'template',
         variants: [{
           label: 'A',
-          subject: filled.subject,
-          body: filled.body,
+          subject: built.subject,
+          body: built.body,
           hook_type: 'accomplishment',
           hook_used: `Template: ${template.name}`,
-          word_count: filled.body.split(/\s+/).length,
+          word_count: built.body.split(/\s+/).length,
           email_id: savedEmail.id,
         }],
       })
@@ -108,6 +116,7 @@ export async function POST(request: NextRequest) {
           body: variant.body,
           variant_label: variant.label,
           status: 'draft',
+          reply_to_email_id: null,
           scheduled_for: null,
           sent_at: null,
           resend_message_id: null,

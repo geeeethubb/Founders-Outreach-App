@@ -25,6 +25,8 @@ export interface SendEmailOptions {
   body: string        // plain text — wrapped in HTML for sending
   replyTo?: string
   scheduledAt?: string // ISO string — not natively supported by SMTP; ignored here
+  inReplyTo?: string  // Message-ID of the email this is a reply to (Gmail threading)
+  references?: string // Message-ID chain — usually the same as inReplyTo for a single-level thread
 }
 
 export interface SendEmailResult {
@@ -44,6 +46,8 @@ export async function sendEmail(opts: SendEmailOptions): Promise<SendEmailResult
       text: opts.body,
       html: htmlBody,
       ...(opts.replyTo && { replyTo: opts.replyTo }),
+      ...(opts.inReplyTo && { inReplyTo: opts.inReplyTo }),
+      ...(opts.references && { references: opts.references }),
     })
 
     return { messageId: info.messageId }

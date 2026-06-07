@@ -62,12 +62,38 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Send via Resend
+    // Load this email's row up front — we need its contact_id, and whether it's
+    // a follow-up that should thread onto an earlier message.
+    const { data: emailRow } = await supabase
+      .from('emails')
+      .select('contact_id, reply_to_email_id')
+      .eq('id', body.email_id)
+      .single()
+
+    // If this is a follow-up, look up the parent's Message-ID so Gmail threads
+    // it into the original conversation (In-Reply-To / References headers).
+    let threadHeaders: { inReplyTo?: string; references?: string } = {}
+    if (emailRow?.reply_to_email_id) {
+      const { data: parent } = await supabase
+        .from('emails')
+        .select('resend_message_id')
+        .eq('id', emailRow.reply_to_email_id)
+        .single()
+      if (parent?.resend_message_id) {
+        threadHeaders = {
+          inReplyTo: parent.resend_message_id,
+          references: parent.resend_message_id,
+        }
+      }
+    }
+
+    // Send via Gmail SMTP
     const result = await sendEmail({
       to: body.to_email,
       toName: body.to_name,
       subject: body.subject,
       body: body.body,
+      ...threadHeaders,
       ...(body.schedule_at && { scheduledAt: body.schedule_at }),
     })
 
@@ -80,12 +106,6 @@ export async function POST(request: NextRequest) {
     await updateEmailStatus(body.email_id, 'sent', result.messageId)
 
     // Update contact status
-    const { data: emailRow } = await supabase
-      .from('emails')
-      .select('contact_id')
-      .eq('id', body.email_id)
-      .single()
-
     if (emailRow?.contact_id) {
       await updateContactStatus(emailRow.contact_id, 'sent')
     }

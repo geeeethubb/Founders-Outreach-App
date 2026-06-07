@@ -39,6 +39,12 @@ export const CATEGORY_COLORS: Record<string, string> = {
   partner:   'bg-amber-100 text-amber-700',
 }
 
+/** Build a follow-up subject line: "Re: <original>", avoiding "Re: Re:" stacking. */
+export function followupSubject(original: string | null | undefined): string {
+  const base = (original ?? '').replace(/^\s*(re:\s*)+/i, '').trim()
+  return base ? `Re: ${base}` : 'Following up'
+}
+
 export function relevanceLabel(score: number): string {
   if (score >= 0.85) return 'High'
   if (score >= 0.6) return 'Medium'

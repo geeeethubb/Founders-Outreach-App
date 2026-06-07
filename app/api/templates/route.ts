@@ -33,6 +33,7 @@ export async function POST(request: NextRequest) {
       user_id: user.id,
       name: body.name,
       category: body.category ?? null,
+      type: body.type === 'followup' ? 'followup' : 'initial',
       subject_template: body.subject_template ?? null,
       body_template: body.body_template,
       variables: body.variables ?? [],

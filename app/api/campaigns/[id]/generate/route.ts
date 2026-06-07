@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { generateEmailVariants } from '@/lib/ai/personalize'
-import { fillEmailTemplate } from '@/lib/ai/fill-template'
+import { buildEmailFromTemplate } from '@/lib/ai/fill-template'
 import { getProfile } from '@/lib/supabase/queries'
 import type { GenerateRequest } from '@/types'
 
@@ -45,7 +45,7 @@ export async function POST(
     const senderName = profile?.name ?? user.email?.split('@')[0] ?? 'A UIUC Student'
 
     // Load template if provided
-    let template: { id: string; name: string; subject_template: string | null; body_template: string } | null = null
+    let template: { id: string; name: string; type: 'initial' | 'followup'; subject_template: string | null; body_template: string } | null = null
     if (body.template_id) {
       const { data } = await supabase
         .from('templates')
@@ -67,19 +67,25 @@ export async function POST(
         let subject: string
         let emailBody: string
         let templateId: string | null = null
+        let replyToEmailId: string | null = null
 
         if (template) {
-          // Template mode — fill placeholders per contact
-          const filled = await fillEmailTemplate(
+          // Template mode — fill placeholders per contact (handles follow-ups)
+          const built = await buildEmailFromTemplate({
             template,
             contact,
-            contact.research ?? null,
+            research: contact.research ?? null,
             senderName,
-            profile
-          )
-          subject = filled.subject
-          emailBody = filled.body
+            senderProfile: profile,
+          })
+          if (!built.ok) {
+            skipped.push({ contact_id: row.contact_id, name: contact.name, reason: built.reason })
+            continue
+          }
+          subject = built.subject
+          emailBody = built.body
           templateId = template.id
+          replyToEmailId = built.replyToEmailId
         } else {
           // Fresh mode — require research
           if (!contact.research) {
@@ -109,6 +115,7 @@ export async function POST(
             body: emailBody,
             variant_label: 'A',
             status: 'draft',
+            reply_to_email_id: replyToEmailId,
             scheduled_for: null,
             sent_at: null,
             resend_message_id: null,

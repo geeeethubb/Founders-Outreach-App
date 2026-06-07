@@ -28,6 +28,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     .update({
       name: body.name,
       category: body.category ?? null,
+      type: body.type === 'followup' ? 'followup' : 'initial',
       subject_template: body.subject_template ?? null,
       body_template: body.body_template,
       variables: body.variables ?? [],

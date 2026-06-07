@@ -15,11 +15,20 @@ const PLACEHOLDER_HELPERS = [
   { label: 'Opening hook', value: '[open with something specific and compelling about them]' },
 ]
 
+// Extra placeholders that only make sense for follow-up templates, where the AI
+// is given the original email it's replying to.
+const FOLLOWUP_PLACEHOLDER_HELPERS = [
+  { label: 'Reference previous email', value: '[reference my previous email in one natural line]' },
+  { label: 'Fresh reason to reconnect', value: '[a fresh, low-pressure reason to follow up now]' },
+  { label: 'Restate the ask briefly', value: '[restate my ask in one short, softer sentence]' },
+]
+
 const BLANK_FORM = {
   name: '',
   subject_template: '',
   body_template: '',
   category: '' as string,
+  type: 'initial' as 'initial' | 'followup',
 }
 
 export default function TemplatesPage() {
@@ -63,6 +72,7 @@ export default function TemplatesPage() {
       subject_template: t.subject_template ?? '',
       body_template: t.body_template ?? '',
       category: t.category ?? '',
+      type: t.type === 'followup' ? 'followup' : 'initial',
     })
     setSaved(false)
     setError('')
@@ -103,6 +113,7 @@ export default function TemplatesPage() {
             subject_template: form.subject_template || null,
             body_template: form.body_template,
             category: form.category || null,
+            type: form.type,
           }),
         })
         const data = await res.json()
@@ -120,6 +131,7 @@ export default function TemplatesPage() {
             subject_template: form.subject_template || null,
             body_template: form.body_template,
             category: form.category || null,
+            type: form.type,
           }),
         })
         const data = await res.json()
@@ -200,8 +212,13 @@ export default function TemplatesPage() {
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <p className="font-medium text-slate-800 text-sm truncate">{t.name}</p>
-                    {t.subject_template && (
+                    <div className="flex items-center gap-1.5">
+                      <p className="font-medium text-slate-800 text-sm truncate">{t.name}</p>
+                      {t.type === 'followup' && (
+                        <span className="flex-shrink-0 text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded-full">↩ Follow-up</span>
+                      )}
+                    </div>
+                    {t.subject_template && t.type !== 'followup' && (
                       <p className="text-xs text-slate-400 truncate mt-0.5">
                         Subject: {t.subject_template}
                       </p>
@@ -264,10 +281,39 @@ export default function TemplatesPage() {
                   />
                 </div>
 
+                {/* Type */}
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Template Type</label>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setForm((f) => ({ ...f, type: 'initial' }))}
+                      className={`flex-1 py-2 rounded-lg border-2 text-sm font-medium transition-colors ${form.type === 'initial' ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-600 hover:border-slate-300'}`}
+                    >
+                      ✉️ Initial outreach
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setForm((f) => ({ ...f, type: 'followup' }))}
+                      className={`flex-1 py-2 rounded-lg border-2 text-sm font-medium transition-colors ${form.type === 'followup' ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-600 hover:border-slate-300'}`}
+                    >
+                      ↩ Follow-up
+                    </button>
+                  </div>
+                  {form.type === 'followup' && (
+                    <p className="text-xs text-slate-500 mt-1.5 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-1.5">
+                      Sent as a reply inside your original email thread. The AI sees your first email to each
+                      contact, so you can reference it. The subject is set automatically to <code className="bg-white px-1 rounded">Re: …</code>.
+                    </p>
+                  )}
+                </div>
+
                 {/* Subject */}
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">
-                    Subject Line Template <span className="text-slate-400 font-normal">(optional — AI writes one if blank)</span>
+                    Subject Line Template <span className="text-slate-400 font-normal">
+                      {form.type === 'followup' ? '(ignored — follow-ups reuse the original "Re:" subject)' : '(optional — AI writes one if blank)'}
+                    </span>
                   </label>
                   <input
                     value={form.subject_template}
@@ -284,7 +330,7 @@ export default function TemplatesPage() {
                     <span className="text-xs text-slate-400">— click to insert at cursor position</span>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    {PLACEHOLDER_HELPERS.map((p) => (
+                    {(form.type === 'followup' ? [...FOLLOWUP_PLACEHOLDER_HELPERS, ...PLACEHOLDER_HELPERS] : PLACEHOLDER_HELPERS).map((p) => (
                       <button
                         key={p.label}
                         type="button"

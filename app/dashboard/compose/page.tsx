@@ -5,6 +5,9 @@ import { useSearchParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import type { Contact, EmailVariant, EmailStyle, Template } from '@/types'
 import { EMAIL_STYLES } from '@/types'
+import { formatRelativeTime } from '@/lib/utils'
+
+interface EmailedInfo { count: number; lastSentAt: string }
 
 const GOAL_OPTIONS = [
   { value: 'speaker',        label: '🎤 Speaker / Event',      desc: 'Invite them to speak at an Illinois Entrepreneurs event' },
@@ -32,6 +35,7 @@ function ComposeContent() {
 
   const [contacts, setContacts] = useState<Contact[]>([])
   const [templates, setTemplates] = useState<Template[]>([])
+  const [emailedMap, setEmailedMap] = useState<Map<string, EmailedInfo>>(new Map())
   const [selectedIds, setSelectedIds] = useState<Set<string>>(
     preselectedContactId ? new Set([preselectedContactId]) : new Set()
   )
@@ -63,15 +67,32 @@ function ComposeContent() {
     async function load() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
-      const [{ data: contactData }, { data: templateData }] = await Promise.all([
+      const [{ data: contactData }, { data: templateData }, { data: sentData }] = await Promise.all([
         supabase.from('contacts').select('*, research:contact_research(*)').eq('user_id', user.id).order('name'),
         supabase.from('templates').select('*').eq('user_id', user.id).eq('is_active', true).order('created_at', { ascending: false }),
+        supabase.from('emails').select('contact_id, sent_at').eq('user_id', user.id).eq('status', 'sent'),
       ])
       setContacts((contactData as Contact[]) ?? [])
       setTemplates((templateData as Template[]) ?? [])
       if (templateData && templateData.length > 0) {
         setSelectedTemplateId(templateData[0].id)
       }
+
+      // Tally who's already been emailed (and most recent send) to flag redundancy
+      // in the picker and gate follow-up templates.
+      const map = new Map<string, EmailedInfo>()
+      for (const row of (sentData as { contact_id: string; sent_at: string | null }[]) ?? []) {
+        if (!row.contact_id) continue
+        const existing = map.get(row.contact_id)
+        const sentAt = row.sent_at ?? ''
+        if (existing) {
+          existing.count += 1
+          if (sentAt > existing.lastSentAt) existing.lastSentAt = sentAt
+        } else {
+          map.set(row.contact_id, { count: 1, lastSentAt: sentAt })
+        }
+      }
+      setEmailedMap(map)
     }
     load()
   }, [])
@@ -104,6 +125,16 @@ function ComposeContent() {
     if (mode === 'template' && !selectedTemplateId) {
       setError('Please select a template first, or switch to Generate Fresh mode.')
       return
+    }
+    // Follow-up templates require a prior sent email for every selected contact.
+    const tmpl = templates.find((t) => t.id === selectedTemplateId)
+    if (mode === 'template' && tmpl?.type === 'followup') {
+      const blockers = [...selectedIds].filter((id) => !emailedMap.has(id))
+      if (blockers.length > 0) {
+        const names = blockers.map((id) => contacts.find((c) => c.id === id)?.name ?? '?').join(', ')
+        setError(`Follow-ups reply to a previous email. These contacts haven't been emailed yet — send an initial email first: ${names}.`)
+        return
+      }
     }
     setGenerating(true)
     setError('')
@@ -182,6 +213,14 @@ function ComposeContent() {
 
   const wordCount = editedBody.split(/\s+/).filter(Boolean).length
   const selectedTemplate = templates.find((t) => t.id === selectedTemplateId)
+
+  // Follow-up templates thread onto a prior email — selected contacts who haven't
+  // been emailed yet can't be followed up.
+  const isFollowupMode = mode === 'template' && selectedTemplate?.type === 'followup'
+  const followupBlockers = isFollowupMode
+    ? [...selectedIds].filter((id) => !emailedMap.has(id))
+    : []
+  const followupBlocked = isFollowupMode && followupBlockers.length > 0
 
   if (sendSuccess) {
     return (
@@ -272,7 +311,22 @@ function ComposeContent() {
                         <p className="text-sm font-medium text-slate-800 truncate">{c.name}</p>
                         <p className="text-xs text-slate-400 truncate">{[c.role, c.company].filter(Boolean).join(' @ ') || '—'}</p>
                       </div>
-                      {!c.research && <span className="text-xs text-amber-500 flex-shrink-0">no research</span>}
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        {!c.research && <span className="text-xs text-amber-500">no research</span>}
+                        {(() => {
+                          const e = emailedMap.get(c.id)
+                          return e ? (
+                            <span
+                              title={`Emailed ${e.count} time${e.count !== 1 ? 's' : ''}${e.lastSentAt ? ` · last ${formatRelativeTime(e.lastSentAt)}` : ''}`}
+                              className="text-[11px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-full whitespace-nowrap"
+                            >
+                              ✓ emailed{e.count > 1 ? ` ${e.count}×` : ''}{e.lastSentAt ? ` · ${formatRelativeTime(e.lastSentAt)}` : ''}
+                            </span>
+                          ) : (
+                            <span className="text-[11px] text-slate-400">new</span>
+                          )
+                        })()}
+                      </div>
                     </label>
                   ))}
                 {contacts.length === 0 && <p className="px-3 py-4 text-sm text-slate-400 text-center">No contacts yet</p>}
@@ -332,8 +386,13 @@ function ComposeContent() {
                         <label key={t.id} className={`flex items-start gap-3 p-3 rounded-lg border-2 cursor-pointer transition-colors ${selectedTemplateId === t.id ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200 hover:border-slate-300'}`}>
                           <input type="radio" name="template" value={t.id} checked={selectedTemplateId === t.id} onChange={() => setSelectedTemplateId(t.id)} className="mt-0.5 accent-indigo-600" />
                           <div className="min-w-0">
-                            <p className="text-sm font-medium text-slate-800">{t.name}</p>
-                            {t.subject_template && <p className="text-xs text-slate-400 truncate">Subject: {t.subject_template}</p>}
+                            <div className="flex items-center gap-1.5">
+                              <p className="text-sm font-medium text-slate-800">{t.name}</p>
+                              {t.type === 'followup' && (
+                                <span className="text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded-full">↩ Follow-up</span>
+                              )}
+                            </div>
+                            {t.subject_template && t.type !== 'followup' && <p className="text-xs text-slate-400 truncate">Subject: {t.subject_template}</p>}
                             {(() => {
                               const count = (t.body_template?.match(/\[[^\]]+\]/g) ?? []).length
                               return count > 0 ? (
@@ -391,11 +450,22 @@ function ComposeContent() {
               />
             </div>
 
+            {isFollowupMode && !followupBlocked && selectedIds.size > 0 && (
+              <div className="bg-amber-50 border border-amber-200 text-amber-700 text-sm px-4 py-3 rounded-lg">
+                ↩ This will be sent as a reply inside your existing email thread with {selectedIds.size === 1 ? selectedContact?.name ?? 'this contact' : `these ${selectedIds.size} contacts`}.
+              </div>
+            )}
+            {followupBlocked && (
+              <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-lg">
+                Follow-ups reply to a previous email, but {followupBlockers.length} selected contact{followupBlockers.length !== 1 ? 's haven\'t' : " hasn't"} been emailed yet. Send an initial email first, or deselect them.
+              </div>
+            )}
+
             {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-lg">{error}</div>}
 
             <button
               onClick={generate}
-              disabled={selectedIds.size === 0 || generating || (mode === 'template' && !selectedTemplateId)}
+              disabled={selectedIds.size === 0 || generating || (mode === 'template' && !selectedTemplateId) || followupBlocked}
               className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-medium py-3 rounded-xl transition-colors"
             >
               {generating ? (
