@@ -30,6 +30,8 @@ export default function DraftsPage() {
   const [editing, setEditing] = useState<Record<string, { subject: string; body: string }>>({})
   const [sending, setSending] = useState<Set<string>>(new Set())
   const [approvingAll, setApprovingAll] = useState(false)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [bulkBusy, setBulkBusy] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
 
   const load = useCallback(async () => {
@@ -112,6 +114,7 @@ export default function DraftsPage() {
       setErrors((e) => ({ ...e, [draft.id]: data.error ?? 'Send failed' }))
     } else {
       setDrafts((prev) => prev.filter((d) => d.id !== draft.id))
+      deselect(draft.id)
     }
   }
 
@@ -119,6 +122,56 @@ export default function DraftsPage() {
     if (!confirm('Discard this draft?')) return
     await supabase.from('emails').delete().eq('id', id)
     setDrafts((prev) => prev.filter((d) => d.id !== id))
+    deselect(id)
+  }
+
+  // ── Selection ──────────────────────────────────────────────────────────────
+  function toggleSelect(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  function deselect(id: string) {
+    setSelected((prev) => {
+      if (!prev.has(id)) return prev
+      const next = new Set(prev)
+      next.delete(id)
+      return next
+    })
+  }
+
+  function toggleSelectAll() {
+    setSelected((prev) => (prev.size === drafts.length ? new Set() : new Set(drafts.map((d) => d.id))))
+  }
+
+  async function sendSelected() {
+    const sendable = drafts.filter((d) => selected.has(d.id) && d.contact.email)
+    if (sendable.length === 0) {
+      alert('None of the selected drafts have an email address to send to.')
+      return
+    }
+    if (!confirm(`Send ${sendable.length} selected email${sendable.length !== 1 ? 's' : ''} now? This cannot be undone.`)) return
+    setBulkBusy(true)
+    for (const draft of sendable) {
+      await sendDraft(draft) // removes from drafts on success, sets an error otherwise
+      deselect(draft.id)
+      await new Promise((r) => setTimeout(r, 300)) // don't hammer the API
+    }
+    setBulkBusy(false)
+  }
+
+  async function discardSelected() {
+    if (selected.size === 0) return
+    if (!confirm(`Discard ${selected.size} selected draft${selected.size !== 1 ? 's' : ''}? This cannot be undone.`)) return
+    setBulkBusy(true)
+    const ids = [...selected]
+    await supabase.from('emails').delete().in('id', ids)
+    setDrafts((prev) => prev.filter((d) => !selected.has(d.id)))
+    setSelected(new Set())
+    setBulkBusy(false)
   }
 
   async function approveAll() {
@@ -139,6 +192,10 @@ export default function DraftsPage() {
   }
 
   const sendableCount = drafts.filter((d) => d.contact.email).length
+  const selectedCount = drafts.filter((d) => selected.has(d.id)).length
+  const selectedSendableCount = drafts.filter((d) => selected.has(d.id) && d.contact.email).length
+  const allSelected = drafts.length > 0 && selectedCount === drafts.length
+  const busy = approvingAll || bulkBusy
 
   if (loading) return <div className="p-8 text-slate-400 text-sm">Loading drafts…</div>
 
@@ -157,7 +214,7 @@ export default function DraftsPage() {
         {drafts.length > 0 && (
           <button
             onClick={approveAll}
-            disabled={approvingAll || sendableCount === 0}
+            disabled={busy || sendableCount === 0}
             className="flex items-center gap-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white text-sm font-medium px-4 py-2.5 rounded-lg transition-colors"
           >
             {approvingAll ? (
@@ -180,6 +237,60 @@ export default function DraftsPage() {
         )}
       </div>
 
+      {/* Selection toolbar */}
+      {drafts.length > 0 && (
+        <div className="flex items-center gap-3 mb-3 bg-white border border-slate-200 rounded-lg px-4 py-2.5">
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={allSelected}
+              ref={(el) => { if (el) el.indeterminate = selectedCount > 0 && !allSelected }}
+              onChange={toggleSelectAll}
+              className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300"
+            />
+            <span className="text-sm text-slate-600">
+              {selectedCount > 0 ? `${selectedCount} selected` : 'Select all'}
+            </span>
+          </label>
+
+          {selectedCount > 0 && (
+            <div className="flex items-center gap-2 ml-auto">
+              <button
+                onClick={sendSelected}
+                disabled={busy || selectedSendableCount === 0}
+                title={selectedSendableCount === 0 ? 'None of the selected drafts have an email address' : undefined}
+                className="flex items-center gap-1.5 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
+              >
+                {bulkBusy ? (
+                  <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                ) : (
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                  </svg>
+                )}
+                Send selected ({selectedSendableCount})
+              </button>
+              <button
+                onClick={discardSelected}
+                disabled={busy}
+                className="flex items-center gap-1.5 border border-slate-200 text-slate-600 hover:bg-red-50 hover:text-red-600 hover:border-red-200 disabled:opacity-50 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
+              >
+                Discard selected ({selectedCount})
+              </button>
+              <button
+                onClick={() => setSelected(new Set())}
+                className="text-xs text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                Clear
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       {drafts.length === 0 ? (
         <div className="bg-white rounded-xl border-2 border-dashed border-slate-200 p-16 text-center">
           <div className="text-4xl mb-3">📭</div>
@@ -201,13 +312,23 @@ export default function DraftsPage() {
             return (
               <div
                 key={draft.id}
-                className="bg-white rounded-xl border border-slate-200 overflow-hidden"
+                className={`bg-white rounded-xl border overflow-hidden transition-colors ${
+                  selected.has(draft.id) ? 'border-indigo-300 ring-1 ring-indigo-200' : 'border-slate-200'
+                }`}
               >
                 {/* Card header — always visible */}
                 <div
                   className="flex items-center gap-4 px-5 py-4 cursor-pointer hover:bg-slate-50 transition-colors"
                   onClick={() => toggleExpand(draft.id)}
                 >
+                  <div onClick={(e) => e.stopPropagation()} className="flex items-center flex-shrink-0">
+                    <input
+                      type="checkbox"
+                      checked={selected.has(draft.id)}
+                      onChange={() => toggleSelect(draft.id)}
+                      className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 cursor-pointer"
+                    />
+                  </div>
                   <div className="w-9 h-9 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0">
                     <span className="text-indigo-600 font-bold text-sm">
                       {draft.contact.name.charAt(0).toUpperCase()}
