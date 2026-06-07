@@ -1,12 +1,18 @@
-import nodemailer from 'nodemailer'
+import crypto from 'crypto'
+import MailComposer from 'nodemailer/lib/mail-composer'
 
-// Mail is sent from each user's OWN Gmail via OAuth2 (XOAUTH2). The caller mints
-// a short-lived access token from the user's stored refresh token (see
-// lib/google/oauth.ts) and passes it in as `sender`. A transport is built per
-// send because the access token and the From address are per-user.
+// Mail is sent from each user's OWN Gmail via the Gmail API (users.messages.send)
+// using their OAuth2 access token. We deliberately use the API rather than SMTP:
+// SMTP/XOAUTH2 requires the full https://mail.google.com/ mailbox scope, whereas
+// the Gmail API send endpoint works with the minimal `gmail.send` scope we
+// request — matching the "we only send, never read your inbox" promise.
+// The caller mints a short-lived access token from the user's stored refresh
+// token (see lib/google/oauth.ts) and passes it in as `sender`.
+
+const GMAIL_SEND_URL = 'https://gmail.googleapis.com/gmail/v1/users/me/messages/send'
 
 export interface EmailSender {
-  email: string       // the connected Gmail — used as the From address + SMTP user
+  email: string       // the connected Gmail — used as the From address
   name?: string       // display name for the From header
   accessToken: string // fresh Google OAuth access token
 }
@@ -17,7 +23,7 @@ export interface SendEmailOptions {
   subject: string
   body: string        // plain text — wrapped in HTML for sending
   replyTo?: string
-  scheduledAt?: string // ISO string — not natively supported by SMTP; ignored here
+  scheduledAt?: string // ISO string — not natively supported here; ignored
   inReplyTo?: string  // Message-ID of the email this is a reply to (Gmail threading)
   references?: string // Message-ID chain — usually the same as inReplyTo for a single-level thread
 }
@@ -29,31 +35,53 @@ export interface SendEmailResult {
 
 export async function sendEmail(opts: SendEmailOptions, sender: EmailSender): Promise<SendEmailResult> {
   try {
-    const transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        type: 'OAuth2',
-        user: sender.email,
-        accessToken: sender.accessToken,
-      },
-    })
-
     const htmlBody = plainTextToHtml(opts.body)
     const toAddress = opts.toName ? `${opts.toName} <${opts.to}>` : opts.to
     const from = sender.name ? `${sender.name} <${sender.email}>` : sender.email
 
-    const info = await transporter.sendMail({
+    // Set our own Message-ID so we can store it and thread follow-ups off it.
+    const domain = sender.email.split('@')[1] || 'mail.gmail.com'
+    const messageId = `<${crypto.randomBytes(16).toString('hex')}.${Date.now()}@${domain}>`
+
+    // Build a proper MIME message (multipart text+html, headers) without sending.
+    const mail = new MailComposer({
       from,
       to: toAddress,
       subject: opts.subject,
       text: opts.body,
       html: htmlBody,
+      messageId,
       ...(opts.replyTo && { replyTo: opts.replyTo }),
       ...(opts.inReplyTo && { inReplyTo: opts.inReplyTo }),
       ...(opts.references && { references: opts.references }),
     })
 
-    return { messageId: info.messageId }
+    const raw: Buffer = await new Promise((resolve, reject) => {
+      mail.compile().build((err, message) => (err ? reject(err) : resolve(message)))
+    })
+
+    // Gmail API wants the raw RFC 822 message base64url-encoded.
+    const encoded = raw
+      .toString('base64')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '')
+
+    const res = await fetch(GMAIL_SEND_URL, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${sender.accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ raw: encoded }),
+    })
+
+    if (!res.ok) {
+      const detail = await res.text()
+      return { messageId: '', error: `Gmail API error (${res.status}): ${detail.slice(0, 300)}` }
+    }
+
+    return { messageId }
   } catch (e) {
     return {
       messageId: '',
