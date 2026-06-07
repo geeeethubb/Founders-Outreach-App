@@ -277,6 +277,15 @@ export interface Template {
   created_at: string
 }
 
+export interface EmailAccount {
+  user_id: string
+  email: string
+  refresh_token: string  // encrypted at rest; never sent to the client
+  scope: string | null
+  connected_at: string
+  updated_at: string
+}
+
 export interface TemplatePerformance {
   id: string
   template_id: string

@@ -1,20 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { sendEmail } from '@/lib/email/resend'
-import { updateEmailStatus, updateContactStatus } from '@/lib/supabase/queries'
+import { getEmailAccount } from '@/lib/email/accounts'
+import { getAccessToken } from '@/lib/google/oauth'
+import { updateEmailStatus, updateContactStatus, getProfile } from '@/lib/supabase/queries'
 import type { SendRequest } from '@/types'
 
 // Rate limiting constants — adjust as you scale
 const MAX_EMAILS_PER_DAY = 500
-
-// Sender allowlist — locks down public sign-up so only approved accounts can
-// actually send mail. Everything currently sends from one shared Gmail
-// (GMAIL_USER), so without this any registered user would send as that account.
-// Configure via ALLOWED_SENDERS (comma-separated emails); defaults to the owner.
-const ALLOWED_SENDERS = (process.env.ALLOWED_SENDERS ?? 'zuyu.alex06@gmail.com')
-  .split(',')
-  .map((e) => e.trim().toLowerCase())
-  .filter(Boolean)
 
 export async function POST(request: NextRequest) {
   try {
@@ -25,12 +18,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Sending is restricted to allowlisted accounts. All mail goes out from a
-    // single shared Gmail, so non-owner sends would impersonate the owner and
-    // damage their sender reputation. Block them here.
-    if (!user.email || !ALLOWED_SENDERS.includes(user.email.toLowerCase())) {
+    // Each user sends from their OWN connected Gmail. No connection → no sending.
+    const account = await getEmailAccount(user.id)
+    if (!account) {
       return NextResponse.json(
-        { error: 'Sending is restricted to the platform owner on this deployment.' },
+        { error: 'Connect your Gmail in Settings to send.' },
         { status: 403 }
       )
     }
@@ -87,15 +79,32 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Send via Gmail SMTP
-    const result = await sendEmail({
-      to: body.to_email,
-      toName: body.to_name,
-      subject: body.subject,
-      body: body.body,
-      ...threadHeaders,
-      ...(body.schedule_at && { scheduledAt: body.schedule_at }),
-    })
+    // Mint a fresh Google access token from the user's stored refresh token.
+    let accessToken: string
+    try {
+      accessToken = await getAccessToken(account.refreshToken)
+    } catch (e) {
+      return NextResponse.json(
+        { error: e instanceof Error ? e.message : 'Gmail authorization failed — reconnect in Settings.' },
+        { status: 401 }
+      )
+    }
+
+    const profile = await getProfile(user.id)
+    const senderName = profile?.name ?? account.email.split('@')[0]
+
+    // Send from the user's own Gmail via OAuth2
+    const result = await sendEmail(
+      {
+        to: body.to_email,
+        toName: body.to_name,
+        subject: body.subject,
+        body: body.body,
+        ...threadHeaders,
+        ...(body.schedule_at && { scheduledAt: body.schedule_at }),
+      },
+      { email: account.email, name: senderName, accessToken }
+    )
 
     if (result.error) {
       await updateEmailStatus(body.email_id, 'failed')

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { Profile } from '@/types'
+import GmailConnection from '@/components/settings/GmailConnection'
 
 export default function ProfilePage() {
   const supabase = createClient()
@@ -218,6 +219,8 @@ export default function ProfilePage() {
                 />
               </div>
             </div>
+
+            <GmailConnection />
           </>
         )}
 

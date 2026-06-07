@@ -1,22 +1,15 @@
 import nodemailer from 'nodemailer'
 
-// Gmail SMTP via App Password
-// Required env vars:
-//   GMAIL_USER        — e.g. zuyu.alex06@gmail.com
-//   GMAIL_APP_PASSWORD — 16-char app password from myaccount.google.com/apppasswords
-//   FROM_NAME         — display name (optional, defaults to 'Founders Illinois')
+// Mail is sent from each user's OWN Gmail via OAuth2 (XOAUTH2). The caller mints
+// a short-lived access token from the user's stored refresh token (see
+// lib/google/oauth.ts) and passes it in as `sender`. A transport is built per
+// send because the access token and the From address are per-user.
 
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.GMAIL_USER,
-    pass: process.env.GMAIL_APP_PASSWORD,
-  },
-})
-
-const FROM_NAME = process.env.FROM_NAME ?? 'Founders Illinois'
-const FROM_EMAIL = process.env.GMAIL_USER ?? ''
-const FROM = `${FROM_NAME} <${FROM_EMAIL}>`
+export interface EmailSender {
+  email: string       // the connected Gmail — used as the From address + SMTP user
+  name?: string       // display name for the From header
+  accessToken: string // fresh Google OAuth access token
+}
 
 export interface SendEmailOptions {
   to: string
@@ -34,13 +27,23 @@ export interface SendEmailResult {
   error?: string
 }
 
-export async function sendEmail(opts: SendEmailOptions): Promise<SendEmailResult> {
+export async function sendEmail(opts: SendEmailOptions, sender: EmailSender): Promise<SendEmailResult> {
   try {
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        type: 'OAuth2',
+        user: sender.email,
+        accessToken: sender.accessToken,
+      },
+    })
+
     const htmlBody = plainTextToHtml(opts.body)
     const toAddress = opts.toName ? `${opts.toName} <${opts.to}>` : opts.to
+    const from = sender.name ? `${sender.name} <${sender.email}>` : sender.email
 
     const info = await transporter.sendMail({
-      from: FROM,
+      from,
       to: toAddress,
       subject: opts.subject,
       text: opts.body,
