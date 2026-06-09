@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
@@ -68,6 +68,7 @@ export default function CampaignDetailPage() {
   const [memberFilter, setMemberFilter] = useState<MemberFilter>('all')
   const [memberSelected, setMemberSelected] = useState<Set<string>>(new Set())
   const [bulkRemoving, setBulkRemoving] = useState(false)
+  const generatePanelRef = useRef<HTMLDivElement>(null)
 
   function toggleGenStyle(s: EmailStyle) {
     setGenStyles((prev) => prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s])
@@ -90,6 +91,7 @@ export default function CampaignDetailPage() {
           styles: genMode === 'fresh' ? genStyles : undefined,
           custom_note: genNote || undefined,
           template_id: genMode === 'template' ? genTemplateId : undefined,
+          contact_ids: targetIds ?? undefined,
         }),
       })
       // The server can run for minutes on large campaigns. If it's killed
@@ -239,6 +241,11 @@ export default function CampaignDetailPage() {
   const filteredIds = filteredMembers.map((m) => m.contact_id)
   const allFilteredSelected = filteredIds.length > 0 && filteredIds.every((id) => memberSelected.has(id))
 
+  // The recipients of the next batch: the selected members, or everyone if none
+  // are selected. Selecting never removes anyone — it just scopes generation.
+  const targetMembers = memberSelected.size > 0 ? members.filter((m) => memberSelected.has(m.contact_id)) : members
+  const targetIds = memberSelected.size > 0 ? Array.from(memberSelected) : null
+
   function toggleMemberSelect(id: string) {
     setMemberSelected((prev) => {
       const next = new Set(prev)
@@ -376,10 +383,12 @@ export default function CampaignDetailPage() {
             })}
           </div>
 
-          {/* Bulk actions */}
+          {/* Bulk actions — selection scopes the next email batch; nobody leaves the campaign unless you explicitly remove them */}
           {memberSelected.size > 0 && (
             <div className="flex items-center justify-between bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-2.5 mb-3">
-              <span className="text-sm font-medium text-indigo-700">{memberSelected.size} selected</span>
+              <span className="text-sm font-medium text-indigo-700">
+                {memberSelected.size} selected for this batch
+              </span>
               <div className="flex items-center gap-3">
                 <button onClick={() => setMemberSelected(new Set())} className="text-xs font-medium text-slate-500 hover:text-slate-700">
                   Clear
@@ -387,9 +396,15 @@ export default function CampaignDetailPage() {
                 <button
                   onClick={removeSelectedMembers}
                   disabled={bulkRemoving}
-                  className="inline-flex items-center gap-1.5 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
+                  className="text-xs font-medium text-slate-500 hover:text-red-600 disabled:opacity-50 transition-colors"
                 >
                   {bulkRemoving ? 'Removing…' : 'Remove from campaign'}
+                </button>
+                <button
+                  onClick={() => generatePanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                  className="inline-flex items-center gap-1.5 bg-violet-600 hover:bg-violet-700 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
+                >
+                  Generate for selected →
                 </button>
               </div>
             </div>
@@ -490,7 +505,7 @@ export default function CampaignDetailPage() {
       )}
 
       {/* Generate Emails Panel */}
-      <div className="mt-6 bg-white rounded-xl border border-slate-200 p-6">
+      <div ref={generatePanelRef} className="mt-6 bg-white rounded-xl border border-slate-200 p-6 scroll-mt-6">
         <div className="flex items-center gap-3 mb-5">
           <div className="w-8 h-8 bg-violet-100 rounded-lg flex items-center justify-center flex-shrink-0">
             <svg className="w-4 h-4 text-violet-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -499,9 +514,27 @@ export default function CampaignDetailPage() {
           </div>
           <div>
             <h3 className="font-semibold text-slate-800">Generate Campaign Emails</h3>
-            <p className="text-xs text-slate-500">AI drafts a personalized email for every contact in this campaign</p>
+            <p className="text-xs text-slate-500">
+              {memberSelected.size > 0
+                ? `AI drafts a personalized email for the ${memberSelected.size} selected contact${memberSelected.size !== 1 ? 's' : ''}`
+                : 'AI drafts a personalized email for every contact in this campaign'}
+            </p>
           </div>
         </div>
+
+        {memberSelected.size > 0 && (
+          <div className="mb-4 flex items-center justify-between gap-3 bg-violet-50 border border-violet-200 rounded-lg px-4 py-2.5">
+            <p className="text-xs text-violet-700">
+              This batch is scoped to <span className="font-semibold">{memberSelected.size} selected</span> of {members.length} — the rest stay in the campaign, untouched.
+            </p>
+            <button
+              onClick={() => setMemberSelected(new Set())}
+              className="text-xs font-medium text-violet-600 hover:text-violet-800 whitespace-nowrap"
+            >
+              Use all instead
+            </button>
+          </div>
+        )}
 
         {/* Goal */}
         <div className="mb-4">
@@ -636,14 +669,14 @@ export default function CampaignDetailPage() {
               ? 'Add contacts to this campaign first'
               : genMode === 'template' && templates.find((t) => t.id === genTemplateId)?.type === 'followup'
               ? (() => {
-                  const eligible = members.filter((m) => emailedMap.has(m.contact_id)).length
-                  return `Follow-up · ${eligible} of ${members.length} already emailed will get a threaded reply; the rest are skipped`
+                  const eligible = targetMembers.filter((m) => emailedMap.has(m.contact_id)).length
+                  return `Follow-up · ${eligible} of ${targetMembers.length} ${memberSelected.size > 0 ? 'selected ' : ''}already emailed will get a threaded reply; the rest are skipped`
                 })()
-              : `Will generate for ${members.length} contact${members.length !== 1 ? 's' : ''} · contacts without research are skipped`}
+              : `Will generate for ${targetMembers.length} ${memberSelected.size > 0 ? 'selected ' : ''}contact${targetMembers.length !== 1 ? 's' : ''} · contacts without research are skipped`}
           </p>
           <button
             onClick={generateCampaignEmails}
-            disabled={generating || members.length === 0}
+            disabled={generating || targetMembers.length === 0}
             className="flex items-center gap-2 bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white text-sm font-medium px-5 py-2.5 rounded-lg transition-colors"
           >
             {generating ? (
@@ -652,14 +685,14 @@ export default function CampaignDetailPage() {
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
-                Generating ({members.length})…
+                Generating ({targetMembers.length})…
               </>
             ) : (
               <>
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
                 </svg>
-                Generate Emails
+                {memberSelected.size > 0 ? `Generate for ${targetMembers.length} selected` : 'Generate Emails'}
               </>
             )}
           </button>

@@ -25,20 +25,26 @@ export async function POST(
       styles?: GenerateRequest['styles']
       custom_note?: string
       template_id?: string
+      contact_ids?: string[]
     }
 
     if (!body.outreach_goal) {
       return NextResponse.json({ error: 'outreach_goal is required' }, { status: 400 })
     }
 
-    // Load all campaign contacts with research
-    const { data: rows } = await supabase
+    // Load campaign contacts with research. When contact_ids is provided, scope
+    // this batch to just those members (the rest stay in the campaign untouched).
+    let query = supabase
       .from('campaign_contacts')
       .select('contact_id, contact:contacts(*, research:contact_research(*))')
       .eq('campaign_id', campaignId)
+    if (body.contact_ids && body.contact_ids.length > 0) {
+      query = query.in('contact_id', body.contact_ids)
+    }
+    const { data: rows } = await query
 
     if (!rows || rows.length === 0) {
-      return NextResponse.json({ error: 'No contacts in this campaign' }, { status: 400 })
+      return NextResponse.json({ error: 'No contacts to generate for' }, { status: 400 })
     }
 
     const profile = await getProfile(user.id)
