@@ -52,7 +52,11 @@ export default async function ConversationsPage() {
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
           <div className="divide-y divide-slate-50">
             {conversations.map((conv: any) => (
-              <div key={conv.id} className="flex items-center gap-4 px-6 py-4 hover:bg-slate-50 transition-colors">
+              <Link
+                key={conv.id}
+                href={`/dashboard/conversations/${conv.id}`}
+                className="flex items-center gap-4 px-6 py-4 hover:bg-slate-50 transition-colors"
+              >
                 <div className="w-9 h-9 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0">
                   <span className="text-indigo-600 font-semibold text-sm">
                     {conv.contact?.name?.charAt(0).toUpperCase() ?? '?'}
@@ -82,7 +86,7 @@ export default async function ConversationsPage() {
                     </p>
                   )}
                 </div>
-              </div>
+              </Link>
             ))}
           </div>
         </div>

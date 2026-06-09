@@ -2,6 +2,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { getEmailAccount, scopeCanReadReplies } from '@/lib/email/accounts'
 import { getAccessToken } from '@/lib/google/oauth'
 import { classifyReply } from '@/lib/ai/classify'
+import { fetchThread, headerValue, extractPlainText, type GmailThread } from '@/lib/email/gmail'
 import type { ReplyClassification } from '@/types'
 
 // Reply tracking for Gmail OAuth sending. We send via gmail.send and have no
@@ -10,9 +11,6 @@ import type { ReplyClassification } from '@/types'
 // we stored its Gmail threadId; here we re-list those threads, pick out messages
 // that aren't from the user (i.e. replies), and import the new ones. The Gmail
 // message id is stored on each row so re-running is idempotent.
-
-const threadUrl = (id: string) =>
-  `https://gmail.googleapis.com/gmail/v1/users/me/threads/${id}?format=full`
 
 /** Run a Gmail search and return the threadId of the first matching message. */
 async function lookupThread(accessToken: string, query: string): Promise<string | undefined> {
@@ -120,14 +118,8 @@ export async function syncReplies(userId: string): Promise<SyncResult> {
   let newReplies = 0
 
   for (const [threadId, contactId] of threadToContact) {
-    const res = await fetch(threadUrl(threadId), {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    })
-    if (!res.ok) {
-      console.error(`[syncReplies] thread ${threadId} fetch failed: ${res.status} ${await res.text().catch(() => '')}`.slice(0, 300))
-      continue
-    }
-    const thread = (await res.json()) as GmailThread
+    const thread = await fetchThread(accessToken, threadId)
+    if (!thread) continue
 
     // Replies = thread messages not sent by the user, that we haven't imported.
     const newInbound = (thread.messages ?? []).filter((m) => {
@@ -287,86 +279,4 @@ async function applyOutcome(
 
   await supabase.from('conversations').update(convUpdate).eq('id', conversationId)
   await supabase.from('contacts').update({ status: contactStatus }).eq('id', contactId)
-}
-
-// ─── Gmail payload parsing ───────────────────────────────────────────────────
-
-interface GmailHeader { name: string; value: string }
-interface GmailPart {
-  mimeType?: string
-  body?: { data?: string }
-  parts?: GmailPart[]
-  headers?: GmailHeader[]
-}
-interface GmailMessage {
-  id: string
-  internalDate?: string
-  snippet?: string
-  payload?: GmailPart
-}
-interface GmailThread {
-  id: string
-  messages?: GmailMessage[]
-}
-
-function headerValue(m: GmailMessage, name: string): string {
-  const headers = m.payload?.headers ?? []
-  return headers.find((h) => h.name.toLowerCase() === name.toLowerCase())?.value ?? ''
-}
-
-function decodeB64Url(data: string): string {
-  return Buffer.from(data.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8')
-}
-
-/** Best plain-text rendering of a Gmail message, with the quoted reply trimmed. */
-function extractPlainText(m: GmailMessage): string {
-  const payload = m.payload
-  if (!payload) return m.snippet ?? ''
-
-  const plain = findPart(payload, 'text/plain')
-  if (plain?.body?.data) return stripQuoted(decodeB64Url(plain.body.data))
-
-  const html = findPart(payload, 'text/html')
-  if (html?.body?.data) return stripQuoted(htmlToText(decodeB64Url(html.body.data)))
-
-  if (payload.body?.data) return stripQuoted(decodeB64Url(payload.body.data))
-  return m.snippet ?? ''
-}
-
-function findPart(part: GmailPart, mime: string): GmailPart | null {
-  if (part.mimeType === mime && part.body?.data) return part
-  for (const p of part.parts ?? []) {
-    const found = findPart(p, mime)
-    if (found) return found
-  }
-  return null
-}
-
-function htmlToText(html: string): string {
-  return html
-    .replace(/<style[\s\S]*?<\/style>/gi, '')
-    .replace(/<script[\s\S]*?<\/script>/gi, '')
-    .replace(/<\/(p|div|br|li|tr)>/gi, '\n')
-    .replace(/<[^>]+>/g, '')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim()
-}
-
-/** Drop the quoted "On … wrote:" history so we keep just the new reply text. */
-function stripQuoted(text: string): string {
-  const lines = text.split('\n')
-  const kept: string[] = []
-  for (const line of lines) {
-    const t = line.trim()
-    if (/^On .+wrote:$/.test(t)) break
-    if (/^-{3,}\s*Original Message\s*-{3,}/i.test(t)) break
-    if (/^From:\s.+/.test(t) && kept.some((l) => l.trim() !== '')) break
-    kept.push(line)
-  }
-  const result = kept.join('\n').trim()
-  return result || text.trim()
 }

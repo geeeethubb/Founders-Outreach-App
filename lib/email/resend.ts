@@ -26,6 +26,7 @@ export interface SendEmailOptions {
   scheduledAt?: string // ISO string — not natively supported here; ignored
   inReplyTo?: string  // Message-ID of the email this is a reply to (Gmail threading)
   references?: string // Message-ID chain — usually the same as inReplyTo for a single-level thread
+  threadId?: string   // Gmail thread id — keeps the sent message in that exact thread
 }
 
 export interface SendEmailResult {
@@ -74,7 +75,9 @@ export async function sendEmail(opts: SendEmailOptions, sender: EmailSender): Pr
         Authorization: `Bearer ${sender.accessToken}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ raw: encoded }),
+      // Passing threadId keeps a reply inside the original Gmail thread (the
+      // In-Reply-To/References headers must also point at a message in it).
+      body: JSON.stringify({ raw: encoded, ...(opts.threadId && { threadId: opts.threadId }) }),
     })
 
     if (!res.ok) {
