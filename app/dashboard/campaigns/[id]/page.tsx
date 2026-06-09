@@ -23,6 +23,19 @@ interface CampaignContact {
   contact: Contact
 }
 
+// Engagement buckets derived from send history + contact status, used to filter
+// the member list so you can bulk-keep/remove contacts before the next push.
+type Engagement = 'new' | 'emailed' | 'followed_up' | 'responded'
+type MemberFilter = 'all' | Engagement
+
+const MEMBER_FILTERS: { key: MemberFilter; label: string }[] = [
+  { key: 'all',          label: 'All' },
+  { key: 'new',          label: 'Not emailed' },
+  { key: 'emailed',      label: 'Emailed once' },
+  { key: 'followed_up',  label: 'Followed up' },
+  { key: 'responded',    label: 'Responded' },
+]
+
 export default function CampaignDetailPage() {
   const params = useParams()
   const router = useRouter()
@@ -50,6 +63,11 @@ export default function CampaignDetailPage() {
   const [genTemplateId, setGenTemplateId] = useState<string>('')
   const [templates, setTemplates] = useState<Template[]>([])
   const [emailedMap, setEmailedMap] = useState<Map<string, { count: number; lastSentAt: string }>>(new Map())
+
+  // Member-list filtering + bulk selection (distinct from the Add-Contacts modal)
+  const [memberFilter, setMemberFilter] = useState<MemberFilter>('all')
+  const [memberSelected, setMemberSelected] = useState<Set<string>>(new Set())
+  const [bulkRemoving, setBulkRemoving] = useState(false)
 
   function toggleGenStyle(s: EmailStyle) {
     setGenStyles((prev) => prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s])
@@ -199,6 +217,78 @@ export default function CampaignDetailPage() {
     setRemoving(null)
   }
 
+  // Which engagement bucket a member falls into. A reply wins over send count.
+  function memberEngagement(member: CampaignContact): Engagement {
+    const status = member.contact.status
+    if (status === 'replied' || status === 'meeting') return 'responded'
+    const count = emailedMap.get(member.contact_id)?.count ?? 0
+    if (count >= 2) return 'followed_up'
+    if (count === 1) return 'emailed'
+    return 'new'
+  }
+
+  const memberCounts = members.reduce((acc, m) => {
+    const e = memberEngagement(m)
+    acc[e] = (acc[e] ?? 0) + 1
+    return acc
+  }, {} as Record<Engagement, number>)
+
+  const filteredMembers =
+    memberFilter === 'all' ? members : members.filter((m) => memberEngagement(m) === memberFilter)
+
+  const filteredIds = filteredMembers.map((m) => m.contact_id)
+  const allFilteredSelected = filteredIds.length > 0 && filteredIds.every((id) => memberSelected.has(id))
+
+  function toggleMemberSelect(id: string) {
+    setMemberSelected((prev) => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  function toggleSelectAllFiltered() {
+    setMemberSelected((prev) => {
+      const next = new Set(prev)
+      if (allFilteredSelected) filteredIds.forEach((id) => next.delete(id))
+      else filteredIds.forEach((id) => next.add(id))
+      return next
+    })
+  }
+
+  async function removeSelectedMembers() {
+    if (memberSelected.size === 0) return
+    const n = memberSelected.size
+    if (!confirm(`Remove ${n} contact${n !== 1 ? 's' : ''} from this campaign? This doesn't delete the contact.`)) return
+    setBulkRemoving(true)
+    const ids = Array.from(memberSelected)
+    await supabase
+      .from('campaign_contacts')
+      .delete()
+      .eq('campaign_id', campaignId)
+      .in('contact_id', ids)
+    await supabase
+      .from('campaigns')
+      .update({ total_contacts: Math.max(0, (campaign?.total_contacts ?? ids.length) - ids.length) })
+      .eq('id', campaignId)
+    setMembers((prev) => prev.filter((m) => !memberSelected.has(m.contact_id)))
+    setCampaign((prev) => (prev ? { ...prev, total_contacts: Math.max(0, prev.total_contacts - ids.length) } : prev))
+    setMemberSelected(new Set())
+    setBulkRemoving(false)
+  }
+
+  // Badge describing a member's outreach state, aligned with the filters above.
+  function engagementBadge(member: CampaignContact) {
+    const e = memberEngagement(member)
+    const info = emailedMap.get(member.contact_id)
+    const rel = info?.lastSentAt ? formatRelativeTime(info.lastSentAt) : null
+    const base = 'text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap'
+    if (e === 'responded') return <span className={`${base} text-green-700 bg-green-50 border border-green-200`}>💬 Responded</span>
+    if (e === 'followed_up') return <span className={`${base} text-amber-700 bg-amber-50 border border-amber-200`}>↩ Followed up ({info?.count}×){rel ? ` · ${rel}` : ''}</span>
+    if (e === 'emailed') return <span className={`${base} text-emerald-700 bg-emerald-50 border border-emerald-200`}>✓ Emailed once{rel ? ` · ${rel}` : ''}</span>
+    return <span className={`${base} text-slate-500 bg-slate-50 border border-slate-200`}>— Not emailed</span>
+  }
+
   const statusColors = {
     active: 'bg-green-100 text-green-700',
     paused: 'bg-amber-100 text-amber-700',
@@ -267,19 +357,82 @@ export default function CampaignDetailPage() {
           </button>
         </div>
       ) : (
-        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <>
+          {/* Engagement filters */}
+          <div className="flex items-center gap-2 mb-3 flex-wrap">
+            {MEMBER_FILTERS.map((f) => {
+              const count = f.key === 'all' ? members.length : (memberCounts[f.key as Engagement] ?? 0)
+              const active = memberFilter === f.key
+              return (
+                <button
+                  key={f.key}
+                  onClick={() => setMemberFilter(f.key)}
+                  className={`text-sm px-3 py-1.5 rounded-lg border font-medium transition-colors ${active ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'}`}
+                >
+                  {f.label}
+                  <span className={`ml-1.5 text-xs ${active ? 'text-indigo-100' : 'text-slate-400'}`}>{count}</span>
+                </button>
+              )
+            })}
+          </div>
+
+          {/* Bulk actions */}
+          {memberSelected.size > 0 && (
+            <div className="flex items-center justify-between bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-2.5 mb-3">
+              <span className="text-sm font-medium text-indigo-700">{memberSelected.size} selected</span>
+              <div className="flex items-center gap-3">
+                <button onClick={() => setMemberSelected(new Set())} className="text-xs font-medium text-slate-500 hover:text-slate-700">
+                  Clear
+                </button>
+                <button
+                  onClick={removeSelectedMembers}
+                  disabled={bulkRemoving}
+                  className="inline-flex items-center gap-1.5 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
+                >
+                  {bulkRemoving ? 'Removing…' : 'Remove from campaign'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
+                <th className="px-5 py-3 w-10">
+                  <input
+                    type="checkbox"
+                    checked={allFilteredSelected}
+                    onChange={toggleSelectAllFiltered}
+                    aria-label="Select all in view"
+                    className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300"
+                  />
+                </th>
                 <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Contact</th>
                 <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Status</th>
+                <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Outreach</th>
                 <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Added</th>
                 <th className="px-5 py-3" />
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {members.map((member) => (
-                <tr key={member.contact_id} className="hover:bg-slate-50 transition-colors">
+              {filteredMembers.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-5 py-10 text-center text-sm text-slate-400">
+                    No contacts in this filter.
+                  </td>
+                </tr>
+              ) : filteredMembers.map((member) => (
+                <tr key={member.contact_id} className={`hover:bg-slate-50 transition-colors ${memberSelected.has(member.contact_id) ? 'bg-indigo-50/40' : ''}`}>
+                  <td className="px-5 py-3.5">
+                    <input
+                      type="checkbox"
+                      checked={memberSelected.has(member.contact_id)}
+                      onChange={() => toggleMemberSelect(member.contact_id)}
+                      aria-label={`Select ${member.contact.name}`}
+                      className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300"
+                    />
+                  </td>
                   <td className="px-5 py-3.5">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0">
@@ -305,6 +458,9 @@ export default function CampaignDetailPage() {
                       {member.contact.status}
                     </span>
                   </td>
+                  <td className="px-5 py-3.5">
+                    {engagementBadge(member)}
+                  </td>
                   <td className="px-5 py-3.5 text-xs text-slate-400">
                     {formatRelativeTime(member.added_at)}
                   </td>
@@ -329,7 +485,8 @@ export default function CampaignDetailPage() {
               ))}
             </tbody>
           </table>
-        </div>
+          </div>
+        </>
       )}
 
       {/* Generate Emails Panel */}
