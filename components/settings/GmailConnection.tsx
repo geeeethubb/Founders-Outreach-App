@@ -6,6 +6,7 @@ export default function GmailConnection() {
   const [loading, setLoading] = useState(true)
   const [connected, setConnected] = useState(false)
   const [email, setEmail] = useState<string | null>(null)
+  const [canReadReplies, setCanReadReplies] = useState(true)
   const [working, setWorking] = useState(false)
   const [banner, setBanner] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
@@ -15,6 +16,7 @@ export default function GmailConnection() {
       const data = await res.json()
       setConnected(!!data.connected)
       setEmail(data.email ?? null)
+      setCanReadReplies(!!data.canReadReplies)
     } catch {
       // leave as disconnected on error
     } finally {
@@ -59,8 +61,9 @@ export default function GmailConnection() {
       <div>
         <h3 className="font-medium text-slate-800 text-sm">Email Sending</h3>
         <p className="text-xs text-slate-500 mt-0.5">
-          Connect your Gmail so outreach goes out from your own address. We only request permission to
-          <span className="font-medium"> send</span> mail — never to read your inbox.
+          Connect your Gmail so outreach goes out from your own address, and so we can fold replies into
+          your <span className="font-medium">Conversations</span>. We request permission to send mail and
+          to read replies to your outreach.
         </p>
       </div>
 
@@ -79,21 +82,37 @@ export default function GmailConnection() {
       {loading ? (
         <p className="text-sm text-slate-400">Checking connection…</p>
       ) : connected ? (
-        <div className="flex items-center justify-between gap-3 bg-slate-50 border border-slate-200 rounded-lg px-4 py-3">
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="text-green-600 text-lg leading-none">✓</span>
-            <div className="min-w-0">
-              <p className="text-sm font-medium text-slate-800">Connected</p>
-              <p className="text-xs text-slate-500 truncate">{email}</p>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between gap-3 bg-slate-50 border border-slate-200 rounded-lg px-4 py-3">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-green-600 text-lg leading-none">✓</span>
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-slate-800">Connected</p>
+                <p className="text-xs text-slate-500 truncate">{email}</p>
+              </div>
             </div>
+            <button
+              onClick={disconnect}
+              disabled={working}
+              className="text-xs font-medium text-slate-500 hover:text-red-600 disabled:opacity-50 transition-colors flex-shrink-0"
+            >
+              {working ? 'Disconnecting…' : 'Disconnect'}
+            </button>
           </div>
-          <button
-            onClick={disconnect}
-            disabled={working}
-            className="text-xs font-medium text-slate-500 hover:text-red-600 disabled:opacity-50 transition-colors flex-shrink-0"
-          >
-            {working ? 'Disconnecting…' : 'Disconnect'}
-          </button>
+
+          {!canReadReplies && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 flex items-center justify-between gap-3">
+              <p className="text-xs text-amber-700">
+                Reply tracking needs read access. Reconnect to start logging replies in Conversations.
+              </p>
+              <a
+                href="/api/google/connect"
+                className="text-xs font-medium text-amber-800 underline hover:text-amber-900 flex-shrink-0"
+              >
+                Reconnect
+              </a>
+            </div>
+          )}
         </div>
       ) : (
         <a

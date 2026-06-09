@@ -111,8 +111,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: result.error }, { status: 500 })
     }
 
-    // Update email status in DB
-    await updateEmailStatus(body.email_id, 'sent', result.messageId)
+    // Update email status in DB, recording the Gmail thread id so reply-sync can
+    // later find replies the contact sends back into this same thread.
+    await updateEmailStatus(body.email_id, 'sent', result.messageId, result.threadId)
 
     // Update contact status
     if (emailRow?.contact_id) {

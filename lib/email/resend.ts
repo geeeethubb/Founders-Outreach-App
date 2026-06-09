@@ -30,6 +30,7 @@ export interface SendEmailOptions {
 
 export interface SendEmailResult {
   messageId: string
+  threadId?: string        // Gmail-assigned thread id — used to sync replies later
   error?: string
 }
 
@@ -81,7 +82,10 @@ export async function sendEmail(opts: SendEmailOptions, sender: EmailSender): Pr
       return { messageId: '', error: `Gmail API error (${res.status}): ${detail.slice(0, 300)}` }
     }
 
-    return { messageId }
+    // Gmail returns the created message: { id, threadId, ... }. We keep the
+    // threadId so reply-sync can list this conversation's later messages.
+    const sent = (await res.json().catch(() => ({}))) as { threadId?: string }
+    return { messageId, threadId: sent.threadId }
   } catch (e) {
     return {
       messageId: '',

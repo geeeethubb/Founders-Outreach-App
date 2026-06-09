@@ -1,13 +1,15 @@
 import { OAuth2Client } from 'google-auth-library'
 
 // Dedicated Google OAuth flow that grants this app permission to SEND mail as
-// the user (gmail.send), plus openid/email so we can read which address they
-// connected. This is separate from app login — users authorize sending here.
+// the user (gmail.send) and READ their mail (gmail.readonly) so we can fold
+// replies into Conversations, plus openid/email so we can read which address
+// they connected. This is separate from app login — users authorize here.
 
 const SCOPES = [
   'openid',
   'email',
   'https://www.googleapis.com/auth/gmail.send',
+  'https://www.googleapis.com/auth/gmail.readonly',
 ]
 
 export function oauthClient(): OAuth2Client {

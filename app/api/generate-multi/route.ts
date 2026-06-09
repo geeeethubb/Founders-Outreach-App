@@ -93,6 +93,7 @@ export async function POST(request: NextRequest) {
             scheduled_for: null,
             sent_at: null,
             resend_message_id: null,
+            gmail_thread_id: null,
             generation_metadata: {
               model: 'gpt-5.4',
               prompt_version: template ? '2.0' : '1.0',

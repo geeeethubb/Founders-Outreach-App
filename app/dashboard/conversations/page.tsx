@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { formatRelativeTime } from '@/lib/utils'
+import SyncButton from './SyncButton'
 
 const STATUS_COLORS: Record<string, string> = {
   open:             'bg-blue-100 text-blue-700',
@@ -23,11 +24,14 @@ export default async function ConversationsPage() {
 
   return (
     <div className="p-8 max-w-4xl">
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-slate-900">Conversations</h1>
-        <p className="text-slate-500 text-sm mt-1">
-          Replies and active threads from your outreach
-        </p>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold text-slate-900">Conversations</h1>
+          <p className="text-slate-500 text-sm mt-1">
+            Replies and active threads from your outreach
+          </p>
+        </div>
+        <SyncButton />
       </div>
 
       {!conversations || conversations.length === 0 ? (

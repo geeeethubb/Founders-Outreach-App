@@ -213,6 +213,7 @@ export interface Email {
   scheduled_for: string | null
   sent_at: string | null
   resend_message_id: string | null
+  gmail_thread_id: string | null
   generation_metadata: GenerationMetadata | null
   created_at: string
   // joined
@@ -258,6 +259,7 @@ export interface Message {
   subject: string | null
   body: string | null
   classification: ReplyClassification | null
+  provider_message_id: string | null
   sent_at: string | null
   created_at: string
 }

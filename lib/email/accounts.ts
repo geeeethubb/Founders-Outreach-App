@@ -38,6 +38,25 @@ export async function getConnectedEmail(userId: string): Promise<string | null> 
   return data?.email ?? null
 }
 
+/** True if the connected account granted the gmail.readonly scope reply-sync needs. */
+export function scopeCanReadReplies(scope: string | null): boolean {
+  return !!scope && scope.includes('https://www.googleapis.com/auth/gmail.readonly')
+}
+
+/** Address + whether reply-tracking is authorized — for status UI, no token decryption. */
+export async function getConnectedAccountInfo(
+  userId: string
+): Promise<{ email: string; canReadReplies: boolean } | null> {
+  const supabase = createServiceClient()
+  const { data } = await supabase
+    .from('email_accounts')
+    .select('email, scope')
+    .eq('user_id', userId)
+    .maybeSingle()
+  if (!data) return null
+  return { email: data.email, canReadReplies: scopeCanReadReplies(data.scope) }
+}
+
 export async function upsertEmailAccount(
   userId: string,
   email: string,

@@ -159,7 +159,8 @@ export async function createEmail(
 export async function updateEmailStatus(
   emailId: string,
   status: Email['status'],
-  resendMessageId?: string
+  resendMessageId?: string,
+  gmailThreadId?: string
 ) {
   const supabase = createClient()
   return supabase
@@ -167,6 +168,7 @@ export async function updateEmailStatus(
     .update({
       status,
       ...(resendMessageId && { resend_message_id: resendMessageId }),
+      ...(gmailThreadId && { gmail_thread_id: gmailThreadId }),
       ...(status === 'sent' && { sent_at: new Date().toISOString() }),
     })
     .eq('id', emailId)
@@ -190,25 +192,24 @@ export async function getConversations(userId: string): Promise<Conversation[]> 
 export async function getDashboardStats(userId: string): Promise<DashboardStats> {
   const supabase = createClient()
 
-  const [contacts, emails, events] = await Promise.all([
+  const [contacts, emails, conversations] = await Promise.all([
     supabase.from('contacts').select('status').eq('user_id', userId),
     supabase.from('emails').select('status').eq('user_id', userId),
-    supabase
-      .from('email_events')
-      .select('event_type, email_id')
-      .in(
-        'email_id',
-        (await supabase.from('emails').select('id').eq('user_id', userId)).data?.map((e) => e.id) ?? []
-      ),
+    // Replies/meetings come from synced Gmail conversations (see lib/email/sync.ts).
+    supabase.from('conversations').select('status, messages(direction)').eq('user_id', userId),
   ])
 
   const contactRows = contacts.data ?? []
   const emailRows = emails.data ?? []
-  const eventRows = events.data ?? []
+  const convRows = (conversations.data ?? []) as Array<{
+    status: string
+    messages: Array<{ direction: string }> | null
+  }>
 
   const sent = emailRows.filter((e) => e.status === 'sent').length
-  const replies = eventRows.filter((e) => e.event_type === 'replied').length
-  const meetings = contactRows.filter((c) => c.status === 'meeting').length
+  // A reply = a conversation that has at least one inbound message.
+  const replies = convRows.filter((c) => (c.messages ?? []).some((m) => m.direction === 'inbound')).length
+  const meetings = convRows.filter((c) => c.status === 'meeting_booked').length
 
   return {
     total_contacts: contactRows.length,
