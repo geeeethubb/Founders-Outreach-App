@@ -14,15 +14,35 @@ import type { ReplyClassification } from '@/types'
 const threadUrl = (id: string) =>
   `https://gmail.googleapis.com/gmail/v1/users/me/threads/${id}?format=full`
 
-const rfcLookupUrl = (rfcMessageId: string) =>
-  `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=1&q=${encodeURIComponent(
-    `rfc822msgid:${rfcMessageId}`
-  )}`
+/** Run a Gmail search and return the threadId of the first matching message. */
+async function lookupThread(accessToken: string, query: string): Promise<string | undefined> {
+  const url = `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=1&q=${encodeURIComponent(query)}`
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } })
+  if (!res.ok) {
+    console.error(`[syncReplies] gmail search failed (${query}): ${res.status} ${await res.text().catch(() => '')}`.slice(0, 200))
+    return undefined
+  }
+  const found = (await res.json()) as { messages?: Array<{ threadId?: string }> }
+  return found.messages?.[0]?.threadId
+}
 
 export interface SyncResult {
   newReplies: number
   threadsChecked: number
+  // Diagnostics surfaced in the UI so a "0 replies" result is explainable.
+  sentEmails?: number
+  threadsResolved?: number
+  backfilled?: number
   error?: string
+}
+
+// Missing-column / un-migrated DB shows up as a Postgres "column does not exist"
+// or PostgREST schema-cache error — turn that into an actionable message.
+function schemaHint(message: string): string | null {
+  if (/gmail_thread_id|provider_message_id|does not exist|schema cache|column/i.test(message)) {
+    return 'Reply-sync columns are missing — run migration 007_reply_sync.sql in Supabase, then sync again.'
+  }
+  return null
 }
 
 export async function syncReplies(userId: string): Promise<SyncResult> {
@@ -50,19 +70,28 @@ export async function syncReplies(userId: string): Promise<SyncResult> {
   // Backfill: emails sent before we tracked thread ids (or via an older path)
   // have no gmail_thread_id. Resolve it from the RFC822 Message-ID we stored so
   // replies the contact already sent get picked up too.
-  await backfillThreadIds(supabase, userId, accessToken)
+  const backfill = await backfillThreadIds(supabase, userId, accessToken)
+  if (backfill.error) {
+    console.error('[syncReplies] backfill failed:', backfill.error)
+    return { newReplies: 0, threadsChecked: 0, error: schemaHint(backfill.error) ?? backfill.error }
+  }
 
   // Map each Gmail thread we sent into -> the contact it belongs to. We know the
   // contact reliably because we initiated every thread ourselves.
-  const { data: sentEmails } = await supabase
+  const { data: sentEmails, error: sentErr } = await supabase
     .from('emails')
     .select('gmail_thread_id, contact_id')
     .eq('user_id', userId)
     .eq('status', 'sent')
-    .not('gmail_thread_id', 'is', null)
 
+  if (sentErr) {
+    console.error('[syncReplies] read sent emails failed:', sentErr)
+    return { newReplies: 0, threadsChecked: 0, error: schemaHint(sentErr.message) ?? `Could not read sent emails: ${sentErr.message}` }
+  }
+
+  const sentRows = sentEmails ?? []
   const threadToContact = new Map<string, string>()
-  for (const row of sentEmails ?? []) {
+  for (const row of sentRows) {
     const threadId = row.gmail_thread_id as string | null
     const contactId = row.contact_id as string | null
     if (threadId && contactId && !threadToContact.has(threadId)) {
@@ -70,11 +99,21 @@ export async function syncReplies(userId: string): Promise<SyncResult> {
     }
   }
 
+  const diag = {
+    sentEmails: sentRows.length,
+    threadsResolved: threadToContact.size,
+    backfilled: backfill.backfilled,
+  }
+
   // Provider message ids we've already imported, so we never duplicate a reply.
-  const { data: existingMsgs } = await supabase
+  const { data: existingMsgs, error: msgErr } = await supabase
     .from('messages')
     .select('provider_message_id')
     .not('provider_message_id', 'is', null)
+  if (msgErr) {
+    console.error('[syncReplies] read messages failed:', msgErr)
+    return { newReplies: 0, threadsChecked: 0, ...diag, error: schemaHint(msgErr.message) ?? `Could not read messages: ${msgErr.message}` }
+  }
   const seen = new Set((existingMsgs ?? []).map((m) => m.provider_message_id as string))
 
   const ownEmail = account.email.toLowerCase()
@@ -84,7 +123,10 @@ export async function syncReplies(userId: string): Promise<SyncResult> {
     const res = await fetch(threadUrl(threadId), {
       headers: { Authorization: `Bearer ${accessToken}` },
     })
-    if (!res.ok) continue
+    if (!res.ok) {
+      console.error(`[syncReplies] thread ${threadId} fetch failed: ${res.status} ${await res.text().catch(() => '')}`.slice(0, 300))
+      continue
+    }
     const thread = (await res.json()) as GmailThread
 
     // Replies = thread messages not sent by the user, that we haven't imported.
@@ -127,8 +169,17 @@ export async function syncReplies(userId: string): Promise<SyncResult> {
         provider_message_id: m.id,
         sent_at: sentAt,
       })
-      // A unique-violation means a concurrent sync already grabbed it — skip.
-      if (error) continue
+      if (error) {
+        // 23505 = unique violation: a concurrent/prior sync already imported it.
+        if (error.code === '23505') {
+          seen.add(m.id)
+          continue
+        }
+        const hint = schemaHint(error.message)
+        if (hint) return { newReplies, threadsChecked: threadToContact.size, ...diag, error: hint }
+        console.error('[syncReplies] message insert failed:', error)
+        continue
+      }
 
       seen.add(m.id)
       newReplies++
@@ -136,7 +187,7 @@ export async function syncReplies(userId: string): Promise<SyncResult> {
     }
   }
 
-  return { newReplies, threadsChecked: threadToContact.size }
+  return { newReplies, threadsChecked: threadToContact.size, ...diag }
 }
 
 /**
@@ -148,30 +199,36 @@ async function backfillThreadIds(
   supabase: ReturnType<typeof createServiceClient>,
   userId: string,
   accessToken: string
-): Promise<void> {
-  const { data: pending } = await supabase
+): Promise<{ backfilled: number; error?: string }> {
+  const { data: pending, error } = await supabase
     .from('emails')
-    .select('id, resend_message_id')
+    .select('id, resend_message_id, contact:contacts(email)')
     .eq('user_id', userId)
     .eq('status', 'sent')
     .is('gmail_thread_id', null)
-    .not('resend_message_id', 'is', null)
 
+  if (error) return { backfilled: 0, error: error.message }
+
+  let backfilled = 0
   for (const row of pending ?? []) {
-    // Stored as an RFC822 Message-ID with angle brackets; the search wants it bare.
-    const rfcId = (row.resend_message_id as string).replace(/^<|>$/g, '')
-    if (!rfcId) continue
+    let threadId: string | undefined
 
-    const res = await fetch(rfcLookupUrl(rfcId), {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    })
-    if (!res.ok) continue
-    const found = (await res.json()) as { messages?: Array<{ threadId?: string }> }
-    const threadId = found.messages?.[0]?.threadId
+    // 1) Exact match via the RFC822 Message-ID we recorded — works when Gmail
+    //    preserved the header we set at send time.
+    const rfcId = (row.resend_message_id as string | null)?.replace(/^<|>$/g, '')
+    if (rfcId) threadId = await lookupThread(accessToken, `rfc822msgid:${rfcId}`)
+
+    // 2) Fallback: find the thread by mail we sent TO this contact. Stable even
+    //    if Gmail rewrote our Message-ID on send (which breaks step 1).
+    const contactEmail = (row.contact as { email?: string } | null)?.email
+    if (!threadId && contactEmail) threadId = await lookupThread(accessToken, `to:${contactEmail}`)
+
     if (!threadId) continue
 
     await supabase.from('emails').update({ gmail_thread_id: threadId }).eq('id', row.id)
+    backfilled++
   }
+  return { backfilled }
 }
 
 /** Find the conversation for this Gmail thread, creating it on first reply. */

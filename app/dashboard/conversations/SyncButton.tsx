@@ -18,7 +18,12 @@ export default function SyncButton() {
     setIsError(false)
     try {
       const res = await fetch('/api/conversations/sync', { method: 'POST' })
-      const data = (await res.json()) as { newReplies?: number; error?: string }
+      const data = (await res.json()) as {
+        newReplies?: number
+        threadsResolved?: number
+        sentEmails?: number
+        error?: string
+      }
       if (!res.ok) {
         setIsError(true)
         setMessage(data.error ?? 'Sync failed')
@@ -27,8 +32,14 @@ export default function SyncButton() {
       if (data.newReplies && data.newReplies > 0) {
         setMessage(`Found ${data.newReplies} new ${data.newReplies === 1 ? 'reply' : 'replies'}`)
         router.refresh()
+      } else if (!data.sentEmails) {
+        setMessage('No sent emails to check yet')
+      } else if (!data.threadsResolved) {
+        // Sent emails exist but none mapped to a Gmail thread — usually a missing
+        // read scope or the send predating thread tracking.
+        setMessage(`No Gmail threads matched your ${data.sentEmails} sent email${data.sentEmails === 1 ? '' : 's'}`)
       } else {
-        setMessage('Up to date')
+        setMessage(`Up to date · checked ${data.threadsResolved} thread${data.threadsResolved === 1 ? '' : 's'}`)
       }
     } catch {
       setIsError(true)
