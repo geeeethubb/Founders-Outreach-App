@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import { RichTextEditor } from '@/components/editor/RichTextEditor'
 import { formatRelativeTime } from '@/lib/utils'
 
 const STATUS_COLORS: Record<string, string> = {
@@ -251,12 +252,11 @@ export default function ConversationDetailPage() {
           </div>
         )}
 
-        <textarea
+        <RichTextEditor
           value={draft}
-          onChange={(e) => setDraft(e.target.value)}
+          onChange={setDraft}
           rows={8}
           placeholder="Your reply will appear here — edit it freely before sending."
-          className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-y leading-relaxed"
         />
 
         <div className="flex items-center justify-between mt-3">

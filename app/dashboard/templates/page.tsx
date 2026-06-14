@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { RichTextEditor, type RichTextEditorHandle } from '@/components/editor/RichTextEditor'
 import type { Template } from '@/types'
 
 const PLACEHOLDER_HELPERS = [
@@ -42,7 +43,7 @@ export default function TemplatesPage() {
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
   const [deletingId, setDeletingId] = useState<string | null>(null)
-  const bodyRef = useRef<HTMLTextAreaElement>(null)
+  const editorRef = useRef<RichTextEditorHandle>(null)
 
   async function load() {
     const { data } = await supabase
@@ -84,18 +85,7 @@ export default function TemplatesPage() {
   }
 
   function insertPlaceholder(placeholder: string) {
-    const ta = bodyRef.current
-    if (!ta) return
-    const start = ta.selectionStart
-    const end = ta.selectionEnd
-    const current = form.body_template
-    const next = current.slice(0, start) + placeholder + current.slice(end)
-    setForm((f) => ({ ...f, body_template: next }))
-    // Restore cursor after the inserted text
-    setTimeout(() => {
-      ta.focus()
-      ta.setSelectionRange(start + placeholder.length, start + placeholder.length)
-    }, 0)
+    editorRef.current?.insertAtCursor(placeholder)
   }
 
   async function save() {
@@ -353,16 +343,16 @@ export default function TemplatesPage() {
                       </span>
                     )}
                   </div>
-                  <textarea
-                    ref={bodyRef}
+                  <RichTextEditor
+                    ref={editorRef}
                     value={form.body_template}
-                    onChange={(e) => setForm((f) => ({ ...f, body_template: e.target.value }))}
+                    onChange={(v) => setForm((f) => ({ ...f, body_template: v }))}
                     rows={16}
+                    textareaClassName="font-mono"
                     placeholder={`Hi [recipient first name],\n\n[open with something specific and compelling about them]\n\nI'm reaching out because [mention why this person is a fit for your goal].\n\n[highlight my most relevant accomplishment for this person]\n\nWould you be open to a 20-minute call to explore this further?\n\nSincerely,\nZuyu Liu\nChemical Engineer, UIUC\nPresident @ Founders: Illinois Entrepreneurs\n[LinkedIn](https://www.linkedin.com/in/zuyu-liu-58b2b2241/)`}
-                    className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none font-mono leading-relaxed"
                   />
                   <p className="text-xs text-slate-400 mt-1.5">
-                    Write in your natural voice. Use <code className="bg-slate-100 px-1 rounded">[bracket instructions]</code> wherever you want AI to fill in personalized content. Everything outside brackets is preserved exactly.
+                    Use the toolbar (or <code className="bg-slate-100 px-1 rounded">**bold**</code>, <code className="bg-slate-100 px-1 rounded">*italic*</code>) to format, and <code className="bg-slate-100 px-1 rounded">[bracket instructions]</code> wherever AI should fill in personalized content. Hit <strong>Preview</strong> to see exactly how it sends.
                   </p>
                 </div>
 

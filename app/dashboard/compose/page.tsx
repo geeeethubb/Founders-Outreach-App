@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { RichTextEditor } from '@/components/editor/RichTextEditor'
 import type { Contact, EmailVariant, EmailStyle, Template } from '@/types'
 import { EMAIL_STYLES } from '@/types'
 import { formatRelativeTime } from '@/lib/utils'
@@ -578,11 +579,10 @@ function ComposeContent() {
             </div>
             <div className="p-5">
               <label className="block text-xs font-medium text-slate-500 mb-2">Body</label>
-              <textarea
+              <RichTextEditor
                 value={editedBody}
-                onChange={(e) => setEditedBody(e.target.value)}
+                onChange={setEditedBody}
                 rows={14}
-                className="w-full text-sm text-slate-700 leading-relaxed focus:outline-none resize-none"
               />
               <div className={`text-right text-xs mt-2 ${wordCount > 180 ? 'text-red-500' : 'text-slate-400'}`}>
                 {wordCount} words {wordCount > 180 && '— consider trimming'}

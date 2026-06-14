@@ -1,5 +1,6 @@
 import crypto from 'crypto'
 import MailComposer from 'nodemailer/lib/mail-composer'
+import { renderEmailBody } from './format'
 
 // Mail is sent from each user's OWN Gmail via the Gmail API (users.messages.send)
 // using their OAuth2 access token. We deliberately use the API rather than SMTP:
@@ -21,7 +22,7 @@ export interface SendEmailOptions {
   to: string
   toName?: string
   subject: string
-  body: string        // plain text — wrapped in HTML for sending
+  body: string        // lightweight markup (see lib/email/format.ts) — rendered to HTML for sending
   replyTo?: string
   scheduledAt?: string // ISO string — not natively supported here; ignored
   inReplyTo?: string  // Message-ID of the email this is a reply to (Gmail threading)
@@ -97,36 +98,15 @@ export async function sendEmail(opts: SendEmailOptions, sender: EmailSender): Pr
   }
 }
 
-/** Convert a plain-text email body to clean HTML, with markdown link support */
+/**
+ * Convert an email body written in our lightweight markup (bold/italic/links/
+ * bullet lists) to clean HTML. The actual markup -> HTML rendering lives in
+ * lib/email/format.ts so the editor's live preview stays in sync with this.
+ */
 function plainTextToHtml(text: string): string {
-  // Extract markdown links before escaping so we can restore them as <a> tags
-  const linkPlaceholders: Array<{ placeholder: string; html: string }> = []
-  let processedText = text.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, (_, linkText, url) => {
-    const placeholder = `\x00LINK${linkPlaceholders.length}\x00`
-    linkPlaceholders.push({
-      placeholder,
-      html: `<a href="${url}" style="color:#1a73e8;text-decoration:underline">${linkText}</a>`,
-    })
-    return placeholder
-  })
-
-  // Escape HTML special chars
-  processedText = processedText
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-
-  // Restore link placeholders as real <a> tags
-  for (const { placeholder, html } of linkPlaceholders) {
-    processedText = processedText.replace(placeholder, html)
-  }
-
   // Render like a normal, hand-written Gmail message: left-aligned, no centered
   // page container, no large padding. Just paragraphs in a plain text block.
-  const paragraphs = processedText
-    .split('\n\n')
-    .map((p) => `<p style="margin:0 0 14px 0">${p.replace(/\n/g, '<br>')}</p>`)
-    .join('\n')
+  const paragraphs = renderEmailBody(text)
 
   return `<!DOCTYPE html>
 <html>

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { RichTextEditor } from '@/components/editor/RichTextEditor'
 import { formatRelativeTime } from '@/lib/utils'
 
 interface DraftEmail {
@@ -380,12 +381,12 @@ export default function DraftsPage() {
                     {/* Body */}
                     <div>
                       <label className="block text-xs font-medium text-slate-500 mb-1">Body</label>
-                      <textarea
+                      <RichTextEditor
                         value={body}
-                        onChange={(e) => updateEdit(draft.id, 'body', e.target.value)}
+                        onChange={(v) => updateEdit(draft.id, 'body', v)}
                         onBlur={() => saveEdit(draft.id)}
                         rows={10}
-                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none font-mono leading-relaxed"
+                        textareaClassName="font-mono"
                       />
                     </div>
 
