@@ -182,7 +182,7 @@ export default function CampaignsPage() {
                     onClick={() => router.push(`/dashboard/campaigns/${campaign.id}`)}
                     className="text-xs text-indigo-600 hover:text-indigo-700 font-medium"
                   >
-                    View contacts
+                    Open dashboard
                   </button>
                   <span className="text-slate-200">|</span>
                   <button

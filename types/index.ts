@@ -377,4 +377,27 @@ export interface DashboardStats {
   reply_rate: number
 }
 
+// Per-campaign rollup. Sends are scoped by emails.campaign_id; replies/meetings
+// attribute through the campaign's member contacts who were emailed under it.
+export interface CampaignStats {
+  total_contacts: number
+  researched: number
+  emails_sent: number       // sent emails with this campaign_id
+  contacts_emailed: number  // distinct contacts emailed under this campaign
+  replies: number
+  positive_replies: number
+  meetings: number
+  reply_rate: number        // replies / contacts_emailed, as a percent
+}
+
+// AI-generated, campaign-specific coaching grounded in that campaign's own
+// emails and response rate (see lib/ai/campaign-feedback.ts).
+export interface CampaignFeedback {
+  headline: string
+  assessment: string
+  strengths: string[]
+  improvements: string[]
+  next_experiment: string
+}
+
 // ─── UI State Types ─────────────────────────────────

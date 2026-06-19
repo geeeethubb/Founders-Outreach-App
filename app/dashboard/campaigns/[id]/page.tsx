@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import type { Campaign, Contact, GenerateRequest, EmailStyle, Template } from '@/types'
+import type { Campaign, Contact, GenerateRequest, EmailStyle, Template, CampaignFeedback } from '@/types'
 import { STATUS_COLORS, formatRelativeTime } from '@/lib/utils'
 import { EMAIL_STYLES } from '@/types'
 
@@ -64,6 +64,14 @@ export default function CampaignDetailPage() {
   const [templates, setTemplates] = useState<Template[]>([])
   const [emailedMap, setEmailedMap] = useState<Map<string, { count: number; lastSentAt: string }>>(new Map())
 
+  // Emails belonging to THIS campaign (campaign_id scoped) — powers the per-campaign dashboard stats.
+  const [campaignEmails, setCampaignEmails] = useState<{ contact_id: string; status: string }[]>([])
+
+  // AI feedback specific to this campaign (on-demand)
+  const [feedback, setFeedback] = useState<CampaignFeedback | null>(null)
+  const [feedbackLoading, setFeedbackLoading] = useState(false)
+  const [feedbackError, setFeedbackError] = useState('')
+
   // Member-list filtering + bulk selection (distinct from the Add-Contacts modal)
   const [memberFilter, setMemberFilter] = useState<MemberFilter>('all')
   const [memberSelected, setMemberSelected] = useState<Set<string>>(new Set())
@@ -122,7 +130,7 @@ export default function CampaignDetailPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { router.push('/login'); return }
 
-    const [{ data: camp }, { data: mems }, { data: contacts }, { data: tmplData }, { data: sentData }] = await Promise.all([
+    const [{ data: camp }, { data: mems }, { data: contacts }, { data: tmplData }, { data: sentData }, { data: campEmails }] = await Promise.all([
       supabase.from('campaigns').select('*').eq('id', campaignId).single(),
       supabase
         .from('campaign_contacts')
@@ -141,9 +149,11 @@ export default function CampaignDetailPage() {
         .eq('is_active', true)
         .order('created_at', { ascending: false }),
       supabase.from('emails').select('contact_id, sent_at').eq('user_id', user.id).eq('status', 'sent'),
+      supabase.from('emails').select('contact_id, status').eq('campaign_id', campaignId).eq('user_id', user.id),
     ])
 
     setCampaign(camp)
+    setCampaignEmails((campEmails as { contact_id: string; status: string }[]) ?? [])
     setMembers((mems ?? []) as unknown as CampaignContact[])
     setAllContacts((contacts ?? []) as Contact[])
     setTemplates((tmplData as Template[]) ?? [])
@@ -302,6 +312,45 @@ export default function CampaignDetailPage() {
     completed: 'bg-slate-100 text-slate-600',
   }
 
+  // ─── Per-campaign dashboard stats ────────────────────────────────────────────
+  // Sends are scoped to this campaign (campaign_id); replies/meetings count only
+  // among the contacts actually emailed under it, so the rate is campaign-true.
+  const sentCampaignEmails = campaignEmails.filter((e) => e.status === 'sent')
+  const emailedContactIds = new Set(sentCampaignEmails.map((e) => e.contact_id))
+  const respondedMembers = members.filter(
+    (m) => emailedContactIds.has(m.contact_id) && (m.contact.status === 'replied' || m.contact.status === 'meeting')
+  )
+  const meetingMembers = members.filter(
+    (m) => emailedContactIds.has(m.contact_id) && m.contact.status === 'meeting'
+  )
+  const researchedCount = members.filter((m) => m.contact.research).length
+  const campaignReplyRate = emailedContactIds.size > 0
+    ? Math.round((respondedMembers.length / emailedContactIds.size) * 100)
+    : 0
+
+  const statCards = [
+    { label: 'Contacts', value: members.length, color: 'text-slate-900', sub: 'in this campaign' },
+    { label: 'Researched', value: researchedCount, color: 'text-blue-600', sub: 'with AI research' },
+    { label: 'Emails Sent', value: sentCampaignEmails.length, color: 'text-indigo-600', sub: `to ${emailedContactIds.size} contact${emailedContactIds.size !== 1 ? 's' : ''}` },
+    { label: 'Replies', value: respondedMembers.length, color: 'text-green-600', sub: `${campaignReplyRate}% reply rate` },
+    { label: 'Meetings', value: meetingMembers.length, color: 'text-emerald-600', sub: 'booked or completed' },
+  ]
+
+  async function getFeedback() {
+    setFeedbackLoading(true)
+    setFeedbackError('')
+    try {
+      const res = await fetch(`/api/campaigns/${campaignId}/feedback`, { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to generate feedback')
+      setFeedback(data.feedback as CampaignFeedback)
+    } catch (e) {
+      setFeedbackError(e instanceof Error ? e.message : 'Failed to generate feedback')
+    } finally {
+      setFeedbackLoading(false)
+    }
+  }
+
   if (loading) {
     return <div className="p-8 text-slate-400 text-sm">Loading…</div>
   }
@@ -346,6 +395,108 @@ export default function CampaignDetailPage() {
           </svg>
           Add Contacts
         </button>
+      </div>
+
+      {/* Per-campaign dashboard */}
+      <div className="grid grid-cols-5 gap-4 mb-6">
+        {statCards.map((card) => (
+          <div key={card.label} className="bg-white rounded-xl border border-slate-200 p-5">
+            <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-2">
+              {card.label}
+            </p>
+            <p className={`text-3xl font-bold ${card.color} mb-1`}>{card.value}</p>
+            <p className="text-xs text-slate-400">{card.sub}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* AI feedback — specific to this campaign's emails + response rate */}
+      <div className="bg-white rounded-xl border border-slate-200 p-6 mb-8">
+        <div className="flex items-start justify-between gap-4 mb-1">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center flex-shrink-0">
+              <span className="text-base">💡</span>
+            </div>
+            <div>
+              <h3 className="font-semibold text-slate-800">Feedback on this campaign</h3>
+              <p className="text-xs text-slate-500">
+                AI reviews the emails you sent here and your {campaignReplyRate}% reply rate
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={getFeedback}
+            disabled={feedbackLoading || sentCampaignEmails.length === 0}
+            className="flex items-center gap-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors whitespace-nowrap"
+          >
+            {feedbackLoading ? (
+              <>
+                <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                Analyzing…
+              </>
+            ) : feedback ? 'Refresh feedback' : 'Get feedback'}
+          </button>
+        </div>
+
+        {sentCampaignEmails.length === 0 && (
+          <p className="text-sm text-slate-400 mt-3">
+            Send some outreach in this campaign first — feedback is based on the emails you actually sent and how people responded.
+          </p>
+        )}
+
+        {feedbackError && (
+          <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2 rounded-lg mt-3">
+            {feedbackError}
+          </div>
+        )}
+
+        {feedback && (
+          <div className="mt-4 space-y-4">
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+              <p className="font-semibold text-slate-800">{feedback.headline}</p>
+              <p className="text-sm text-slate-600 mt-1">{feedback.assessment}</p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {feedback.strengths.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-green-700 uppercase tracking-wide mb-2">✓ What's working</p>
+                  <ul className="space-y-1.5">
+                    {feedback.strengths.map((s, i) => (
+                      <li key={i} className="text-sm text-slate-600 flex gap-2">
+                        <span className="text-green-500 flex-shrink-0">•</span>
+                        <span>{s}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {feedback.improvements.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-orange-700 uppercase tracking-wide mb-2">↑ What to improve</p>
+                  <ul className="space-y-1.5">
+                    {feedback.improvements.map((s, i) => (
+                      <li key={i} className="text-sm text-slate-600 flex gap-2">
+                        <span className="text-orange-500 flex-shrink-0">•</span>
+                        <span>{s}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+
+            {feedback.next_experiment && (
+              <div className="border-t border-slate-100 pt-3">
+                <p className="text-xs font-semibold text-indigo-700 uppercase tracking-wide mb-1">🧪 Try next</p>
+                <p className="text-sm text-slate-600">{feedback.next_experiment}</p>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Contact list */}
