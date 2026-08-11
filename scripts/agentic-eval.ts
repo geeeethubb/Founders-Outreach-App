@@ -89,7 +89,11 @@ async function runProfile(profile: EvalProfile, userId: string): Promise<Profile
     backgroundItems: items,
     budget: {
       maxCompanies: 18,
-      maxPeoplePerCompany: 3,
+      // Widening the pool via people-per-company rather than more companies:
+      // iteration 3 showed asking discovery for more companies pushes it into
+      // weaker ones (97% -> 69% precision), while a deeper pool inside ALREADY
+      // validated companies costs no company quality at all.
+      maxPeoplePerCompany: Number(process.env.EVAL_PEOPLE_PER_COMPANY ?? 3),
       maxApolloCalls: 90,
       maxWebSearches: 5,
       maxAgentSteps: 6,
