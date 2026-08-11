@@ -1,0 +1,279 @@
+// Tests for the deterministic core: scoring arithmetic, weights, dedupe, and
+// seniority calibration.
+//
+// These are the highest-value things to pin down (docs/IMPLEMENTATION_PLAN.md
+// §Testing): pure functions, high blast radius, no mocking required. Agent
+// prompts are covered by evals, not unit tests — asserting an LLM's exact output
+// is brittle and measures the wrong thing.
+//
+// Deliberately dependency-free so it runs under tsx with no test-runner install.
+//   npm run test:deterministic
+
+import { computeOverallScore, clampScore, rankByScore, applyThreshold, reweight, buildScoreResult } from '../lib/scoring/compute'
+import { DEFAULT_WEIGHTS, resolveWeights, normalizeWeights, isValidWeights } from '../lib/scoring/weights'
+import { SCORING_DIMENSIONS, type ScoreComponent } from '../lib/scoring/types'
+import { computeTotal, deriveRecommendation, DIMENSION_MAX, SCOUT_DIMENSIONS, type ScoutComponent } from '../lib/scouting/score'
+import { assessSeniority, sizeBand, normalizeSeniority } from '../lib/scouting/seniority'
+import { dedupeCompanies, dedupePeople, countResidualDuplicates, companyKey, normalizeLinkedIn } from '../lib/scouting/dedupe'
+import { interleave } from '../lib/scouting/concurrency'
+import { filterCompany, filterPerson } from '../lib/scouting/filter'
+import type { CompanyCandidate, PersonCandidate } from '../lib/providers/types'
+
+let passed = 0
+let failed = 0
+const failures: string[] = []
+
+function check(name: string, condition: boolean, detail = ''): void {
+  if (condition) {
+    passed++
+  } else {
+    failed++
+    failures.push(`${name}${detail ? ` — ${detail}` : ''}`)
+  }
+}
+
+function close(a: number, b: number, tol = 0.001): boolean {
+  return Math.abs(a - b) < tol
+}
+
+// ─── Fixtures ────────────────────────────────────────────────────────────────
+
+function company(over: Partial<CompanyCandidate> = {}): CompanyCandidate {
+  return {
+    name: 'Acme Chemicals', domain: 'acme.com', description: 'Specialty chemicals manufacturer',
+    industry: 'chemicals', sub_industries: [], employee_count: 500, employee_range: null,
+    stage: null, founded_year: 2001, hq_location: 'Chicago, IL, United States', country: 'United States',
+    website_url: 'https://acme.com', linkedin_url: null, raw: {},
+    provenance: { provider_id: 'apollo', retrieved_at: '2026-08-10T00:00:00Z' },
+    ...over,
+  }
+}
+
+function person(over: Partial<PersonCandidate> = {}): PersonCandidate {
+  return {
+    name: 'Jane Doe', first_name: 'Jane', last_name: 'Doe', title: 'Director of Manufacturing',
+    seniority: 'director', department: 'operations', email: 'jane@acme.com', email_status: 'verified',
+    linkedin_url: 'https://linkedin.com/in/janedoe', location: 'Chicago, IL', company_name: 'Acme Chemicals',
+    company_domain: 'acme.com', raw: {},
+    provenance: { provider_id: 'apollo', external_id: 'apollo-1', retrieved_at: '2026-08-10T00:00:00Z' },
+    ...over,
+  }
+}
+
+function components(scores: Partial<Record<string, number>>): ScoreComponent[] {
+  return SCORING_DIMENSIONS.map((d) => ({
+    dimension: d, score: scores[d] ?? 0.5, explanation: 'x', evidence: [],
+  }))
+}
+
+function scoutComponents(scores: Partial<Record<string, number>>): ScoutComponent[] {
+  return SCOUT_DIMENSIONS.map((d) => {
+    const normalized = scores[d] ?? 0.5
+    return { dimension: d, normalized, points: normalized * DIMENSION_MAX[d], max: DIMENSION_MAX[d], explanation: 'x' }
+  })
+}
+
+// ─── Scoring arithmetic ──────────────────────────────────────────────────────
+
+check('clampScore bounds', clampScore(1.7) === 1 && clampScore(-3) === 0 && clampScore(0.4) === 0.4)
+check('clampScore handles NaN', clampScore(NaN) === 0)
+
+check(
+  'all-1.0 components produce 1.0 overall',
+  close(computeOverallScore(components(Object.fromEntries(SCORING_DIMENSIONS.map((d) => [d, 1]))), DEFAULT_WEIGHTS), 1)
+)
+check(
+  'all-0 components produce 0 overall',
+  close(computeOverallScore(components(Object.fromEntries(SCORING_DIMENSIONS.map((d) => [d, 0]))), DEFAULT_WEIGHTS), 0)
+)
+
+// A dimension the agent could not judge must not be treated as a zero — that
+// would conflate "no evidence" with "bad".
+{
+  const partial = components({ opportunity_fit: 1 }).filter((c) => c.dimension === 'opportunity_fit')
+  check('missing dimensions excluded from denominator', close(computeOverallScore(partial, DEFAULT_WEIGHTS), 1),
+    `got ${computeOverallScore(partial, DEFAULT_WEIGHTS)}`)
+}
+
+// Weighting must actually bite: the heaviest dimension moves the score most.
+{
+  const onlyFit = computeOverallScore(components({ opportunity_fit: 1, decision_making_power: 0, user_differentiation: 0, probability_of_response: 0, company_attractiveness: 0, timing_trigger: 0 }), DEFAULT_WEIGHTS)
+  const onlyTiming = computeOverallScore(components({ opportunity_fit: 0, decision_making_power: 0, user_differentiation: 0, probability_of_response: 0, company_attractiveness: 0, timing_trigger: 1 }), DEFAULT_WEIGHTS)
+  check('heavier dimension contributes more', onlyFit > onlyTiming, `fit=${onlyFit} timing=${onlyTiming}`)
+  check('opportunity_fit contributes exactly its weight', close(onlyFit, 0.25))
+}
+
+// ─── Weights ─────────────────────────────────────────────────────────────────
+
+check('default weights sum to 1', close(SCORING_DIMENSIONS.reduce((s, d) => s + DEFAULT_WEIGHTS[d], 0), 1))
+check('resolveWeights with null returns defaults', close(resolveWeights(null).opportunity_fit, 0.25))
+{
+  const r = resolveWeights({ opportunity_fit: 0.5 })
+  check('partial override renormalizes to 1', close(SCORING_DIMENSIONS.reduce((s, d) => s + r[d], 0), 1))
+  check('overridden dimension gains share', r.opportunity_fit > 0.25, `got ${r.opportunity_fit}`)
+}
+check('negative weights fall back to default', close(resolveWeights({ opportunity_fit: -1 } as never).opportunity_fit / normalizeWeights(DEFAULT_WEIGHTS).opportunity_fit, 1))
+check('zero-total weights fall back to defaults',
+  close(normalizeWeights(Object.fromEntries(SCORING_DIMENSIONS.map((d) => [d, 0])) as never).opportunity_fit, 0.25))
+check('isValidWeights rejects partial', !isValidWeights({ opportunity_fit: 0.5 }))
+check('isValidWeights accepts complete', isValidWeights(DEFAULT_WEIGHTS))
+
+// Re-weighting is the payoff of ADR-004: re-rank with no model call.
+{
+  const base = buildScoreResult({ subject_id: 'a', components: components({ timing_trigger: 1, opportunity_fit: 0 }), confidence: 0.8, summary: 's' }, null)
+  const heavy = reweight([base], { timing_trigger: 0.9 })[0]
+  check('reweight raises score when the strong dimension is upweighted', heavy.overall_score > base.overall_score,
+    `${base.overall_score} -> ${heavy.overall_score}`)
+  check('reweight snapshots the new weights', heavy.weights_used.timing_trigger > base.weights_used.timing_trigger)
+  check('reweight leaves components untouched', heavy.components.length === base.components.length)
+}
+
+// ─── Ranking and thresholds ──────────────────────────────────────────────────
+{
+  const items = [
+    { overall_score: 0.8, confidence: 0.2 },
+    { overall_score: 0.9, confidence: 0.5 },
+    { overall_score: 0.8, confidence: 0.9 },
+  ]
+  const ranked = rankByScore(items)
+  check('ranks by score descending', ranked[0].overall_score === 0.9)
+  check('ties break on confidence', ranked[1].confidence === 0.9, `got ${ranked[1].confidence}`)
+  check('rankByScore does not mutate input', items[0].overall_score === 0.8)
+  check('applyThreshold filters by score', applyThreshold(items, 0.85).length === 1)
+  // score >= 0.7 AND confidence >= 0.6 keeps only {0.8, 0.9}
+  check('applyThreshold filters by confidence too', applyThreshold(items, 0.7, 0.6).length === 1,
+    `got ${applyThreshold(items, 0.7, 0.6).length}`)
+  check('confidence floor defaults to permissive', applyThreshold(items, 0.7).length === 3)
+}
+
+// ─── Phase 3 scout scoring ───────────────────────────────────────────────────
+
+check('scout dimension maxima sum to 100', SCOUT_DIMENSIONS.reduce((s, d) => s + DIMENSION_MAX[d], 0) === 100)
+check('perfect scout score is 100', computeTotal(scoutComponents(Object.fromEntries(SCOUT_DIMENSIONS.map((d) => [d, 1])))) === 100)
+check('zero scout score is 0', computeTotal(scoutComponents(Object.fromEntries(SCOUT_DIMENSIONS.map((d) => [d, 0])))) === 0)
+
+// Recommendation bands are derived in code so equal scores always get equal labels.
+{
+  const strong = scoutComponents({ opportunity_fit: 0.9, background_relevance: 0.9, decision_influence: 0.9, differentiation: 0.8, accessibility: 0.8 })
+  check('high score with influence is STRONG', deriveRecommendation(computeTotal(strong), strong) === 'STRONG')
+
+  // The influence floor: a high total built on domain fit alone is a trap —
+  // someone interesting who cannot create or refer an opportunity is not STRONG.
+  const noInfluence = scoutComponents({ opportunity_fit: 1, background_relevance: 1, decision_influence: 0.1, differentiation: 1, accessibility: 1 })
+  check('high total but low influence is not STRONG', deriveRecommendation(computeTotal(noInfluence), noInfluence) !== 'STRONG',
+    `total=${computeTotal(noInfluence)} rec=${deriveRecommendation(computeTotal(noInfluence), noInfluence)}`)
+
+  const weak = scoutComponents({ opportunity_fit: 0.2, background_relevance: 0.2, decision_influence: 0.2, differentiation: 0.2, accessibility: 0.2 })
+  check('low score is WEAK', deriveRecommendation(computeTotal(weak), weak) === 'WEAK')
+}
+
+// ─── Seniority calibration ───────────────────────────────────────────────────
+// The product rule: appropriate != maximum (docs/PRODUCT.md §5).
+
+check('sizeBand boundaries', sizeBand(10) === 'micro' && sizeBand(100) === 'small' && sizeBand(1000) === 'mid' && sizeBand(5000) === 'large' && sizeBand(50000) === 'enterprise')
+check('sizeBand handles unknown', sizeBand(null) === 'unknown' && sizeBand(0) === 'unknown')
+check('normalizeSeniority maps unknown values', normalizeSeniority('emperor') === 'unknown' && normalizeSeniority('C_Suite') === 'c_suite')
+
+check('CEO at a 25-person startup is appropriate',
+  assessSeniority('c_suite', 'Chief Executive Officer', 25).verdict === 'appropriate')
+check('CEO at a 40,000-person corporation is TOO SENIOR',
+  assessSeniority('c_suite', 'Chief Executive Officer', 40000).verdict === 'too_senior',
+  assessSeniority('c_suite', 'CEO', 40000).verdict)
+check('Director at a 40,000-person corporation is appropriate',
+  assessSeniority('director', 'Director of Digital Manufacturing', 40000).verdict === 'appropriate')
+check('VP at a large company is appropriate',
+  assessSeniority('vp', 'VP of Operations', 5000).verdict === 'appropriate')
+check('intern is too junior', assessSeniority('intern', 'Intern', 100).verdict === 'too_junior')
+check('IC senior is too junior', assessSeniority('senior', 'Senior Engineer', 100).verdict === 'too_junior')
+check('plain line manager is too junior', assessSeniority('manager', 'Manager', 500).verdict === 'too_junior')
+check('senior manager with real scope is appropriate',
+  assessSeniority('manager', 'Senior Manager, Manufacturing Operations', 500).verdict === 'appropriate',
+  assessSeniority('manager', 'Senior Manager, Manufacturing Operations', 500).reason)
+check('IC title with senior band is rejected',
+  assessSeniority('director', 'Research Scientist', 500).verdict === 'too_junior')
+check('Head of AI keeps its band despite engineer-ish wording',
+  assessSeniority('head', 'Head of AI Engineering', 200).verdict === 'appropriate')
+
+// ─── Dedupe ──────────────────────────────────────────────────────────────────
+
+check('companyKey prefers domain', companyKey({ domain: 'Acme.COM', name: 'Different Name' }) === 'd:acme.com')
+check('companyKey falls back to normalized name',
+  companyKey({ domain: null, name: 'Acme Chemicals, Inc.' }) === companyKey({ domain: null, name: 'ACME Chemicals LLC' }),
+  `${companyKey({ domain: null, name: 'Acme Chemicals, Inc.' })} vs ${companyKey({ domain: null, name: 'ACME Chemicals LLC' })}`)
+
+{
+  // Domains arrive already normalized from normalizeOrg(); companyKey normalizes
+  // again defensively, which is what collapses raw variants.
+  const deduped = dedupeCompanies([
+    company({ domain: 'acme.com', employee_count: null, industry: null, description: null, founded_year: null, hq_location: null }),
+    company({ domain: 'https://www.acme.com/careers', employee_count: 500, industry: 'chemicals' }),
+    company({ domain: 'other.com' }),
+  ])
+  check('dedupeCompanies collapses domain variants', deduped.unique.length === 2, `got ${deduped.unique.length}`)
+  check('dedupeCompanies keeps the richer record',
+    deduped.unique.some((c) => c.employee_count === 500 && c.industry === 'chemicals'),
+    JSON.stringify(deduped.unique.map((c) => ({ d: c.domain, e: c.employee_count }))))
+}
+
+{
+  const deduped = dedupePeople([
+    person({ provenance: { provider_id: 'apollo', external_id: 'x1', retrieved_at: '' } }),
+    person({ provenance: { provider_id: 'apollo', external_id: 'x1', retrieved_at: '' } }),
+    person({ provenance: { provider_id: 'apollo', external_id: 'x2', retrieved_at: '' } }),
+  ])
+  check('dedupePeople collapses on apollo id', deduped.unique.length === 2)
+  check('dedupePeople reports removals', deduped.duplicatesRemoved === 1)
+}
+
+check('normalizeLinkedIn strips scheme, www, trailing slash and query',
+  normalizeLinkedIn('https://WWW.linkedin.com/in/janedoe/?utm=x') === 'linkedin.com/in/janedoe')
+
+// The residual pass is what catches the SAME human under two Apollo ids.
+{
+  const residual = countResidualDuplicates([
+    person({ provenance: { provider_id: 'apollo', external_id: 'a', retrieved_at: '' } }),
+    person({ provenance: { provider_id: 'apollo', external_id: 'b', retrieved_at: '' } }),
+  ])
+  check('residual duplicates catch same LinkedIn under different apollo ids', residual === 1, `got ${residual}`)
+  check('distinct people are not flagged',
+    countResidualDuplicates([person(), person({ name: 'Bob Smith', linkedin_url: 'https://linkedin.com/in/bob', company_name: 'Other Co' })]) === 0)
+}
+
+// ─── Filters ─────────────────────────────────────────────────────────────────
+
+check('staffing agency rejected', !filterCompany(company({ name: 'Apex Staffing Solutions' })).keep)
+check('job board rejected', !filterCompany(company({ name: 'Empleos Chile' })).keep)
+check('university rejected', !filterCompany(company({ name: 'University at Buffalo' })).keep)
+check('recruiting described company rejected',
+  !filterCompany(company({ name: 'Neutral Co', description: 'We are a recruiting agency for manufacturers' })).keep)
+check('real chemical company kept', filterCompany(company()).keep)
+check('company below size floor rejected', !filterCompany(company({ employee_count: 5 }), { minEmployees: 50 }).keep)
+check('company above size ceiling rejected', !filterCompany(company({ employee_count: 90000 }), { maxEmployees: 5000 }).keep)
+
+check('sales VP rejected as irrelevant function',
+  !filterPerson(person({ title: 'VP of Sales', seniority: 'vp' }), 500).keep)
+check('recruiter rejected', !filterPerson(person({ title: 'Technical Recruiter', seniority: 'director' }), 500).keep)
+check('AI solutions leader kept despite sales-adjacent wording',
+  filterPerson(person({ title: 'VP of AI Solutions Engineering', seniority: 'vp' }), 500).keep)
+check('person with no company rejected',
+  !filterPerson(person({ company_name: null }), 500).keep)
+check('relevant director kept', filterPerson(person(), 500).keep)
+
+// ─── Interleave ──────────────────────────────────────────────────────────────
+{
+  const items = Array.from({ length: 12 }, (_, i) => i)
+  const out = interleave(items, 4)
+  check('interleave preserves every element', out.length === 12 && new Set(out).size === 12)
+  check('interleave mixes across the pool', out[0] === 0 && out[1] === 4 && out[2] === 8, out.slice(0, 4).join(','))
+  check('interleave is deterministic', interleave(items, 4).join(',') === out.join(','))
+  check('interleave no-ops on small input', interleave([1, 2], 8).length === 2)
+}
+
+// ─── Report ──────────────────────────────────────────────────────────────────
+
+process.stdout.write(`\n${passed} passed, ${failed} failed\n`)
+if (failures.length) {
+  process.stdout.write('\nFAILURES:\n')
+  for (const f of failures) process.stdout.write(`  ✗ ${f}\n`)
+}
+process.exit(failed === 0 ? 0 : 1)

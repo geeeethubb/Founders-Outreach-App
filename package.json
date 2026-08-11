@@ -6,7 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "eval:phase3": "tsx scripts/phase3-eval.ts",
+    "test:deterministic": "tsx scripts/test-deterministic.ts",
+    "report:phase3": "tsx evals/phase3/report.ts"
   },
   "dependencies": {
     "@heroicons/react": "^2.1.5",
@@ -30,10 +33,12 @@
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "autoprefixer": "^10.4.19",
+    "dotenv": "^17.4.2",
     "eslint": "^9",
     "eslint-config-next": "^16.2.6",
     "postcss": "^8.4.40",
     "tailwindcss": "^3.4.7",
+    "tsx": "^4.23.12",
     "typescript": "^5"
   }
 }

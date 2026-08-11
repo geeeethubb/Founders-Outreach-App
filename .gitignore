@@ -31,3 +31,12 @@ next-env.d.ts
 # OS
 .DS_Store
 Thumbs.db
+
+# Stray credential files — never commit secrets
+Apollo API.txt
+*.key
+*credentials*.json
+
+# Provider response cache + eval run artifacts
+.provider-cache/
+.eval-runs/
