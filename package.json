@@ -18,7 +18,8 @@
     "probe:anthropic-web": "tsx scripts/probe-anthropic-web.ts",
     "probe:downstream": "tsx scripts/probe-downstream-agents.ts",
     "eval:agentic": "tsx scripts/agentic-eval.ts",
-    "scout": "tsx scripts/scout-mission.ts"
+    "scout": "tsx scripts/scout-mission.ts",
+    "eval:positioning": "tsx scripts/positioning-eval.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.116.0",

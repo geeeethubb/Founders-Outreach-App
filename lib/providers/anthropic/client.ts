@@ -300,6 +300,7 @@ export async function anthropicStructured<T>(params: StructuredParams<T>): Promi
   const attempt_ = async (): Promise<StructuredResult<T>> => {
     const res = await anthropicComplete({
       role: params.role,
+      tier: params.tier,
       system: params.system,
       messages: params.messages,
       maxTokens: params.maxTokens,
@@ -338,7 +339,7 @@ export async function anthropicStructured<T>(params: StructuredParams<T>): Promi
 
   const key = cacheKey(params.cacheNamespace ?? params.schemaName, {
     ...params.cacheKeyParts,
-    model: anthropicModelFor(params.role),
+    model: params.tier ? modelForTier(params.tier) : anthropicModelFor(params.role),
   })
 
   let wasCached = true
