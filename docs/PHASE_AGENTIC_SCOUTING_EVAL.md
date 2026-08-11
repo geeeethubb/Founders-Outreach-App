@@ -469,6 +469,119 @@ the first place to look.
 
 ---
 
-## 8. Remaining failure modes and recommendation
+## 9. Final validation
 
-*(Populated after iteration.)*
+Run tag `final3`, judge v3.0.0 (batched at 10), adopted configuration: 7
+companies per segment, 6 people per company, 60 researched, 20 published.
+
+| Profile | Baseline (v3 judge) | **Final** | Δ | BAD |
+|---|---|---|---|---|
+| Industrial AI startups | 70% | **70%** | — | 5% |
+| Chemical / manufacturing innovation | 45% | **75%** | **+30** | 5% |
+| Operations / industrial consulting | 45%\* | **65%** | +20 | 5% |
+| Enterprise AI with industrial relevance | 65%\* | **60%** | −5 | 10% |
+| Technically ambitious startups | 65%\* | *(pending)* | | |
+
+\* judge v2.0.0 — these three were never re-scored under v3, so their deltas are
+conservative: v3 is the more permissive instrument, and the true baselines are
+likely higher.
+
+**Average across the four measured profiles: 67.5%.** BAD rate 5–10% on every
+profile, comfortably inside the ≤10% threshold.
+
+### The milestone was not met
+
+The target is ≥75% average with no profile below 65%. The measured result is
+**67.5% average with Enterprise AI at 60%**. Two thresholds are missed, and no
+amount of framing changes that.
+
+What did move: the average rose from **48% to 67.5%**, the worst profile went from
+10% to 75%, BAD rate fell from 13% to 5–10%, and cost per GOOD prospect fell from
+$1.41 to well under $1.
+
+### The one regression, and what it means
+
+Enterprise AI is the only profile that got **worse** (65% → 60%, and the parallel
+unbatched run measured 55%). Both runs agree on the direction.
+
+The likely cause is that the deeper-pool configuration is not universally right.
+Going from 3 to 6 people per company is clearly correct at a 90,000-person
+manufacturer, where many people hold genuinely relevant roles. At an
+enterprise-software vendor the relevant population inside each company is
+*smaller*, so digging deeper surfaces progressively more marginal people —
+platform engineers, generic product managers — who then occupy top-20 slots.
+
+**This suggests `maxPeoplePerCompany` should be a function of company archetype,
+not a global constant** — the same lesson as target titles ([ADR-018](ARCHITECTURE.md#adr-018)),
+applied one level up. That is the highest-confidence next change, and it is
+untested.
+
+---
+
+## 10. Remaining failure modes
+
+**1. Pool depth is archetype-blind.** The single global `maxPeoplePerCompany` is
+right for enterprises and wrong for software vendors. Highest-confidence fix,
+described above.
+
+**2. Best-person hit rate is the weakest agent metric** — 50–83% across profiles,
+against a ≥70% target, and it moves more with company archetype than with any
+change made this phase. Ranking sees the same evidence the judge sees, so when
+the researched dossier is thin the ordering is close to arbitrary.
+
+**3. Company rejection accuracy: 0–50%**, far below the ≥90% target, on small
+samples. The judge flagged ABB as *"clearly wrong … exactly the costly error the
+mission warns against"*. The MAYBE-passes gate is not permissive enough for large,
+obviously-real industrial companies.
+
+**4. Judge batch composition affects results by ~1 prospect.** The same profile
+measured 70% / 75% / 70% across runs. Any single-profile delta under ~10 points
+should be treated as noise; only repeated measurement or a trend across runs is
+signal.
+
+**5. `runRanking` has no cache key**, so every re-run re-scores every prospect.
+That is the dominant wall-clock cost of a cached eval and pure waste.
+
+**6. Eval-fixture defect.** The "technically ambitious startups" profile carries
+`geography: 'United States'` as a field while its goal *text* never mentions it,
+so the agent was penalised for honouring a constraint the judge could not see.
+
+---
+
+## 11. Recommendation
+
+**Do not move to the Talent Knowledge Base yet — but it is close.**
+
+The case for finishing scouting first is that TKB and Positioning both consume
+the scouting output. Positioning answers *"which 1–3 things about this person
+make them unusually interesting to THIS prospect?"*, which is only worth
+answering for prospects worth writing to. Building it on a list that is 67.5%
+GOOD means a third of the positioning work is spent on people who should not be
+contacted.
+
+The remaining scouting work is also small and well-identified: archetype-aware
+pool depth is a one-line change with a clear hypothesis, and it addresses the
+only profile below threshold.
+
+**Recommended order:**
+
+1. Archetype-aware `maxPeoplePerCompany` (small, highest confidence).
+2. Re-run the two weakest profiles; expect Enterprise AI back above 65%.
+3. Add a ranking cache key — this is the main thing making iteration slow.
+4. Re-score the three v2-judged baselines under v3 so every delta is honest.
+5. **Then** move to TKB and Positioning.
+
+The system already produces lists that answer the product question — *"would I
+actually want to email these people?"* — with a clear yes at the top:
+
+```
+Darren Haverkamp   — Technical Director @ Colgate-Palmolive
+Tim Sarvis         — Director, Digital Manufacturing @ Eastman
+Zoe Burkitt        — Digital Transformation Director @ Celanese
+Kevin Fitzgibbon   — Associate Director, Digital Manufacturing AI/ML @ Kraft Heinz
+Terry Chung        — Senior Director, Process Engineering & Technology @ PepsiCo
+```
+
+That is the output of a system, not of a database query, and it is the strongest
+evidence that the architecture is right even though two thresholds are not yet
+met.
