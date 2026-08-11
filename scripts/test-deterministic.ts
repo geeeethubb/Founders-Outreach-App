@@ -339,6 +339,35 @@ check('relevant director kept', filterPerson(person(), 500).keep)
   check('leaves a real title untouched',
     eq(normalizeTitlePattern('Director of Applied AI'), ['Director of Applied AI']))
 
+  // "Director, X" means "Director of X" — the tail is the FUNCTION. Dropping it
+  // reduced the title to a bare "Director", and searching a 90,000-person
+  // manufacturer for "Director" returns every director in the company.
+  check('keeps the function after a bare rank + comma',
+    eq(normalizeTitlePattern('Director, Digital Manufacturing'), ['Director Digital Manufacturing']),
+    JSON.stringify(normalizeTitlePattern('Director, Digital Manufacturing')))
+  check('handles rank + comma + function + trailing scope',
+    eq(normalizeTitlePattern('Director, Process Technology - Polymerization'), ['Director Process Technology']),
+    JSON.stringify(normalizeTitlePattern('Director, Process Technology - Polymerization')))
+  check('handles a multi-word bare rank',
+    eq(normalizeTitlePattern('Senior Director, Manufacturing Technology'), ['Senior Director Manufacturing Technology']),
+    JSON.stringify(normalizeTitlePattern('Senior Director, Manufacturing Technology')))
+  check('never normalizes down to a bare rank',
+    normalizeTitlePattern('Director, Digital Manufacturing')[0] !== 'Director')
+  // The opposite convention must still work: qualifier after the comma.
+  check('still drops a scope qualifier when the head is a real title',
+    eq(normalizeTitlePattern('Solutions Engineering Manager, Process Industries'), ['Solutions Engineering Manager']),
+    JSON.stringify(normalizeTitlePattern('Solutions Engineering Manager, Process Industries')))
+
+  // The enterprise fallback list must not contain titles that mean product
+  // innovation at a CPG manufacturer — they produced 3 of 6 BADs.
+  const { ARCHETYPE_TITLES } = require('../lib/scouting/titles') as typeof import('../lib/scouting/titles')
+  check('enterprise fallback drops ambiguous innovation/R&D titles',
+    !ARCHETYPE_TITLES.enterprise.some((t) => /^Director of Innovation$|^Director R&D$/i.test(t)),
+    JSON.stringify(ARCHETYPE_TITLES.enterprise))
+  check('every enterprise fallback title names a function',
+    ARCHETYPE_TITLES.enterprise.every((t) => t.trim().split(/\s+/).length >= 3),
+    JSON.stringify(ARCHETYPE_TITLES.enterprise))
+
   check('drops prose that is not a title',
     normalizeTitlePattern('someone who owns process optimization end to end').length === 0,
     JSON.stringify(normalizeTitlePattern('someone who owns process optimization end to end')))

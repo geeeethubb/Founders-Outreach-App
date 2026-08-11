@@ -10,8 +10,27 @@
 // and then drifts. So the prompt asks for real titles AND this runs afterwards,
 // which makes the guarantee structural.
 
-/** Qualifier separators. Everything after the first one is scope, not title. */
+/** Qualifier separators. Everything after the first one is usually scope. */
 const QUALIFIER_SPLIT = /,| - | – | — |:|\|/
+
+/**
+ * A bare rank with no function attached.
+ *
+ * Corporate titles use two opposite comma conventions:
+ *
+ *   "Solutions Engineering Manager, Process Industries"  -> qualifier follows
+ *   "Director, Digital Manufacturing"                    -> FUNCTION follows
+ *
+ * Discarding everything after the comma is right for the first and catastrophic
+ * for the second: it reduces the title to "Director", and searching a 90,000-
+ * person manufacturer for "Director" returns every director in the company —
+ * which is how food-science "Director of Innovation" and "Director R&D" ended up
+ * in an industrial-digitalization list.
+ *
+ * So when the head is a bare rank, the tail is rejoined rather than dropped.
+ */
+const BARE_RANK =
+  /^(director|manager|head|lead|vp|vice president|svp|evp|avp|principal|partner|chief|president|senior director|senior manager|associate director|global director|regional director|executive director|managing director)$/i
 
 /** Alternatives within one string: "Founder/CTO", "VP or Head of Data". */
 const ALTERNATIVE_SPLIT = /\/| or /i
@@ -34,8 +53,16 @@ export function normalizeTitlePattern(raw: string): string[] {
   let t = raw.replace(/\([^)]*\)/g, ' ').replace(/\s+/g, ' ').trim()
   if (!t) return []
 
-  // Keep only the head of the phrase: the part before any scope qualifier.
-  t = t.split(QUALIFIER_SPLIT)[0].trim()
+  // Keep the head of the phrase — unless the head is a bare rank, in which case
+  // the segment after the separator is the function and must be kept.
+  const segments = t.split(QUALIFIER_SPLIT).map((s) => s.trim()).filter(Boolean)
+  if (segments.length === 0) return []
+
+  if (segments.length > 1 && BARE_RANK.test(segments[0])) {
+    t = `${segments[0]} ${segments[1]}`.replace(/\s+/g, ' ').trim()
+  } else {
+    t = segments[0]
+  }
   if (!t) return []
 
   const out: string[] = []
@@ -92,10 +119,18 @@ export const ARCHETYPE_TITLES: Record<CompanyArchetype, string[]> = {
     'Director of Operations', 'Director of Engineering', 'Head of Manufacturing',
     'Plant Manager', 'Director of Technology', 'VP Operations',
   ],
+  // Every title here must name a FUNCTION, not just a rank plus a vague noun.
+  //
+  // "Director of Innovation" and "Director R&D" were removed: at a food or CPG
+  // manufacturer they mean product and flavour innovation, and they produced
+  // three of the six BADs on the chemical/manufacturing profile — a General
+  // Mills innovation director, a Unilever R&D associate director, and a PepsiCo
+  // R&D innovation director, none of whom touch digital manufacturing.
   enterprise: [
-    'Director Digital Manufacturing', 'Director Advanced Manufacturing', 'Director of Innovation',
-    'Director Process Technology', 'Head of Data Science', 'Director R&D',
-    'Manager Manufacturing Technology', 'Director Operational Excellence',
+    'Director Digital Manufacturing', 'Director Advanced Manufacturing',
+    'Director Process Technology', 'Director Manufacturing Technology',
+    'Head of Data Science', 'Director Operational Excellence',
+    'Manager Advanced Manufacturing', 'Director Process Automation',
   ],
   consultancy: ['Partner', 'Principal', 'Managing Director', 'Associate Partner', 'Director'],
   research: ['Principal Investigator', 'Research Director', 'Group Leader', 'Staff Scientist'],
