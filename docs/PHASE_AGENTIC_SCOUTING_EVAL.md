@@ -596,6 +596,50 @@ enterprise software vendors with real industrial deployment, and returning
 seed-stage startups is a `WRONG_COMPANY_ARCHETYPE` diagnosis the agent has in its
 vocabulary but did not use here.
 
+### Iteration 6 — segments declare the kind of company they hunt · **KEPT**
+
+**Hypothesis.** Enterprise AI is not limited by person selection or pool depth.
+It is limited because Market Discovery has no statement of *what kind of company*
+the segment wants, so it returns on-topic companies of the wrong scale — and at a
+startup, only the founder is a good target for this mission.
+
+**Change.** Mission Strategist 1.1.0 declares `intended_archetype` per segment.
+Market Discovery 2.1.0 is told what it is hunting and instructed to diagnose
+`WRONG_COMPANY_ARCHETYPE` rather than quietly keeping wrong-scale companies. The
+diagnosis already existed in its vocabulary; it had nothing to measure drift
+against.
+
+**Measured** — Enterprise AI with industrial relevance:
+
+| | Iter 5 | **Iter 6** |
+|---|---|---|
+| Precision@20 | 55% | **80%** |
+| GOOD split | 11 (0hi/11role) | **16** (9hi / 7role) |
+| BAD rate | 0% | 5% |
+| **Discovery precision** | 80% | **98%** |
+| Search-space diagnoses | mixed | **all HEALTHY** |
+
+**+25 points**, and discovery precision reached 98% — the strategist produced a
+segment explicitly targeting *"horizontal enterprise AI / cloud giants'
+manufacturing units"*, which is the enterprise-scale supply the profile had been
+missing entirely. The GOOD split also shifted from entirely role-based to
+majority high-evidence, meaning the people found are not merely plausible but
+publicly verifiable.
+
+The resulting list is unambiguously on-segment:
+
+```
+Jon Sobel                — Co-Founder & CEO @ Sight Machine
+Anoop Mohan              — Chief Product & Technology Officer @ Augury
+Will Barley              — Director of Forward Deployed Engineering @ Gecko Robotics
+Anna-Katrina Shedletsky  — CEO, Founder @ Instrumental
+Dan Kearns               — CTO @ Falkonry
+```
+
+**Verdict: KEEP.** This is the change that unblocked the failing profile, and it
+came from inspecting a run rather than from a plausible-sounding theory — the two
+preceding hypotheses about this same profile were both measurably wrong.
+
 ---
 
 ## 10. Remaining failure modes
