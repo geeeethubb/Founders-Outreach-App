@@ -341,6 +341,61 @@ cannot cover it, because the prompt did not change.
 **Expected.** Fallback rate falls; the three product-R&D BADs and the bare-"Director"
 noise disappear from chemical/manufacturing.
 
+**Measured** (judge v3.0.0 throughout):
+
+| Profile | Baseline | Iter 1 | **Iter 2** |
+|---|---|---|---|
+| Industrial AI startups | 70% | 65% | **70%** |
+| Chemical / manufacturing innovation | 45% | 40% | **40%** |
+
+Precision did not move. The failure modes the change targeted did:
+
+| Chemical / manufacturing | Baseline | Iter 1 | Iter 2 |
+|---|---|---|---|
+| BAD rate | 30% | 25% | **15%** |
+| BAD count | 6 | 5 | **3** |
+| People dropped by person-level verdict | 17 | 13 | **8** |
+| Stubs found | 127 | 127 | **148** |
+
+Efficiency improved sharply across the phase: **$0.77 per GOOD prospect** (from
+$1.41) and **1.6 Apollo credits per GOOD prospect** (from 3.1).
+
+**Verdict: KEEP.** The BAD rate halved and the wrong-person drop rate more than
+halved, which is exactly what the change targeted. Industrial AI returned to its
+baseline 70%, confirming iteration 1's −5 there was the normalizer regression
+rather than the geography or ordering work.
+
+**But precision is flat**, and that is the honest headline. The freed slots
+became MAYBEs rather than GOODs. Note also that 45% → 40% is a **one-prospect
+difference at n=20** and sits inside run-to-run noise — discovery itself returned
+a different company set each run (79–100% precision). The BAD-rate trend across
+three runs is a far stronger signal than the precision delta.
+
+---
+
+### Iteration 3 — selectivity
+
+**Hypothesis.** Precision@20 is capped by the size of the pool it selects from,
+not by the quality of any single agent.
+
+The funnel publishes 20 of roughly 28 qualified people — 71%. That is not
+selection; it is *everything that survived*, and Precision@20 is measuring the
+funnel rather than the ranking. To publish 13 GOODs (65%) from a pool whose GOOD
+density is ~40%, the top 20 has to be drawn from roughly 60 qualified
+candidates, not 28.
+
+This is the one lever the previous two iterations did not touch, and it was
+visible in the very first profile's numbers.
+
+**Change.** Raise the researched pool from 32 to 64 and companies per segment
+from 7 to 10, on the chemical/manufacturing profile only.
+
+**Expected.** If the hypothesis holds, precision rises materially with BAD rate
+staying at or below 15%. If precision stays near 40% with twice the pool, the
+constraint is not selectivity — it is that this segment's *supply* of people whose
+scope can be verified is genuinely thin, which is a finding about the market
+rather than about the code.
+
 **Measured.** *(pending)*
 
 ---
