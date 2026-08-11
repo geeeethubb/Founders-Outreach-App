@@ -474,30 +474,49 @@ the first place to look.
 Run tag `final3`, judge v3.0.0 (batched at 10), adopted configuration: 7
 companies per segment, 6 people per company, 60 researched, 20 published.
 
-| Profile | Baseline (v3 judge) | **Final** | Δ | BAD |
-|---|---|---|---|---|
-| Industrial AI startups | 70% | **70%** | — | 5% |
-| Chemical / manufacturing innovation | 45% | **75%** | **+30** | 5% |
-| Operations / industrial consulting | 45%\* | **65%** | +20 | 5% |
-| Enterprise AI with industrial relevance | 65%\* | **60%** | −5 | 10% |
-| Technically ambitious startups | 65%\* | *(pending)* | | |
+| Profile | Baseline (v3 judge) | **Final** | Δ | BAD | Discovery | Best-person |
+|---|---|---|---|---|---|---|
+| Industrial AI startups | 70% | **70%** | — | 5% | 88% | 75% |
+| Chemical / manufacturing innovation | 45% | **75%** | **+30** | 5% | 79% | 50% |
+| Operations / industrial consulting | 45%\* | **65%** | +20 | 5% | 83% | 83% |
+| Enterprise AI with industrial relevance | 65%\* | **60%** | −5 | 10% | 80% | 83% |
+| Technically ambitious startups | 65%\* | **75%** | +10 | 0% | 89% | 75% |
 
 \* judge v2.0.0 — these three were never re-scored under v3, so their deltas are
 conservative: v3 is the more permissive instrument, and the true baselines are
 likely higher.
 
-**Average across the four measured profiles: 67.5%.** BAD rate 5–10% on every
-profile, comfortably inside the ≤10% threshold.
+### Threshold status
+
+| Metric | Result | Target | |
+|---|---|---|---|
+| Average Precision@20 | **69.0%** | ≥ 75% | FAIL |
+| Minimum profile Precision@20 | **60%** | ≥ 65% | FAIL |
+| BAD rate@20 | **5%** | ≤ 10% | PASS |
+| Market discovery precision | **84%** | ≥ 80% | PASS |
+| Best-person hit rate | **73%** | ≥ 70% | PASS |
+| Company rejection accuracy | **25%** | ≥ 90% | FAIL |
+| Search recovery | **50%** (1 of 2) | ≥ 80% | FAIL (n=2) |
+
+**69 of 100 judged prospects were GOOD**, against 48 at baseline.
+
+### Cost
+
+The final run replayed almost entirely from cache — $26.82 and 14 Apollo credits
+— so those are **re-run** figures, not from-scratch ones. The honest
+from-scratch number comes from iteration 4, which was largely uncached: **$7.19
+and 23 credits for one profile producing 16 GOOD prospects**, i.e. roughly
+**$0.45 and 1.4 credits per GOOD prospect**, against a baseline of $1.41 and 3.1.
 
 ### The milestone was not met
 
 The target is ≥75% average with no profile below 65%. The measured result is
-**67.5% average with Enterprise AI at 60%**. Two thresholds are missed, and no
+**69.0% average with Enterprise AI at 60%**. Two thresholds are missed, and no
 amount of framing changes that.
 
-What did move: the average rose from **48% to 67.5%**, the worst profile went from
-10% to 75%, BAD rate fell from 13% to 5–10%, and cost per GOOD prospect fell from
-$1.41 to well under $1.
+What did move: the average rose from **48% to 69%**, the worst profile went from
+10% to 75%, BAD rate fell from 13% to 5%, and cost per GOOD prospect fell from $1.41 to
+about $0.45.
 
 ### The one regression, and what it means
 
@@ -555,9 +574,9 @@ so the agent was penalised for honouring a constraint the judge could not see.
 The case for finishing scouting first is that TKB and Positioning both consume
 the scouting output. Positioning answers *"which 1–3 things about this person
 make them unusually interesting to THIS prospect?"*, which is only worth
-answering for prospects worth writing to. Building it on a list that is 67.5%
-GOOD means a third of the positioning work is spent on people who should not be
-contacted.
+answering for prospects worth writing to. Building it on a list that is 69%
+GOOD means roughly a third of the positioning work is spent on people who should not
+be contacted.
 
 The remaining scouting work is also small and well-identified: archetype-aware
 pool depth is a one-line change with a clear hypothesis, and it addresses the
