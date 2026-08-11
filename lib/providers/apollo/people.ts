@@ -19,6 +19,7 @@ import type {
   ProviderResult,
 } from '../types'
 import { apolloAvailable, apolloRequest } from './client'
+import { cacheGet, cacheKey, cacheSet } from '../cache'
 import { normalizePerson, type RawApolloPerson } from './normalize'
 
 const CAPABILITIES: ProviderCapabilities = {
@@ -26,6 +27,11 @@ const CAPABILITIES: ProviderCapabilities = {
   people_search: true,
   person_enrichment: true,
   web_research: false,
+}
+
+/** Stable per-person cache key, independent of which batch resolved them. */
+export function personCacheKey(apolloId: string): string {
+  return cacheKey('person_enriched', { id: apolloId })
 }
 
 /** Apollo caps bulk_match at 10 records per request. */
@@ -140,18 +146,33 @@ export class ApolloPeopleProvider implements PeopleProvider {
   }
 
   /**
-   * Resolve Apollo ids to full records. Batched at 10, cached per id so a
-   * person is never enriched twice across eval iterations.
+   * Resolve Apollo ids to full records.
+   *
+   * Enriched people are indexed INDIVIDUALLY by Apollo id, not only as part of
+   * their bulk_match batch. Batch-keyed caching alone is useless the moment the
+   * pipeline changes which people it selects: the same person in a different
+   * batch is a cache miss and costs another credit. Since credits are the hard
+   * currency here, a per-person index is what makes the cache actually reusable
+   * across pipeline changes.
    */
   async enrichMany(apolloIds: string[]): Promise<ProviderResult<PersonCandidate>> {
-    if (!this.isAvailable()) return { items: [], error: 'APOLLO_API_KEY is not set' }
-
     const unique = Array.from(new Set(apolloIds.filter(Boolean)))
     const items: PersonCandidate[] = []
-    let credits = 0
+    const missing: string[] = []
 
-    for (let i = 0; i < unique.length; i += BULK_MATCH_SIZE) {
-      const batch = unique.slice(i, i + BULK_MATCH_SIZE)
+    // Serve anyone we have already resolved, whatever batch they arrived in.
+    for (const id of unique) {
+      const hit = cacheGet<RawApolloPerson>(personCacheKey(id))
+      if (hit) items.push(normalizePerson(hit, { person_index: true }))
+      else missing.push(id)
+    }
+
+    if (missing.length === 0) return { items, credits_used: 0 }
+    if (!this.isAvailable()) return { items, error: 'APOLLO_API_KEY is not set' }
+
+    let credits = 0
+    for (let i = 0; i < missing.length; i += BULK_MATCH_SIZE) {
+      const batch = missing.slice(i, i + BULK_MATCH_SIZE)
       const res = await apolloRequest<BulkMatchResponse>(
         'people/bulk_match',
         { details: batch.map((id) => ({ id })) },
@@ -163,6 +184,7 @@ export class ApolloPeopleProvider implements PeopleProvider {
       for (const match of res.data.matches ?? []) {
         // Apollo returns nulls for ids it cannot resolve — skip, don't fabricate.
         if (!match?.id || !match.name) continue
+        cacheSet(personCacheKey(match.id), match)
         items.push(normalizePerson(match, { bulk_match: true }))
       }
     }

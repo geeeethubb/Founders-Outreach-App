@@ -36,7 +36,12 @@ export interface JudgeUsage {
   cost_estimate: number
 }
 
-export const JUDGE_PROMPT_VERSION = '1.1.0'
+// v1.2.0 — Phase 6. The judge now receives the researched company description.
+// It previously judged from Apollo's description field, which is empty for most
+// companies, so it was measuring the provider's data gaps rather than the
+// shortlist's quality. Independence is preserved: different prompt, different
+// question, and still no access to the scorer's numbers or reasoning.
+export const JUDGE_PROMPT_VERSION = '1.2.0'
 
 const JUDGE_SYSTEM = `You are a skeptical career advisor reviewing a shortlist that an automated recruiting system produced for one specific undergraduate. Your job is quality control. You are not scoring — you are deciding what deserves to stay on a high-priority outreach list.
 
@@ -86,10 +91,21 @@ export interface JudgeInput {
   candidateId: string
   person: PersonCandidate
   company: CompanyCandidate | null
+  /**
+   * Phase 6: grounded company context.
+   *
+   * The judge stays independent because it has a DIFFERENT PROMPT and answers a
+   * DIFFERENT QUESTION, and because it never sees the scorer's numbers,
+   * explanations or ranking. Independence does not require keeping it
+   * *ignorant* — a careful advisor would look up what the company does, and
+   * judging from an empty Apollo description measures the provider's data gaps
+   * rather than the shortlist's quality.
+   */
+  companyContext?: string | null
 }
 
 function renderForJudge(input: JudgeInput): string {
-  const { candidateId, person, company } = input
+  const { candidateId, person, company, companyContext } = input
   const parts = [
     `--- ${candidateId} ---`,
     `${person.name} — ${person.title ?? 'unknown title'}`,
@@ -99,11 +115,17 @@ function renderForJudge(input: JudgeInput): string {
     parts.push(`Employees: ${company.employee_count ?? 'unknown'}`)
     parts.push(`Industry: ${company.industry ?? 'unknown'}`)
     parts.push(`Location: ${company.hq_location ?? person.location ?? 'unknown'}`)
-    if (company.description) parts.push(`Description: ${company.description.slice(0, 350)}`)
     if (company.sub_industries.length) {
       parts.push(`Keywords: ${company.sub_industries.slice(0, 10).join(', ')}`)
     }
   }
+
+  if (companyContext) {
+    parts.push(`What the company actually does (researched): ${companyContext.slice(0, 600)}`)
+  } else if (company?.description) {
+    parts.push(`Description: ${company.description.slice(0, 350)}`)
+  }
+
   return parts.join('\n')
 }
 

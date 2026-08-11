@@ -11,6 +11,7 @@ import { modelFor, temperatureFor, estimateCost } from '@/lib/ai/models'
 import { clampScore } from '@/lib/scoring/compute'
 import { cacheGet, cacheKey, cacheSet } from '@/lib/providers/cache'
 import type { CompanyCandidate, PersonCandidate } from '@/lib/providers/types'
+import { renderCompanyDossier, renderPersonDossier, type CompanyDossier, type PersonDossier } from '@/lib/research/types'
 
 // Lazily constructed: the deterministic exports in this file (computeTotal,
 // deriveRecommendation) must be importable and testable without an API key.
@@ -142,7 +143,12 @@ function buildComponents(raw: Record<string, { score?: number; explanation?: str
 // (CONTINUUS), food safety (Novolyze), life-science ingredients (Mironova),
 // metallurgy (BANIQL). Process depth transfers there, but they are not what the
 // mission asked for, so background_relevance is now capped at 0.7 for them.
-export const SCORER_PROMPT_VERSION = '4.1.0'
+// v5.0.0 — Phase 6. Scoring now receives grounded, sourced company and person
+// dossiers. The first Phase 6 run showed the research was CORRECT (Avid
+// Engineers really is MEP/building systems; Semco Carbon really is graphite
+// machining) but the scorer still ranked them 79-89 — it had the evidence and
+// did not act on it. This version makes the researched CORE BUSINESS decisive.
+export const SCORER_PROMPT_VERSION = '5.0.0'
 
 function systemPrompt(profileBlock: string, missionBlock: string): string {
   return `You are a recruiting scout evaluating whether specific people are worth cold-outreach effort for ONE specific undergraduate.
@@ -187,6 +193,29 @@ opportunity_fit:
   0.6   Right industry, but unclear whether this specific org would host a winter project.
   0.35  Adjacent industry, weak path to a real project.
   0.2-  Could not plausibly host a winter project for a ChemE undergraduate.
+
+⚠ WHEN RESEARCHED COMPANY CONTEXT IS PRESENT, IT OVERRIDES EVERYTHING ELSE.
+The Apollo industry label and keywords are lexical noise; the researched "WHAT THEY DO" is
+what the company actually sells. Judge on that, and be decisive about the CORE business:
+
+  • Core business is buildings, MEP, HVAC, facilities, commissioning, construction, real
+    estate or architecture → background_relevance ≤ 0.45, even if they serve "industrial
+    facilities". Building systems are not process engineering.
+  • Core business is EHS/environmental/safety compliance, restructuring, headcount reduction,
+    org design, or generic "operational excellence" with no process/plant depth
+    → background_relevance ≤ 0.5.
+  • Core business is IT staffing, ERP/software implementation, or reselling someone else's
+    supply-chain product → background_relevance ≤ 0.45.
+  • Core business is niche contract machining/fabrication with no process chemistry, no R&D
+    and no digital dimension → opportunity_fit ≤ 0.45; a job shop rarely creates a
+    student project.
+  • Research explicitly said mission_relevant = false → opportunity_fit ≤ 0.3 AND
+    background_relevance ≤ 0.3. Do not rescue it.
+
+Conversely, when the research shows chemicals, process manufacturing, materials, energy
+production, industrial AI/software sold into plants, or genuine process/operations
+consulting as the CORE business, score it confidently high. That is the whole point of
+having researched it.
 
 background_relevance — REAL overlap, not vague adjacency. Be strict:
   0.9+  ON-MISSION vertical AND process depth: industrial AI, manufacturing operations,
@@ -260,7 +289,9 @@ Return ONLY valid JSON:
 export function renderProspectForPrompt(
   candidateId: string,
   person: PersonCandidate,
-  company: CompanyCandidate | null
+  company: CompanyCandidate | null,
+  companyDossier?: CompanyDossier | null,
+  personDossier?: PersonDossier | null
 ): string {
   const parts = [
     `--- CANDIDATE ${candidateId} ---`,
@@ -271,16 +302,31 @@ export function renderProspectForPrompt(
     `Company: ${person.company_name ?? 'unknown'}`,
   ]
   if (company) {
-    parts.push(`Company domain: ${company.domain ?? 'unknown'}`)
     parts.push(`Company employees: ${company.employee_count ?? 'unknown'}`)
-    parts.push(`Company industry: ${company.industry ?? 'unknown'}`)
+    parts.push(`Company industry (Apollo label): ${company.industry ?? 'unknown'}`)
     parts.push(`Company location: ${company.hq_location ?? 'unknown'}`)
     if (company.founded_year) parts.push(`Founded: ${company.founded_year}`)
-    if (company.description) parts.push(`What they do: ${company.description.slice(0, 400)}`)
-    if (company.sub_industries.length) {
-      parts.push(`Keywords: ${company.sub_industries.slice(0, 12).join(', ')}`)
-    }
   }
+
+  // Grounded research supersedes the Apollo label. Phase 3 scored from a company
+  // name plus a keyword list and could not tell an industrial consultancy from a
+  // golf-club advisory; this block is the fix.
+  if (companyDossier && !companyDossier.research_failed) {
+    parts.push('', '=== RESEARCHED COMPANY CONTEXT (grounded, sourced) ===')
+    parts.push(renderCompanyDossier(companyDossier))
+  } else {
+    parts.push('', '=== COMPANY RESEARCH: UNAVAILABLE ===')
+    parts.push('No grounded context could be retrieved. Judge conservatively: absence of')
+    parts.push('evidence is NOT evidence of relevance. Cap background_relevance at 0.55.')
+    if (company?.description) parts.push(`Apollo description only: ${company.description.slice(0, 300)}`)
+    if (company?.sub_industries.length) parts.push(`Apollo keywords only: ${company.sub_industries.slice(0, 10).join(', ')}`)
+  }
+
+  if (personDossier && !personDossier.research_failed) {
+    parts.push('', '=== RESEARCHED PERSON CONTEXT (grounded, sourced) ===')
+    parts.push(renderPersonDossier(personDossier))
+  }
+
   return parts.join('\n')
 }
 
@@ -290,6 +336,9 @@ export interface ScoreBatchInput {
   candidateId: string
   person: PersonCandidate
   company: CompanyCandidate | null
+  /** Phase 6: grounded dossiers. When present, scoring reasons over evidence. */
+  companyDossier?: CompanyDossier | null
+  personDossier?: PersonDossier | null
 }
 
 export interface ScoreBatchResult {
@@ -317,7 +366,7 @@ export async function scoreBatch(
   const userPrompt = [
     `Evaluate these ${batch.length} prospects. Return one entry per candidate_id.`,
     '',
-    ...batch.map((b) => renderProspectForPrompt(b.candidateId, b.person, b.company)),
+    ...batch.map((b) => renderProspectForPrompt(b.candidateId, b.person, b.company, b.companyDossier, b.personDossier)),
   ].join('\n\n')
 
   const key = cacheKey('score', { v: SCORER_PROMPT_VERSION, model: modelFor('reasoning'), userPrompt })

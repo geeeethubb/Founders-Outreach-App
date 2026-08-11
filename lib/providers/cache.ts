@@ -89,17 +89,26 @@ export function cacheSet<T>(key: string, value: T): void {
   }
 }
 
-/** Read-through cache wrapper. `bypass` forces a fresh fetch. */
+/**
+ * Read-through cache wrapper. `bypass` forces a fresh fetch.
+ *
+ * `shouldCache` exists because caching a failure makes it permanent: a
+ * transient parse error or rate limit would be replayed forever on every
+ * subsequent run, and the failure would look like a stable property of the
+ * input rather than a blip. Callers that can distinguish success from failure
+ * should say so.
+ */
 export async function cached<T>(
   key: string,
   fetcher: () => Promise<T>,
-  bypass = false
+  bypass = false,
+  shouldCache: (value: T) => boolean = () => true
 ): Promise<T> {
   if (!bypass) {
     const hit = cacheGet<T>(key)
     if (hit !== null) return hit
   }
   const value = await fetcher()
-  cacheSet(key, value)
+  if (shouldCache(value)) cacheSet(key, value)
   return value
 }

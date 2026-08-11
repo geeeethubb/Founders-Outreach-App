@@ -10,7 +10,7 @@
 //   - mixed_companies/search returns sparse orgs (id/name/domain only);
 //     employee count, industry and location require organizations/enrich.
 
-import { cached, cacheKey } from '../cache'
+import { cached, cacheGet, cacheKey } from '../cache'
 
 const BASE = 'https://api.apollo.io/api/v1'
 
@@ -41,6 +41,7 @@ export function resetApolloStats(): void {
   stats.byEndpoint = {}
   stats.enrichmentCredits = 0
   stats.errors = 0
+  cacheOnlySkips = 0
 }
 
 // ─── Run budget ──────────────────────────────────────────────────────────────
@@ -165,6 +166,24 @@ async function request<T>(
   return { ok: false, status: 0, data: null, error: lastError }
 }
 
+// ─── Cache-only mode ─────────────────────────────────────────────────────────
+// APOLLO_CACHE_ONLY=true serves exclusively from the disk cache and never makes
+// a live call. This exists because Apollo lead credits are a hard, exhaustible
+// resource: once spent, eval iteration would stop entirely. Replaying a frozen
+// candidate pool also makes iterations properly comparable — a metric change is
+// attributable to a code change rather than to Apollo returning different rows.
+
+export function isCacheOnly(): boolean {
+  return process.env.APOLLO_CACHE_ONLY === 'true'
+}
+
+/** Live calls skipped because of cache-only mode — reported in diagnostics. */
+let cacheOnlySkips = 0
+
+export function cacheOnlySkipCount(): number {
+  return cacheOnlySkips
+}
+
 /**
  * Cached request. `namespace` scopes the cache key so a params change in one
  * endpoint never collides with another.
@@ -176,6 +195,16 @@ export async function apolloRequest<T>(
 ): Promise<ApolloResponse<T>> {
   const { method = 'POST', namespace = endpoint.replace(/\W+/g, '_'), bypassCache = false, credits = 0 } = opts
   const key = cacheKey(namespace, { endpoint, body, method })
+
+  if (isCacheOnly()) {
+    const hit = cacheGet<ApolloResponse<T>>(key)
+    if (hit) {
+      stats.cachedCalls++
+      return hit
+    }
+    cacheOnlySkips++
+    return { ok: false, status: 0, data: null, error: 'APOLLO_CACHE_ONLY: no cached response' }
+  }
 
   let wasCached = true
   const result = await cached<ApolloResponse<T>>(

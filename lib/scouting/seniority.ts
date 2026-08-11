@@ -59,7 +59,7 @@ const STRONG_MANAGER_TITLE =
  * Titles that indicate an individual contributor or a non-decision role even
  * when Apollo reports a senior-sounding band.
  */
-const IC_TITLE = /\b(engineer|scientist|analyst|specialist|associate|consultant|developer|researcher|technician|intern)\b/i
+export const IC_TITLE = /\b(engineer|scientist|analyst|specialist|associate|consultant|developer|researcher|technician|intern)\b/i
 
 const SIZE_RULES: Record<CompanySizeBand, { appropriate: Seniority[]; tooSenior: Seniority[] }> = {
   // Founder-led and tiny: the top of the company is the right door.

@@ -9,7 +9,10 @@
     "lint": "next lint",
     "eval:phase3": "tsx scripts/phase3-eval.ts",
     "test:deterministic": "tsx scripts/test-deterministic.ts",
-    "report:phase3": "tsx evals/phase3/report.ts"
+    "report:phase3": "tsx evals/phase3/report.ts",
+    "eval:phase6": "tsx scripts/phase6-eval.ts",
+    "probe:research": "tsx scripts/research-probe.ts",
+    "backfill:person-index": "tsx scripts/backfill-person-index.ts"
   },
   "dependencies": {
     "@heroicons/react": "^2.1.5",

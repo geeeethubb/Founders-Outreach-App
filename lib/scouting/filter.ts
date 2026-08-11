@@ -9,7 +9,7 @@
 // This runs BEFORE any LLM sees a candidate. See docs/ARCHITECTURE.md §1.
 
 import type { CompanyCandidate, PersonCandidate } from '@/lib/providers/types'
-import { assessSeniority, type SeniorityAssessment } from './seniority'
+import { assessSeniority, IC_TITLE, type SeniorityAssessment } from './seniority'
 
 // ─── Company filters ─────────────────────────────────────────────────────────
 
@@ -213,6 +213,50 @@ export function filterPerson(
   }
 
   return { keep: true, reason: null, detail: null, seniority }
+}
+
+// ─── Cheap stub filter (Phase 6) ─────────────────────────────────────────────
+
+/**
+ * Free pre-enrichment filter, applied to obfuscated search stubs.
+ *
+ * A stub carries only a title and a company name — but that is enough to
+ * discard the two largest categories of waste before spending a lead credit:
+ * non-technical functions, and companies that can never host the opportunity.
+ *
+ * Deliberately CONSERVATIVE. A false negative here costs a good prospect
+ * permanently and invisibly, while a false positive only costs one credit and
+ * gets caught by the researched company filter downstream. When in doubt, keep.
+ */
+export function stubPassesCheapFilter(
+  title: string | null,
+  companyName: string | null
+): { keep: boolean; reason: string | null; detail: string | null } {
+  const t = title ?? ''
+
+  if (!t.trim()) return { keep: false, reason: 'missing_identity', detail: 'no title' }
+
+  if (HARD_EXCLUDED_FUNCTION.test(t)) {
+    return { keep: false, reason: 'irrelevant_function', detail: 'recruiting/HR/legal/finance/support' }
+  }
+  if (SOFT_EXCLUDED_FUNCTION.test(t) && !RELEVANT_OVERRIDE.test(t)) {
+    return { keep: false, reason: 'irrelevant_function', detail: 'commercial function, no technical ownership' }
+  }
+
+  // Obvious individual-contributor titles cannot sponsor or refer.
+  if (IC_TITLE.test(t) && !/\b(head|director|vp|vice president|chief|founder|owner|partner|principal|president)\b/i.test(t)) {
+    return { keep: false, reason: 'seniority', detail: `IC title "${t}"` }
+  }
+
+  if (companyName) {
+    for (const { pattern, reason } of EXCLUDED_NAME_PATTERNS) {
+      if (pattern.test(companyName)) {
+        return { keep: false, reason: 'excluded_business_type', detail: reason }
+      }
+    }
+  }
+
+  return { keep: true, reason: null, detail: null }
 }
 
 // ─── Diagnostics ─────────────────────────────────────────────────────────────
