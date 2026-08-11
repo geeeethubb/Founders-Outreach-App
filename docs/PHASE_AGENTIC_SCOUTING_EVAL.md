@@ -136,18 +136,108 @@ that did not exist.
 
 ---
 
-## 5. Baseline results
+## 5. Baseline
 
-*(Populated from `.eval-runs/baseline.json`.)*
+Run tag `baseline`, judge v2.0.0, 20 prospects published per profile from ~32
+researched.
+
+| Profile | Precision@20 | BAD rate | Discovery precision | Best-person |
+|---|---|---|---|---|
+| Industrial AI startups | 55% (11G/8M/1B) | 5% | 88% | 75%* |
+| Chemical / manufacturing innovation | **10%** (2G/11M/7B) | **35%** | **97%** | 67%* |
+| Operations / industrial consulting | 45% (9G/7M/4B) | 20% | 89% | 92%* |
+
+\* measured with a `candidatePool` keying bug (looked up by Apollo's company name
+rather than the discovery name, so pools were often empty). Fixed; these figures
+are not trustworthy and the post-fix numbers supersede them.
+
+### The finding that reframed the phase
+
+**Discovery is not the bottleneck.** Company-level precision measured 88–97%
+across every profile. On the worst profile it was 97% — nearly every company was
+a correct target — while Precision@20 was 10%.
+
+Essentially all the loss is *which person inside a right company gets
+contacted*. That is a different problem from the one Phase 6 was solving, and it
+is the reason this phase's changes are concentrated in People Scout and Company
+Validation's title selection rather than in discovery.
+
+Consulting is also worth noting: 45% here against **20% in Phase 6**, and Phase 6
+concluded that segment was supply-limited. Research-led discovery moved it
+substantially, so that conclusion was too pessimistic.
 
 ---
 
-## 6. Iteration log
+## 6. The judge was measuring the wrong thing
+
+Before iterating on the pipeline, the judge itself was audited — every non-GOOD
+verdict on the worst profile was read.
+
+**The BADs were real.** All 7 were genuine person-selection failures: a CRM/sales
+owner, a fragrance-formulation scientist, food-science product R&D, an S&OP
+planner, and a plant manager in Thailand on a US-scoped mission. The BAD rate was
+measuring something true, and none of those criteria were touched.
+
+**5 of 11 MAYBEs were an artefact.** The judge praised the fit and then
+downgraded for obscurity:
+
+> *"Role template (plant Digital Manufacturing Leader at Kimberly-Clark) is an
+> **excellent functional fit**, but there is zero verifiable information about
+> this specific individual."*
+
+> *"Title and inferred scope (plant-level Digital Manufacturing Leader) **fit the
+> mission well**, but nothing specific is known about this individual beyond a
+> generic job description."*
+
+v2.0.0 instructed: *"if nothing specific is known about someone, they cannot be
+GOOD."* That conflates **we could not find much about this person** with **this
+person is a bad target**. Most directors at large manufacturers have no public
+footprint; requiring one measures internet fame rather than whether the prospect
+is worth an email.
+
+**v3.0.0** splits GOOD into `GOOD_HIGH_EVIDENCE` and `GOOD_ROLE_BASED`. Both
+count as GOOD; the split is reported so a list resting entirely on role fit
+remains visible as such. MAYBE is reserved for *material* uncertainty — adjacent
+function, ambiguous scope, partial overlap. Geography, function, seniority and
+decision influence remain hard BAD criteria.
+
+**Thresholds were not changed.** 75% average, 65% per profile, 10% BAD rate.
+
+### Baseline re-scored under the corrected judge
+
+`scripts/rejudge-run.ts` reconstructs a completed run's top-20 from persisted
+`agent_runs` and re-scores it, so before and after are measured with the same
+instrument.
+
+| Profile | v2.0.0 | v3.0.0 | GOOD split |
+|---|---|---|---|
+| Industrial AI startups | 55% | **70%** | 8 high-evidence / 6 role-based |
+| Chemical / manufacturing innovation | 10% | **45%** | 2 high-evidence / 7 role-based |
+
+The recalibration is worth roughly 15–35 points depending on how enterprise-heavy
+the profile is — and it is not lenient: it still returns 1 BAD and 5 MAYBEs on
+profile 1, correctly flagging a *"Research Assistant, Masters Student"* and a
+*"Head of Sales Engineering"*.
+
+It also does not close the gap. Profile 2's remaining 6 BADs are all genuine, and
+they map cleanly onto the pipeline fixes:
+
+| Remaining BAD | Real cause |
+|---|---|
+| Plant Manager @ Dow (Thailand) | geography never passed to Apollo |
+| Latam IS Lead @ Hershey | geography + IT function |
+| Director of Innovation @ General Mills | food-science R&D, not digital |
+| Associate Director R&D @ Unilever | product R&D |
+| Director of R&D Innovation @ PepsiCo | beverage R&D |
+
+---
+
+## 7. Iteration log
 
 *(Each entry: hypothesis, change, expected, measured, keep/revert.)*
 
 ---
 
-## 7. Remaining failure modes and recommendation
+## 8. Remaining failure modes and recommendation
 
 *(Populated after iteration.)*
