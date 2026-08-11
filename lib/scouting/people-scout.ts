@@ -38,6 +38,14 @@ export interface PeopleScoutParams {
   /** Fallback only, for targets that carry no titles of their own. */
   titlePatterns: string[]
   maxPerCompany: number
+  /**
+   * Mission geography, passed to Apollo as person_locations.
+   *
+   * Without it a US-scoped mission returned a Dow plant supervisor in Ho Chi
+   * Minh City: the COMPANY is global, so scoping the search to the company says
+   * nothing about where its people sit.
+   */
+  locations?: string[]
   /** Hard ceiling on enrichment — the only step that spends credits. */
   maxEnrich: number
   concurrency?: number
@@ -112,7 +120,9 @@ export async function scoutPeople(params: PeopleScoutParams): Promise<PeopleScou
       const titles = target.titles.length ? target.titles : params.titlePatterns
       const perPage = Math.max(10, params.maxPerCompany * 3)
 
-      const titled = await apolloPeopleProvider.searchStubs({ ...scope, title_patterns: titles, per_page: perPage })
+      const geo = params.locations?.length ? { locations: params.locations } : {}
+
+      const titled = await apolloPeopleProvider.searchStubs({ ...scope, ...geo, title_patterns: titles, per_page: perPage })
       if (titled.error) {
         // One company failing does not stop the run (ARCHITECTURE §9).
         errors.push(`${target.company_name}: ${titled.error.slice(0, 120)}`)
@@ -123,7 +133,7 @@ export async function scoutPeople(params: PeopleScoutParams): Promise<PeopleScou
         return { target, stubs: guardIdentity(titled.items, target, errors), usedFallbackSearch: false }
       }
 
-      const untitled = await apolloPeopleProvider.searchStubs({ ...scope, per_page: perPage })
+      const untitled = await apolloPeopleProvider.searchStubs({ ...scope, ...geo, per_page: perPage })
       if (untitled.error) {
         errors.push(`${target.company_name} (fallback): ${untitled.error.slice(0, 120)}`)
         return { target, stubs: [] as PersonStub[], usedFallbackSearch: true }

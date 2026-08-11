@@ -389,9 +389,14 @@ export async function runScouting(params: ScoutRunParams): Promise<ScoutRunResul
     archetype: a.validation.archetype,
   }))
 
+  // Geography is a mission constraint, so it belongs in the people query, not
+  // only in the prose the agents read.
+  const missionLocations = params.mission.geography ? [params.mission.geography] : []
+
   const scouted = await scoutPeople({
     targets,
     titlePatterns,
+    locations: missionLocations,
     maxPerCompany: params.budget.maxPeoplePerCompany,
     maxEnrich: params.maxProspects,
     concurrency,
@@ -510,6 +515,7 @@ export async function runScouting(params: ScoutRunParams): Promise<ScoutRunResul
       const second = await scoutPeople({
         targets: rescoutTargets,
         titlePatterns,
+        locations: missionLocations,
         maxPerCompany: 1,
         maxEnrich: Math.min(rescoutTargets.length, params.maxProspects),
         concurrency,
