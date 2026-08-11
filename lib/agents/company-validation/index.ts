@@ -199,6 +199,12 @@ export async function runCompanyValidation(
     maxWebSearches: 4,
     maxSteps: 6,
     maxTokens: 6000,
+    cacheKeyParts: {
+      company: input.company.name,
+      domain: input.company.domain,
+      goal: input.mission.goal,
+      segment: input.segment.name,
+    },
   })
 }
 

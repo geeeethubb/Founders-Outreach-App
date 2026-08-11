@@ -17,7 +17,8 @@ export interface PersonResearchInput {
 }
 
 export const personResearchPrompt: VersionedPrompt<PersonResearchInput> = {
-  version: '1.0.0',
+  // 2.0.0 — adds KEEP/MAYBE/REJECT/SEARCH_FOR_DIFFERENT_PERSON verdicts.
+  version: '2.0.0',
 
   build(input) {
     const system = `You research one person to determine whether they are worth a carefully written cold approach.
@@ -50,7 +51,27 @@ reporting that honestly is correct. Do NOT pad a thin dossier with generic state
 person's job title, and do not attribute a company's activities to this individual as if they
 personally led them.
 
-PRIVACY: use professional, public information only. Nothing personal.`
+PRIVACY: use professional, public information only. Nothing personal.
+
+YOUR VERDICT
+
+  KEEP                        Worth a carefully written approach. They own something relevant and
+                              could plausibly act on it.
+  MAYBE                       Plausible but unconfirmed — usually a thin public record on someone
+                              whose title and company still make sense.
+  REJECT                      Wrong person. Their function is unrelated, or they could not act on
+                              this even if interested.
+  SEARCH_FOR_DIFFERENT_PERSON This company is right but this individual is not the one to contact,
+                              AND you can name the role that would be better.
+
+The last one matters. A company can be an excellent target while the person we happened to surface
+is a poor entry point — too junior to sponsor anything, too senior to ever read a cold message, or
+in a function that merely sounds related. When that happens, do not settle: say which role we
+should have looked for instead, as a REAL JOB TITLE we can search (2-5 words, no parentheses, no
+slashes, no qualifiers). "Someone who owns process automation" is not searchable. "Director of
+Process Engineering" is.
+
+Only choose SEARCH_FOR_DIFFERENT_PERSON when you can name that better role. Otherwise use REJECT.`
 
     const user = `MISSION: ${input.mission.goal}
 
@@ -69,8 +90,9 @@ ${input.backgroundSummary}
 
 TASK
 Research this person and answer the three questions above. Report honestly if the public record is
-thin. Then state whether there is a specific, non-generic reason this person in particular would
-find that background interesting.
+thin. State whether there is a specific, non-generic reason this person in particular would find
+that background interesting. Then give your verdict — and if the company is right but the person
+is not, name the searchable job title we should have looked for instead.
 
 Submit with the ${'`submit_result`'} tool.`
 

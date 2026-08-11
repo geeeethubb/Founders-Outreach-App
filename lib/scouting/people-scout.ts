@@ -51,6 +51,12 @@ export interface PeopleScoutResult {
   emptyCompanies: string[]
   /** Companies where no predicted title matched — a title-prediction miss. */
   titleMisses: string[]
+  /**
+   * Every person Apollo surfaced per company, as "Name — Title".
+   * The Best-Person eval needs the alternatives we DIDN'T pick, so that "was
+   * this the right person?" is judged against what was actually available.
+   */
+  candidatePool: Record<string, string[]>
   errors: string[]
 }
 
@@ -128,10 +134,14 @@ export async function scoutPeople(params: PeopleScoutParams): Promise<PeopleScou
 
   // ─── Cheap filter, then cap per company ────────────────────────────────────
   const selected: { stub: PersonStub; target: ScoutTarget }[] = []
+  const candidatePool: Record<string, string[]> = {}
   let stubsFound = 0
 
   for (const { target, stubs } of perCompany) {
     stubsFound += stubs.length
+    candidatePool[target.company_ref] = stubs
+      .map((s) => `${s.first_name ?? '?'} — ${s.title ?? 'unknown title'}`)
+      .slice(0, 25)
     let kept = 0
     for (const stub of stubs) {
       if (kept >= params.maxPerCompany) break
@@ -176,6 +186,7 @@ export async function scoutPeople(params: PeopleScoutParams): Promise<PeopleScou
     filterStats,
     emptyCompanies,
     titleMisses,
+    candidatePool,
     errors: isCacheOnly() ? [...errors, 'APOLLO_CACHE_ONLY is on: no live Apollo calls were made'] : errors,
   }
 }

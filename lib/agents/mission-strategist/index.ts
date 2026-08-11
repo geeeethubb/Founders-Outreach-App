@@ -140,5 +140,13 @@ export async function runMissionStrategist(
     maxWebSearches: 3,
     maxSteps: 5,
     maxTokens: 6000,
+    cacheKeyParts: {
+      goal: input.mission.goal,
+      timeframe: input.mission.timeframe,
+      geography: input.mission.geography,
+      constraints: input.mission.constraints,
+      background: input.backgroundSummary,
+      segments: input.segmentCount,
+    },
   })
 }

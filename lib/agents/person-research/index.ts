@@ -7,6 +7,7 @@
 // because it is the most expensive step per prospect.
 
 import { runAgent } from '../runtime/loop'
+import { normalizeTitlePatterns } from '@/lib/scouting/titles'
 import { validateClaimsAgainstEvidence } from '@/lib/research/types'
 import type { ResearchClaim } from '@/lib/research/types'
 import type { AgentResult, EvidenceSource, ToolContext } from '../runtime/types'
@@ -14,7 +15,13 @@ import { personResearchPrompt, type PersonResearchInput } from './prompt'
 
 export type { PersonResearchInput }
 
+export type PersonVerdict = 'KEEP' | 'MAYBE' | 'REJECT' | 'SEARCH_FOR_DIFFERENT_PERSON'
+
 export interface PersonResearch {
+  verdict: PersonVerdict
+  /** Set only for SEARCH_FOR_DIFFERENT_PERSON. A searchable job title. */
+  better_role_hypothesis: string | null
+  verdict_reasoning: string
   apparent_ownership: string
   function_relevance: string
   decision_maker_assessment: string
@@ -29,8 +36,22 @@ export interface PersonResearch {
   downgraded_claims: number
 }
 
+const PERSON_VERDICTS: PersonVerdict[] = ['KEEP', 'MAYBE', 'REJECT', 'SEARCH_FOR_DIFFERENT_PERSON']
+
 const OUTPUT_SCHEMA = {
   properties: {
+    verdict: {
+      type: 'string',
+      enum: PERSON_VERDICTS,
+      description:
+        'SEARCH_FOR_DIFFERENT_PERSON means the company is right but this individual is not, and you can name a better role.',
+    },
+    better_role_hypothesis: {
+      type: ['string', 'null'],
+      description:
+        'REQUIRED for SEARCH_FOR_DIFFERENT_PERSON. A real searchable job title, 2-5 words, no parentheses or slashes. Null otherwise.',
+    },
+    verdict_reasoning: { type: 'string', description: 'Why this verdict.' },
     apparent_ownership: {
       type: 'string',
       description: 'The real scope this person owns — function, site, product line, group, P&L. Not a restatement of their title.',
@@ -72,6 +93,7 @@ const OUTPUT_SCHEMA = {
     },
   },
   required: [
+    'verdict', 'better_role_hypothesis', 'verdict_reasoning',
     'apparent_ownership', 'function_relevance', 'decision_maker_assessment',
     'can_create_opportunity', 'recent_initiatives', 'specific_interest_hook',
     'claims', 'uncertainties', 'thin_public_record',
@@ -97,7 +119,22 @@ function validate(raw: unknown, evidence: EvidenceSource[]): PersonResearch | nu
 
   const hook = typeof r.specific_interest_hook === 'string' ? r.specific_interest_hook.trim() : ''
 
+  const stated = String(r.verdict ?? '').toUpperCase() as PersonVerdict
+  let verdict: PersonVerdict = PERSON_VERDICTS.includes(stated) ? stated : 'MAYBE'
+
+  // A re-scout request is only actionable with a searchable title attached.
+  // Without one it is just a rejection wearing a more optimistic label.
+  const betterRole = normalizeTitlePatterns(
+    typeof r.better_role_hypothesis === 'string' ? [r.better_role_hypothesis] : [],
+    1
+  )[0] ?? null
+
+  if (verdict === 'SEARCH_FOR_DIFFERENT_PERSON' && !betterRole) verdict = 'REJECT'
+
   return {
+    verdict,
+    better_role_hypothesis: verdict === 'SEARCH_FOR_DIFFERENT_PERSON' ? betterRole : null,
+    verdict_reasoning: String(r.verdict_reasoning ?? '').trim(),
     apparent_ownership: ownership,
     function_relevance: String(r.function_relevance ?? '').trim(),
     decision_maker_assessment: String(r.decision_maker_assessment ?? '').trim(),
@@ -127,12 +164,20 @@ export async function runPersonResearch(
     maxWebSearches: 3,
     maxSteps: 5,
     maxTokens: 5000,
+    cacheKeyParts: {
+      person: input.person.name,
+      title: input.person.title,
+      company: input.person.company_name,
+      linkedin: input.person.linkedin_url,
+      goal: input.mission.goal,
+    },
   })
 }
 
 /** Compact rendering for the ranking prompt. Kept tight — prompt budget. */
 export function renderPersonResearch(r: PersonResearch): string {
   const lines = [
+    `RESEARCHER VERDICT: ${r.verdict} — ${r.verdict_reasoning}`,
     `OWNS: ${r.apparent_ownership}`,
     `FUNCTION RELEVANCE: ${r.function_relevance}`,
     `CAN CREATE OPPORTUNITY: ${r.can_create_opportunity ? 'yes' : 'unclear/no'} — ${r.decision_maker_assessment}`,

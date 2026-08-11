@@ -14,8 +14,9 @@
 //      FACT must cite (ADR-006).
 
 import type Anthropic from '@anthropic-ai/sdk'
-import { anthropicComplete, anthropicUsage, recordWebSearches } from '@/lib/providers/anthropic/client'
+import { anthropicComplete, recordWebSearches } from '@/lib/providers/anthropic/client'
 import { anthropicModelFor, ANTHROPIC_WEB_SEARCH_COST_PER_CALL } from '@/lib/ai/models'
+import { cached, cacheKey } from '@/lib/providers/cache'
 import type { ModelRole } from '@/lib/ai/models'
 import type {
   AgentResult,
@@ -45,6 +46,15 @@ export interface RunAgentParams<TInput, TOutput> {
   maxWebSearches?: number
   maxSteps?: number
   maxTokens?: number
+  /**
+   * Identity of this agent's INPUT. Supplying it makes the result reusable
+   * across runs. Omit to always call live.
+   *
+   * The prompt version and model are folded in automatically, so bumping a
+   * prompt invalidates every cached result derived from it — which is what
+   * keeps "reuse unchanged work" from quietly meaning "reuse stale work".
+   */
+  cacheKeyParts?: Record<string, unknown>
 }
 
 interface CitationLike {
@@ -122,6 +132,37 @@ function serializeToolResult(value: unknown, limit = 6000): string {
 }
 
 export async function runAgent<TInput, TOutput>(
+  params: RunAgentParams<TInput, TOutput>
+): Promise<AgentResult<TOutput>> {
+  if (!params.cacheKeyParts) return runAgentLive(params)
+
+  const key = cacheKey(`agent_${params.agentId}`, {
+    ...params.cacheKeyParts,
+    prompt_version: params.prompt.version,
+    model: anthropicModelFor(params.modelRole),
+  })
+
+  let wasCached = true
+  const result = await cached<AgentResult<TOutput>>(
+    key,
+    async () => {
+      wasCached = false
+      return runAgentLive(params)
+    },
+    false,
+    // ADR-015: successes only. A cached failure is a permanent failure, and a
+    // cached rate-limit error would outlive the rate limit by weeks.
+    (r) => r.status === 'succeeded' && r.output !== null
+  )
+
+  // A replayed result cost nothing this run. Reporting its original cost again
+  // would inflate every cost-per-prospect figure the evals depend on.
+  return wasCached
+    ? { ...result, trace: { ...result.trace, cost_usd: 0, tokens_in: 0, tokens_out: 0, web_searches: 0, from_cache: true } }
+    : result
+}
+
+async function runAgentLive<TInput, TOutput>(
   params: RunAgentParams<TInput, TOutput>
 ): Promise<AgentResult<TOutput>> {
   const started = Date.now()
@@ -231,9 +272,25 @@ export async function runAgent<TInput, TOutput>(
         result_summary: value === null ? 'schema validation failed' : 'accepted',
         ...(value === null ? { error: 'invalid output' } : {}),
       })
-      return value === null
-        ? finish(null, 'invalid_output', 'submitted output failed schema validation')
-        : finish(value, 'succeeded', null)
+      if (value !== null) return finish(value, 'succeeded', null)
+
+      // Invalid output is RETRYABLE, not a dead run (ADR-007). Discarding it
+      // outright threw away a whole discovery round — every company found and
+      // every search paid for — because one enum value was wrong. Hand the
+      // model its own rejected output and let it correct itself.
+      if (steps < maxSteps) {
+        messages.push({ role: 'assistant', content: res.content })
+        messages.push({
+          role: 'user',
+          content:
+            `Your ${SUBMIT} call did not satisfy the schema, so it was rejected. Re-read the tool's ` +
+            `input_schema: every required field must be present, enum fields must use one of the listed ` +
+            `values exactly, and fields you have no answer for must still appear (use null or an empty ` +
+            `array). Call ${SUBMIT} again with the same findings, corrected. Do not search again.`,
+        })
+        continue
+      }
+      return finish(null, 'invalid_output', 'submitted output failed schema validation')
     }
 
     // Client-side tools the model asked for this turn.

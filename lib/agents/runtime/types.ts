@@ -73,6 +73,8 @@ export interface AgentTrace {
   cost_usd: number
   latency_ms: number
   steps: number
+  /** Replayed from disk. Its cost was paid by an earlier run, so it reads zero. */
+  from_cache?: boolean
 }
 
 export interface AgentResult<TOutput> {

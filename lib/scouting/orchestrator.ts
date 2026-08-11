@@ -15,7 +15,11 @@
 // rejected at that gate.
 
 import { runMissionStrategist, type MissionStrategy } from '@/lib/agents/mission-strategist'
-import { runMarketDiscovery, type DiscoveredCompany } from '@/lib/agents/market-discovery'
+import {
+  runDiscoverySession,
+  type DiscoveredCompany,
+  type DiscoveryRoundHistory,
+} from '@/lib/agents/market-discovery'
 import { runCompanyValidation, shouldEnrich, type CompanyValidation } from '@/lib/agents/company-validation'
 import { runPersonResearch, renderPersonResearch, type PersonResearch } from '@/lib/agents/person-research'
 import { runRanking, type RankedProspect } from '@/lib/agents/ranking'
@@ -58,6 +62,10 @@ export interface ScoutRunParams {
   companiesPerSegment: number
   /** Cap on person-research + ranking, the most expensive per-prospect steps. */
   maxProspects: number
+  /** Bounded autonomy for each discovery session. */
+  maxDiscoveryRounds?: number
+  /** Re-scout attempts when person research asks for a different role. */
+  maxRescoutRounds?: number
   concurrency?: number
   /** Log a line per stage. The smoke test wants to watch it work. */
   onProgress?: (stage: string, detail: string) => void
@@ -94,6 +102,12 @@ export interface ScoutRunResult {
     factsRejected: number
   }
   rejections: { company: string; reason: string }[]
+  /** Companies that passed validation and reached Apollo. Feeds discovery precision. */
+  enrichedCompanies: { name: string; description: string; note: string }[]
+  /** Every person Apollo surfaced per company. Feeds the best-person eval. */
+  candidatePool: Record<string, string[]>
+  /** Every discovery round: query, diagnosis, action. Feeds the recovery eval. */
+  discoveryHistory: { segment: string; rounds: DiscoveryRoundHistory[]; rejected: boolean }[]
   /** Why people were dropped before enrichment. "0 enriched" must be explainable. */
   peopleFilter: { seen: number; kept: number; rejected: Record<string, number> } | null
   errors: string[]
@@ -127,6 +141,7 @@ export async function runScouting(params: ScoutRunParams): Promise<ScoutRunResul
   const log = params.onProgress ?? (() => {})
   const errors: string[] = []
   const rejections: { company: string; reason: string }[] = []
+  const discoveryHistory: { segment: string; rounds: DiscoveryRoundHistory[]; rejected: boolean }[] = []
   const concurrency = params.concurrency ?? 3
 
   resetAnthropicUsage()
@@ -191,6 +206,9 @@ export async function runScouting(params: ScoutRunParams): Promise<ScoutRunResul
       usage: usageSnapshot(0),
       persistence: { migrationMissing, companiesInserted: 0, contactsInserted: 0, agentRunsRecorded, factsInserted, factsRejected },
       rejections,
+      enrichedCompanies: [],
+      candidatePool: {},
+      discoveryHistory,
       peopleFilter: null,
       errors: [...errors, `mission_strategist failed: ${strategyRun.error}`],
     }
@@ -201,35 +219,50 @@ export async function runScouting(params: ScoutRunParams): Promise<ScoutRunResul
   log('strategy', `${strategy.segments.length} segments: ${strategy.segments.map((s) => s.name).join(' | ')}`)
   if (runId) await updateScoutingRun(runId, { strategy })
 
-  // ─── 2. Market Discovery, segment by segment ───────────────────────────────
+  // ─── 2. Market Discovery — an adaptive session per segment ─────────────────
   // Sequential so each segment can be told what earlier ones already claimed —
   // cross-segment duplicates were a measured problem in Phase 3.
   const discovered: { company: DiscoveredCompany; segment: MissionStrategy['segments'][number] }[] = []
   const claimed = new Set<string>()
+  const claimedNames = new Set<string>()
 
   for (const segment of strategy.segments) {
-    const run = await runMarketDiscovery(
+    const session = await runDiscoverySession(
       {
         segment,
         mission: { goal: params.mission.goal, geography: params.mission.geography },
-        alreadyFound: Array.from(claimed),
+        alreadyFound: Array.from(claimedNames),
         targetCount: params.companiesPerSegment,
+        maxRounds: params.maxDiscoveryRounds ?? 3,
+        onRound: (h) =>
+          log(
+            'discovery',
+            `${segment.name} r${h.round}: "${h.query_used.slice(0, 60)}" → ${h.companies_kept} new, ${h.diagnosis} → ${h.action}`
+          ),
       },
       ctx
     )
-    await trace(run, { segment: segment.name })
 
-    if (!run.output) {
-      errors.push(`market_discovery(${segment.name}): ${run.error}`)
-      continue
-    }
-    for (const company of run.output.companies) {
+    for (const run of session.agentResults) await trace(run, { segment: segment.name })
+    errors.push(...session.errors)
+
+    discoveryHistory.push({
+      segment: segment.name,
+      rounds: session.history,
+      rejected: session.hypothesisRejected || session.needsNewHypothesis,
+    })
+
+    for (const company of session.companies) {
       const key = companyKey({ name: company.name, domain: company.domain } as CompanyCandidate)
       if (claimed.has(key)) continue
       claimed.add(key)
+      claimedNames.add(company.name)
       discovered.push({ company, segment })
     }
-    log('discovery', `${segment.name}: ${run.output.companies.length} companies${run.output.thin_supply ? ' (thin supply)' : ''}`)
+
+    if (session.hypothesisRejected) {
+      log('discovery', `${segment.name}: hypothesis rejected by the agent (${session.finalDiagnosis})`)
+    }
   }
 
   funnel.companiesDiscovered = discovered.length
@@ -307,6 +340,9 @@ export async function runScouting(params: ScoutRunParams): Promise<ScoutRunResul
         factsRejected,
       },
       rejections,
+      enrichedCompanies: [],
+      candidatePool: {},
+      discoveryHistory,
       peopleFilter: null,
       errors: [...errors, 'no companies survived validation'],
     }
@@ -411,8 +447,107 @@ export async function runScouting(params: ScoutRunParams): Promise<ScoutRunResul
   funnel.peopleResearched = researched.filter((r) => r.research).length
   log('research', `${funnel.peopleResearched}/${researched.length} person dossiers`)
 
+  // ─── 6b. Re-scout ──────────────────────────────────────────────────────────
+  // When research says "right company, wrong person, look for THIS role instead",
+  // act on it. This is the one place a downstream agent feeds a hypothesis back
+  // upstream, and it is bounded to a single extra pass: the point is to rescue a
+  // good company from a bad entry point, not to search until something sticks.
+  const rescoutRounds = params.maxRescoutRounds ?? 1
+  const rescouted: typeof researched = []
+
+  if (rescoutRounds > 0) {
+    const requests = researched.filter(
+      (r) => r.research?.verdict === 'SEARCH_FOR_DIFFERENT_PERSON' && r.research.better_role_hypothesis
+    )
+
+    // One request per company — several people at one company usually produce
+    // the same suggestion, and acting on each would re-buy the same rows.
+    const byCompany = new Map<string, { role: string; person: (typeof researched)[number] }>()
+    for (const r of requests) {
+      const ref = r.person.company_ref
+      if (!byCompany.has(ref)) byCompany.set(ref, { role: r.research!.better_role_hypothesis!, person: r })
+    }
+
+    if (byCompany.size > 0) {
+      const alreadyHave = new Set(contactRows.map((p) => (p.linkedin_url ?? p.email ?? p.name).toLowerCase()))
+      const rescoutTargets: ScoutTarget[] = []
+      for (const [ref, { role }] of byCompany) {
+        const original = targets.find((t) => t.company_ref === ref)
+        if (original) rescoutTargets.push({ ...original, titles: [role] })
+      }
+
+      log('rescout', `${rescoutTargets.length} companies: ${Array.from(byCompany.values()).map((v) => v.role).join(', ')}`)
+
+      const second = await scoutPeople({
+        targets: rescoutTargets,
+        titlePatterns,
+        maxPerCompany: 1,
+        maxEnrich: Math.min(rescoutTargets.length, params.maxProspects),
+        concurrency,
+      })
+      errors.push(...second.errors.slice(0, 2))
+
+      const fresh = second.people.filter(
+        (p) => !alreadyHave.has((p.linkedin_url ?? p.email ?? p.name).toLowerCase())
+      )
+      funnel.peopleEnriched += fresh.length
+
+      if (fresh.length > 0) {
+        const persistedRescout = await persistContacts(params.userId, fresh, persistedCompanies.idByKey)
+        for (const [k, v] of persistedRescout.idByKey) persistedContacts.idByKey.set(k, v)
+
+        const extra = await mapWithConcurrency(fresh, concurrency, async (person) => {
+          const validation = validationByCompany.get(person.company_ref)
+          const companyContext = renderCompany(validation, person.company_name ?? 'unknown company')
+          const run = await runPersonResearch(
+            {
+              person: {
+                name: person.name,
+                title: person.title,
+                company_name: person.company_name,
+                linkedin_url: person.linkedin_url,
+                location: person.location,
+              },
+              companyContext,
+              mission: { goal: params.mission.goal },
+              backgroundSummary,
+            },
+            ctx
+          )
+          const agentRunId = await trace(run, { person: person.name, rescout: true })
+          if (run.output) {
+            const contactId = persistedContacts.idByKey.get(person.linkedin_url ?? person.email ?? person.name) ?? null
+            const facts = await persistResearchFacts({
+              userId: params.userId,
+              runId,
+              contactId,
+              subjectLabel: person.name,
+              agentRunId,
+              claims: run.output.claims,
+            })
+            factsInserted += facts.inserted
+            factsRejected += facts.rejected
+          }
+          return { person, research: run.output, companyContext }
+        })
+
+        rescouted.push(...extra)
+        funnel.peopleResearched += extra.filter((r) => r.research).length
+        log('rescout', `${extra.filter((r) => r.research).length} replacement dossiers`)
+      }
+    }
+  }
+
+  // Drop the people research told us not to contact. Ranking exists to order
+  // qualified prospects, not to rescue ones discovery got wrong.
+  const qualified = [...researched, ...rescouted].filter(
+    (r) => !r.research || (r.research.verdict !== 'REJECT' && r.research.verdict !== 'SEARCH_FOR_DIFFERENT_PERSON')
+  )
+  const disqualified = researched.length + rescouted.length - qualified.length
+  if (disqualified > 0) log('research', `${disqualified} dropped by person-level verdict`)
+
   // ─── 7. Ranking ────────────────────────────────────────────────────────────
-  const rankedResults = await mapWithConcurrency(researched, concurrency, async (r) => {
+  const rankedResults = await mapWithConcurrency(qualified, concurrency, async (r) => {
     const personContext = r.research
       ? renderPersonResearch(r.research)
       : 'No person-level research was available. Judge on company context and title alone, and reflect that thinness in your scores.'
@@ -476,6 +611,13 @@ export async function runScouting(params: ScoutRunParams): Promise<ScoutRunResul
       factsRejected,
     },
     rejections,
+    enrichedCompanies: accepted.map((a) => ({
+      name: a.company.name,
+      description: a.validation.what_they_do,
+      note: `${a.validation.verdict} — ${a.validation.relevance_reasoning}`,
+    })),
+    candidatePool: scouted.candidatePool,
+    discoveryHistory,
     peopleFilter,
     errors,
   }
