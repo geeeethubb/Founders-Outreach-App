@@ -214,7 +214,12 @@ export async function apolloRequest<T>(
       if (credits > 0) stats.enrichmentCredits += credits
       return request<T>(endpoint, body, method)
     },
-    bypassCache
+    bypassCache,
+    // ADR-015: never cache a failure. A cached 422 "insufficient credits" turns
+    // a temporary account state into a permanent one — the same request keeps
+    // failing from disk long after the credits are topped up, and nothing in the
+    // logs explains why.
+    (r) => r.ok
   )
 
   if (wasCached) stats.cachedCalls++

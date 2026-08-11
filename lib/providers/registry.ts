@@ -9,7 +9,7 @@
 
 import type { CompanyProvider, PeopleProvider, WebResearchProvider } from './types'
 
-export type ProviderId = 'apollo' | 'pitchbook' | 'openai_web'
+export type ProviderId = 'apollo' | 'pitchbook' | 'openai_web' | 'anthropic_web'
 
 export interface ProviderAvailability {
   id: ProviderId
@@ -39,9 +39,15 @@ export function providerAvailability(): ProviderAvailability[] {
             : 'PITCHBOOK_API_KEY is not set',
     },
     {
+      // Legacy V1 research paths only. New research uses anthropic_web.
       id: 'openai_web',
       available: Boolean(process.env.OPENAI_API_KEY),
       reason: process.env.OPENAI_API_KEY ? undefined : 'OPENAI_API_KEY is not set',
+    },
+    {
+      id: 'anthropic_web',
+      available: Boolean(process.env.ANTHROPIC_API_KEY),
+      reason: process.env.ANTHROPIC_API_KEY ? undefined : 'ANTHROPIC_API_KEY is not set',
     },
   ]
 }

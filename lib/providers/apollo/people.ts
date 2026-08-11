@@ -171,6 +171,8 @@ export class ApolloPeopleProvider implements PeopleProvider {
     if (!this.isAvailable()) return { items, error: 'APOLLO_API_KEY is not set' }
 
     let credits = 0
+    const batchErrors: string[] = []
+
     for (let i = 0; i < missing.length; i += BULK_MATCH_SIZE) {
       const batch = missing.slice(i, i + BULK_MATCH_SIZE)
       const res = await apolloRequest<BulkMatchResponse>(
@@ -178,7 +180,15 @@ export class ApolloPeopleProvider implements PeopleProvider {
         { details: batch.map((id) => ({ id })) },
         { namespace: 'people_bulk_match', credits: batch.length }
       )
-      if (!res.ok || !res.data) continue
+
+      if (!res.ok || !res.data) {
+        // A failed batch degrades the run but must never be silent: "0 enriched"
+        // with no reason is exactly the diagnostic hole ARCHITECTURE §9 forbids.
+        // Credit exhaustion looks identical to a network fault from the outside,
+        // and the difference decides whether retrying is even sensible.
+        batchErrors.push(res.error ?? `bulk_match failed with status ${res.status}`)
+        continue
+      }
 
       credits += batch.length
       for (const match of res.data.matches ?? []) {
@@ -189,7 +199,15 @@ export class ApolloPeopleProvider implements PeopleProvider {
       }
     }
 
-    return { items, credits_used: credits }
+    return {
+      items,
+      credits_used: credits,
+      ...(batchErrors.length
+        ? {
+            error: `${batchErrors.length} of ${Math.ceil(missing.length / BULK_MATCH_SIZE)} enrichment batches failed — ${batchErrors[0].slice(0, 160)}`,
+          }
+        : {}),
+    }
   }
 
   async searchPeople(query: PeopleSearchQuery): Promise<ProviderResult<PersonCandidate>> {

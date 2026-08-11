@@ -17,6 +17,8 @@ export interface ResearchClaim {
   source_url: string | null
   source_title: string | null
   confidence: number
+  /** Why this claim matters to the mission. Optional; persisted when present. */
+  relevance?: string | null
 }
 
 export interface CompanyDossier {
@@ -109,9 +111,57 @@ export function validateClaims(raw: unknown[]): ResearchClaim[] {
       source_url: type === 'FACT' ? url : url,
       source_title: typeof c.source_title === 'string' ? c.source_title : null,
       confidence,
+      relevance: typeof c.relevance === 'string' ? c.relevance : null,
     })
   }
   return out
+}
+
+/**
+ * The stronger form, used by the agent runtime.
+ *
+ * `validateClaims` proves a FACT's URL is well-formed. This additionally proves
+ * the model actually *retrieved* that URL: the allowed set is the citation list
+ * harvested from its own tool results, so a plausible-looking but never-visited
+ * link is downgraded to INFERENCE.
+ *
+ * Phase 6 found this mattered — a model will happily cite a company's real
+ * homepage for a claim that page does not make. Restricting to retrieved URLs
+ * does not fix that alone, but it removes the entire class of invented links.
+ */
+export function validateClaimsAgainstEvidence(
+  raw: unknown[],
+  evidenceUrls: Iterable<string>
+): { claims: ResearchClaim[]; downgraded: number } {
+  const allowed = new Set<string>()
+  for (const u of evidenceUrls) {
+    allowed.add(u)
+    // Also accept the bare origin: models routinely cite the site root for a
+    // claim sourced from a specific page on that same site.
+    try {
+      allowed.add(new URL(u).origin)
+    } catch {
+      /* ignore unparseable */
+    }
+  }
+
+  let downgraded = 0
+  const claims = validateClaims(raw).map((c) => {
+    if (c.type !== 'FACT' || !c.source_url) return c
+    let retrieved = allowed.has(c.source_url)
+    if (!retrieved) {
+      try {
+        retrieved = allowed.has(new URL(c.source_url).origin)
+      } catch {
+        retrieved = false
+      }
+    }
+    if (retrieved) return c
+    downgraded++
+    return { ...c, type: 'INFERENCE' as FactType }
+  })
+
+  return { claims, downgraded }
 }
 
 export function countCoverage(

@@ -114,18 +114,33 @@ export async function persistCompanies(
   return { idByKey, inserted, updated, migrationMissing: false, errors }
 }
 
-/** Upsert people into the existing `contacts` table, linked to their company. */
+/**
+ * Upsert people into the existing `contacts` table, linked to their company.
+ *
+ * Returns `idByKey` so callers can attach downstream rows — research facts,
+ * scores — to the stored contact without a second lookup. The key is the
+ * person's LinkedIn URL, else email, else name, matching how the orchestrator
+ * identifies a candidate before it has a database id.
+ */
 export async function persistContacts(
   userId: string,
   people: PersonCandidate[],
   companyIdByKey: Map<string, string>
-): Promise<{ inserted: number; updated: number; migrationMissing: boolean; errors: string[] }> {
+): Promise<{
+  idByKey: Map<string, string>
+  inserted: number
+  updated: number
+  migrationMissing: boolean
+  errors: string[]
+}> {
   const supabase = createServiceClient()
+  const idByKey = new Map<string, string>()
   const errors: string[] = []
   let inserted = 0
   let updated = 0
 
   for (const person of people) {
+    const candidateKey = person.linkedin_url ?? person.email ?? person.name
     const apolloId = person.provenance.external_id ?? null
     const domain = normalizeDomain(person.company_domain)
     const companyKey = domain ? `d:${domain}` : `n:${normalizeCompanyName(person.company_name) ?? ''}`
@@ -155,7 +170,7 @@ export async function persistContacts(
       const { data, error } = await supabase
         .from('contacts').select('id').eq('user_id', userId).eq('apollo_id', apolloId).maybeSingle()
       if (error && isMissingSchema(error.message)) {
-        return { inserted, updated, migrationMissing: true, errors: [error.message] }
+        return { idByKey, inserted, updated, migrationMissing: true, errors: [error.message] }
       }
       existingId = data?.id ?? null
     }
@@ -171,19 +186,21 @@ export async function persistContacts(
       const { error } = await supabase.from('contacts').update(safeUpdate).eq('id', existingId)
       if (error) errors.push(`update ${person.name}: ${error.message}`)
       else updated++
+      idByKey.set(candidateKey, existingId)
       continue
     }
 
     const { data: created, error } = await supabase.from('contacts').insert(row).select('id').maybeSingle()
     if (error) {
       if (isMissingSchema(error.message)) {
-        return { inserted, updated, migrationMissing: true, errors: [error.message] }
+        return { idByKey, inserted, updated, migrationMissing: true, errors: [error.message] }
       }
       errors.push(`insert ${person.name}: ${error.message}`)
       continue
     }
     if (created) {
       inserted++
+      idByKey.set(candidateKey, created.id)
       await supabase.from('contact_sources').upsert(
         {
           contact_id: created.id,
@@ -196,7 +213,7 @@ export async function persistContacts(
     }
   }
 
-  return { inserted, updated, migrationMissing: false, errors }
+  return { idByKey, inserted, updated, migrationMissing: false, errors }
 }
 
 export async function persistScoutResults(

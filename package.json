@@ -12,9 +12,14 @@
     "report:phase3": "tsx evals/phase3/report.ts",
     "eval:phase6": "tsx scripts/phase6-eval.ts",
     "probe:research": "tsx scripts/research-probe.ts",
-    "backfill:person-index": "tsx scripts/backfill-person-index.ts"
+    "backfill:person-index": "tsx scripts/backfill-person-index.ts",
+    "verify:setup": "tsx scripts/verify-setup.ts",
+    "smoke:agentic": "tsx scripts/smoke-agentic.ts",
+    "probe:anthropic-web": "tsx scripts/probe-anthropic-web.ts",
+    "probe:downstream": "tsx scripts/probe-downstream-agents.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.116.0",
     "@heroicons/react": "^2.1.5",
     "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "^2.43.4",
