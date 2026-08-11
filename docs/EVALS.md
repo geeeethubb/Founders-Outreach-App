@@ -529,9 +529,47 @@ reports how many profiles actually contributed.
 
 ### Precision@20 only measures selection if there is selection
 
-The pipeline researches ~32 people per profile to publish 20. Ranking 22 to
-publish 20 is not a curated list — it is everything that survived, and the
-metric would be measuring the funnel rather than the ranking.
+**This turned out to be the single largest lever in the phase**, worth more than
+every prompt change combined.
+
+At baseline the pipeline researched ~32 people and published 20 — a **71% publish
+ratio**. That is not a curated list; it is everything that survived, and
+Precision@20 was largely measuring the funnel rather than the ranking. Widening
+the pool to 60 researched (38% publish ratio) moved the worst profile from 45% to
+80%.
+
+Two rules learned from getting this wrong once:
+
+- **Widen by going deeper inside validated companies, not by finding more
+  companies.** Iteration 3 raised the pool by asking discovery for 10 companies
+  per segment instead of 7. Precision rose, but company precision fell 79% → 69%
+  and the BAD rate doubled — discovery had been pushed past the good candidates.
+  Mining already-validated companies more deeply costs no company quality.
+- **A wider pool is also cheaper.** Credits stop being spent on people who are
+  dropped later: the 80% run cost $7.19 and 23 credits against the 45%
+  baseline's $12.55 and 34.
+
+### The judge is the instrument — change it deliberately, and re-score
+
+Changing the judge invalidates every prior number. When the v2 → v3
+recalibration was made, the baseline was **re-scored** with
+`scripts/rejudge-run.ts`, which reconstructs a completed run's top-20 from
+persisted `agent_runs`. Before and after are always compared under the same
+instrument.
+
+Never freeze a judge you have shown to be wrong, and never quietly swap one in
+either.
+
+### Cache keys must cover deterministic post-processing
+
+`company_validation` normalizes the model's titles inside `validate()`, so a
+cached `AgentResult` replays the **already-normalized** output. A fix to the
+normalizer would have silently not applied to any cached company — and iteration
+2 would have measured iteration 1's titles while appearing to test new ones.
+
+That is the worst class of eval bug, because it produces a confident wrong number
+rather than an error. The prompt version cannot cover it, since the prompt did not
+change. `cacheKeyParts` carries an explicit `titles_logic` version instead.
 
 ---
 
