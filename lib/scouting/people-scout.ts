@@ -12,6 +12,7 @@
 import { apolloPeopleProvider, type PersonStub } from '@/lib/providers/apollo/people'
 import { apolloStats, isCacheOnly } from '@/lib/providers/apollo/client'
 import { normalizeCompanyName } from '@/lib/providers/apollo/normalize'
+import { rankStubsByTitle, type CompanyArchetype } from './titles'
 import { stubPassesCheapFilter, newFilterStats, recordFilter, type FilterStats } from './filter'
 import { personKey } from './dedupe'
 import { mapWithConcurrency } from './concurrency'
@@ -28,6 +29,8 @@ export interface ScoutTarget {
    * global title list cannot serve both.
    */
   titles: string[]
+  /** Drives which seniority tier counts as appropriate here. */
+  archetype: CompanyArchetype
 }
 
 export interface PeopleScoutParams {
@@ -142,8 +145,15 @@ export async function scoutPeople(params: PeopleScoutParams): Promise<PeopleScou
     candidatePool[target.company_ref] = stubs
       .map((s) => `${s.first_name ?? '?'} — ${s.title ?? 'unknown title'}`)
       .slice(0, 25)
+
+    // Order by fit BEFORE capping. Apollo returns matches in an order of its
+    // own, so taking the first N that survive the filter means the person we
+    // contact was chosen by Apollo's sort rather than by how well their role
+    // matches what this company's research said to look for.
+    const ordered = rankStubsByTitle(stubs, (s) => s.title, target.titles, target.archetype)
+
     let kept = 0
-    for (const stub of stubs) {
+    for (const stub of ordered) {
       if (kept >= params.maxPerCompany) break
       const verdict = stubPassesCheapFilter(stub.title, stub.company_name ?? target.company_name)
       recordFilter(filterStats, verdict.keep, verdict.reason, verdict.detail)

@@ -88,6 +88,8 @@ export interface ScoutRunResult {
   ranked: (RankedProspect & {
     person: PersonCandidate
     company: string
+    /** Discovery-side company name — the key for candidatePool / enrichedCompanies. */
+    companyRef: string
     /** Person-research dossier as text. What the eval judge is allowed to see. */
     researchSummary: string
     researchVerdict: string | null
@@ -384,6 +386,7 @@ export async function runScouting(params: ScoutRunParams): Promise<ScoutRunResul
     domain: a.validation.confirmed_domain ?? normalizeDomain(a.company.domain),
     company_ref: a.company.name,
     titles: a.validation.target_titles,
+    archetype: a.validation.archetype,
   }))
 
   const scouted = await scoutPeople({
@@ -606,6 +609,10 @@ export async function runScouting(params: ScoutRunParams): Promise<ScoutRunResul
       ...run.output,
       person: r.person as PersonCandidate,
       company: r.person.company_name ?? r.person.company_ref,
+      // The DISCOVERY name, which is how candidatePool and enrichedCompanies are
+      // keyed. Apollo often returns a different legal or trading name, so
+      // looking those tables up by person.company_name silently misses.
+      companyRef: r.person.company_ref,
       // Carried so the eval judge can see the RESEARCH rather than the ranking
       // agent's own justification. Showing the judge the scorer's prose would
       // make Precision@20 measure self-consistency instead of quality.

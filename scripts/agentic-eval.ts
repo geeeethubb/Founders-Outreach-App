@@ -115,7 +115,7 @@ async function runProfile(profile: EvalProfile, userId: string): Promise<Profile
     title: p.person.title,
     company: p.company,
     company_description:
-      result.enrichedCompanies.find((c) => c.name === p.company)?.description ??
+      result.enrichedCompanies.find((c) => c.name === p.companyRef)?.description ??
       p.person.company_name ??
       'unknown',
     // The person-research dossier, NOT the ranking agent's justification.
@@ -147,11 +147,11 @@ async function runProfile(profile: EvalProfile, userId: string): Promise<Profile
   // Only inside companies that reached Apollo, and only where alternatives
   // existed — "was this the best person?" is meaningless with a pool of one.
   const bestPersonCases = top.slice(0, 12).map((p) => {
-    const pool = result.candidatePool[p.company] ?? []
+    const pool = result.candidatePool[p.companyRef] ?? []
     const chosen = `${p.person.name} — ${p.person.title ?? 'unknown'}`
     return {
       company: p.company,
-      company_description: result.enrichedCompanies.find((c) => c.name === p.company)?.description ?? 'unknown',
+      company_description: result.enrichedCompanies.find((c) => c.name === p.companyRef)?.description ?? 'unknown',
       chosen,
       alternatives: pool.filter((a) => !a.startsWith(p.person.name.split(' ')[0])).slice(0, 12),
     }
