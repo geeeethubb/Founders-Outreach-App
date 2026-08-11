@@ -447,6 +447,138 @@ result that costs money per entity.
 
 ---
 
+### ADR-016 ★ — Agents run a bounded tool loop; `submit_result` is the only way to answer
+
+**Problem.** Phase 6 agents were single model calls returning JSON in prose. Two
+failure modes followed. Output arrived *nearly* valid, got coerced by the parser,
+and flowed downstream looking fine. And an agent that needed to look something up
+could not — the orchestrator had to guess in advance what evidence it would want.
+
+**Decision.** Every agent runs the same bounded loop (`lib/agents/runtime/loop.ts`).
+The model is given Anthropic's server-side `web_search`, zero or more of our
+client-side tools, and exactly one `submit_result` tool carrying that agent's
+output schema. **Text outside that tool call is ignored.**
+
+Making "finish" a typed action moves malformed output from *a parsing problem
+later* to *a tool-call validation failure at the boundary*. Invalid output is
+retried once with the rejection reason attached — discarding it outright threw
+away a whole discovery round, including four paid web searches and six real
+companies, over one misspelled enum value.
+
+**Bounded autonomy.** Steps, web searches, output tokens, total model calls, and
+Apollo calls are all capped. The agent decides *what* to do; the code decides
+*how long it may keep deciding*. That split is the entire safety story.
+
+**Consequence.** Agents are no longer pure functions of their input in the strict
+sense — they call tools. They remain pure with respect to the **database**, and
+they still never call each other. Those are the two properties that keep this a
+pipeline rather than a swarm, and they are unchanged.
+
+---
+
+### ADR-017 ★ — The evidence pool comes from retrieved pages, not from cited text
+
+**Problem.** `validateClaimsAgainstEvidence` downgrades a `FACT` whose
+`source_url` the agent never actually retrieved. The first implementation built
+that pool only from `citations` attached to the model's text blocks.
+
+But an agent whose final answer arrives as a `submit_result` **tool call** emits
+no cited *text at all*. The pool was empty on every real run, so the check
+downgraded **every genuine FACT** to `INFERENCE`. The grounding mechanism was
+inverted: instead of catching fabrication it was destroying real sourcing.
+Measured: 0 of 9 FACTs kept their source.
+
+**Decision.** Build the pool from **both** structural sources:
+
+| Source | What it proves |
+|---|---|
+| `web_search_tool_result` blocks | the page was actually retrieved |
+| `citations` on text blocks | the model tied a specific sentence to that page |
+
+Prose is still never scanned for links. After the fix: 12 of 12 FACTs retained
+their sources.
+
+**The general lesson.** A grounding check that can silently fail *open* is bad; a
+grounding check that silently fails *closed* looks like it is working — the
+counts all read "100% sourced" because the numerator and denominator both
+collapsed to zero. Assert on the absolute count, not only the ratio.
+
+---
+
+### ADR-018 — Search titles are derived per company, from research
+
+**Problem.** The Mission Strategist emitted "job titles" that were really
+descriptions: `Head of Product - Manufacturing/Process Industries`,
+`Founder/CTO (early-stage industrial AI startup)`. Apollo's `person_titles` is a
+phrase match against real titles, so every one returned **zero rows** — a smoke
+run lost all three of its companies to this.
+
+A single global title list is also wrong on its face. A founder is the right
+target at a 12-person startup and the wrong one at a 90,000-person manufacturer,
+where the reachable and empowered person is a director who owns the function.
+
+**Decision.** Two layers, neither trusting the other:
+
+1. **Company Validation emits `target_titles` per company**, chosen from the
+   researched size and archetype. It already knows what the company is.
+2. **`lib/scouting/titles.ts` normalizes them deterministically** — strips
+   parentheticals and scope qualifiers, splits slash alternatives, drops anything
+   longer than five words, and falls back to archetype defaults when fewer than
+   three usable titles survive.
+
+Prompt guidance alone would be unverifiable: the model complies for a while and
+then drifts. The normalizer makes the guarantee structural, and its fourteen test
+cases are all real strings that returned zero rows.
+
+**This is the mechanical form of "appropriate seniority is not maximum
+seniority."**
+
+---
+
+### ADR-019 — One upstream edge: `SEARCH_FOR_DIFFERENT_PERSON`
+
+**Problem.** A company can be an excellent target while the person the pipeline
+happened to surface is a poor entry point — too junior to sponsor anything, too
+senior to read a cold message, or in a function that merely sounds related.
+Discarding the company over that is unrecoverable.
+
+**Decision.** Person Research may return `SEARCH_FOR_DIFFERENT_PERSON` with a
+**searchable job title**, which goes back to People Scout for one bounded pass.
+This is the only place a downstream agent feeds a hypothesis upstream, and it is
+deliberately narrow:
+
+- gated on a real, searchable title — a re-scout request without one is a
+  rejection wearing a better label, and degrades to `REJECT`
+- one request per company, since several people at one company produce the same
+  suggestion and acting on each re-buys the same rows
+- one extra pass, not a loop
+
+**Why not a general feedback graph.** Every additional upstream edge multiplies
+the states a run can be in and makes "why did this run cost that much?"
+unanswerable. One narrow, well-justified edge is affordable; a mesh is not.
+
+---
+
+### ADR-020 — Killing a hypothesis is a successful outcome
+
+**Problem.** An agent that can only refine its search will always spend its
+entire budget on the worst segment, because refinement always *looks* like
+progress.
+
+**Decision.** Market Discovery runs as a bounded session, and its action space
+includes `REJECT_HYPOTHESIS` and `REQUEST_NEW_HYPOTHESIS` alongside the seven
+continuing actions. The Search Recovery eval scores abandoning a `LOW_SUPPLY`
+segment **exactly as highly** as recovering one, and scores *grinding a diagnosed
+segment through more rounds without recovering* as a **failure**.
+
+The agent must also name what is wrong — `DOMAIN_DRIFT`,
+`SEARCH_TERM_AMBIGUITY`, `LOW_SUPPLY`, `WRONG_COMPANY_ARCHETYPE`,
+`GEOGRAPHIC_OVERCONSTRAINT`, `TITLE_MISMATCH`, or `HEALTHY` — before choosing.
+Naming the failure is what makes the choice reviewable rather than a vibe, and
+the diagnosis histogram is the fastest read on where a run's budget went.
+
+---
+
 ## 4. Providers
 
 ```ts

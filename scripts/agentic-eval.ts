@@ -32,6 +32,7 @@ import {
   computePrecision,
   pct,
   recoveryRate,
+  averageWhereMeasured,
   type RecoveryCase,
 } from '../evals/agentic/metrics'
 
@@ -96,7 +97,10 @@ async function runProfile(profile: EvalProfile, userId: string): Promise<Profile
     // run. Defaults are sized to produce ~20 rankable prospects per profile.
     segmentCount: Number(process.env.EVAL_SEGMENTS ?? profile.segmentCount),
     companiesPerSegment: Number(process.env.EVAL_COMPANIES_PER_SEGMENT ?? 7),
-    maxProspects: Number(process.env.EVAL_MAX_PROSPECTS ?? 26),
+    // Research more people than the list needs. Precision@20 only measures
+    // selection if there is something to select from — ranking 22 people to
+    // publish 20 is not a curated list, it is everything that survived.
+    maxProspects: Number(process.env.EVAL_MAX_PROSPECTS ?? 32),
     maxDiscoveryRounds: Number(process.env.EVAL_DISCOVERY_ROUNDS ?? 3),
     maxRescoutRounds: Number(process.env.EVAL_RESCOUT_ROUNDS ?? 1),
     concurrency: Number(process.env.EVAL_CONCURRENCY ?? 4),
@@ -114,7 +118,10 @@ async function runProfile(profile: EvalProfile, userId: string): Promise<Profile
       result.enrichedCompanies.find((c) => c.name === p.company)?.description ??
       p.person.company_name ??
       'unknown',
-    person_summary: p.why_they_fit || 'no research summary available',
+    // The person-research dossier, NOT the ranking agent's justification.
+    // Feeding the judge the scorer's own prose would make Precision@20 measure
+    // self-consistency rather than quality.
+    person_summary: p.researchSummary || 'no research was available for this person',
     location: p.person.location,
   }))
 
@@ -130,7 +137,7 @@ async function runProfile(profile: EvalProfile, userId: string): Promise<Profile
   // ─── Company rejection accuracy ────────────────────────────────────────────
   const rejectedSample = result.rejections.slice(0, 12).map((r) => ({
     name: r.company,
-    description: 'see the assistant note',
+    description: r.description || 'no description was established',
     note: r.reason,
   }))
   const rejectionJudged = await judgeCompanies(profile.goal, rejectedSample, 'rejections')
@@ -287,8 +294,12 @@ async function main() {
   const totalCost = reports.reduce((s, r) => s + r.efficiency.anthropicCostUsd, 0)
   const totalCredits = reports.reduce((s, r) => s + r.efficiency.enrichmentCredits, 0)
 
-  const avgDiscovery = reports.reduce((s, r) => s + r.discovery.rate, 0) / reports.length
-  const avgRejection = reports.reduce((s, r) => s + r.rejection.rate, 0) / reports.length
+  // Skip profiles with nothing to measure — a profile that rejected no
+  // companies has no rejection accuracy, and averaging a zero in would invent a
+  // failure to chase.
+  const avgDiscovery = averageWhereMeasured(reports.map((r) => r.discovery)).value
+  const rejectionAgg = averageWhereMeasured(reports.map((r) => r.rejection))
+  const avgRejection = rejectionAgg.value
 
   const summary = {
     tag,
@@ -335,8 +346,8 @@ async function main() {
   line('Average Precision@' + TOP_N, pct(avgPrecision), avgPrecision >= THRESHOLDS.avgPrecision, `>= ${pct(THRESHOLDS.avgPrecision)}`)
   line('Min profile Precision', pct(minProfile), minProfile >= THRESHOLDS.minProfilePrecision, `>= ${pct(THRESHOLDS.minProfilePrecision)}`)
   line('BAD rate@' + TOP_N, pct(overallBadRate), overallBadRate <= THRESHOLDS.maxBadRate, `<= ${pct(THRESHOLDS.maxBadRate)}`)
-  line('Market discovery precision', pct(avgDiscovery), avgDiscovery >= THRESHOLDS.minDiscoveryPrecision, `>= ${pct(THRESHOLDS.minDiscoveryPrecision)}`)
-  line('Company rejection accuracy', pct(avgRejection), avgRejection >= THRESHOLDS.minRejectionAccuracy, `>= ${pct(THRESHOLDS.minRejectionAccuracy)}`)
+  line('Market discovery precision', pct(avgDiscovery), Number.isNaN(avgDiscovery) ? null : avgDiscovery >= THRESHOLDS.minDiscoveryPrecision, `>= ${pct(THRESHOLDS.minDiscoveryPrecision)}`)
+  line(`Company rejection accuracy (${rejectionAgg.profiles}p)`, pct(avgRejection), Number.isNaN(avgRejection) ? null : avgRejection >= THRESHOLDS.minRejectionAccuracy, `>= ${pct(THRESHOLDS.minRejectionAccuracy)}`)
   line(`Search recovery (${recovery.succeeded}/${recovery.applicable})`, pct(recovery.rate), recovery.rate >= THRESHOLDS.minSearchRecovery, `>= ${pct(THRESHOLDS.minSearchRecovery)}`)
   line(`Best-person hit rate (${bestPersonHits}/${bestPersonN})`, pct(summary.aggregate.bestPersonHitRate), summary.aggregate.bestPersonHitRate >= THRESHOLDS.minBestPersonHitRate, `>= ${pct(THRESHOLDS.minBestPersonHitRate)}`)
 

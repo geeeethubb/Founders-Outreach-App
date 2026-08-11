@@ -368,6 +368,80 @@ check('relevant director kept', filterPerson(person(), 500).keep)
     resolveTitlesForCompany([], 'consultancy').titles.length > 0)
 }
 
+// ─── Agentic eval metrics ────────────────────────────────────────────────────
+// The eval decides whether the phase passes, so its arithmetic gets the same
+// scrutiny as the pipeline's.
+{
+  const m = require('../evals/agentic/metrics') as typeof import('../evals/agentic/metrics')
+
+  const p = m.computePrecision(['GOOD', 'GOOD', 'MAYBE', 'BAD'])
+  check('precision counts GOOD only', p.precision === 0.5, String(p.precision))
+  check('MAYBE is neither hit nor miss', p.maybe === 1 && p.badRate === 0.25, JSON.stringify(p))
+  check('empty verdicts do not divide by zero', m.computePrecision([]).precision === 0)
+
+  // A profile that returned nothing must not score 100% by vacuous truth.
+  check('empty profile scores zero, not one', m.computePrecision([]).precision === 0)
+
+  const c = m.computeCompanyRate(['GOOD', 'MAYBE', 'BAD', 'BAD'])
+  check('company rate gives MAYBE half credit', Math.abs(c.rate - 0.375) < 1e-9, String(c.rate))
+
+  // Search recovery. Only segments that actually hit trouble are counted.
+  const round = (over: Partial<import('@/lib/agents/market-discovery').DiscoveryRoundHistory>) => ({
+    round: 1, query_used: 'q', companies_found: 0, companies_kept: 0,
+    diagnosis: 'HEALTHY', action: 'ACCEPT', note: '', ...over,
+  }) as import('@/lib/agents/market-discovery').DiscoveryRoundHistory
+
+  const healthy = m.classifyRecovery([{ segment: 'a', rounds: [round({})] }])
+  check('healthy segment is not applicable', healthy[0].outcome === 'not_applicable', healthy[0].outcome)
+
+  const recovered = m.classifyRecovery([{
+    segment: 'b',
+    rounds: [
+      round({ round: 1, diagnosis: 'DOMAIN_DRIFT', action: 'SYNONYMS' }),
+      round({ round: 2, companies_kept: 5, action: 'ACCEPT' }),
+    ],
+  }])
+  check('drift then companies counts as recovered', recovered[0].outcome === 'recovered', recovered[0].detail)
+
+  const terminated = m.classifyRecovery([{
+    segment: 'c',
+    rounds: [round({ round: 1, diagnosis: 'LOW_SUPPLY', action: 'REJECT_HYPOTHESIS' })],
+  }])
+  check('killing a dead hypothesis is a success', terminated[0].outcome === 'correctly_terminated', terminated[0].detail)
+
+  const ground = m.classifyRecovery([{
+    segment: 'd',
+    rounds: [
+      round({ round: 1, diagnosis: 'LOW_SUPPLY', action: 'REFINE' }),
+      round({ round: 2, diagnosis: 'LOW_SUPPLY', action: 'REFINE' }),
+    ],
+  }])
+  check('grinding a dead hypothesis is a failure', ground[0].outcome === 'failed', ground[0].detail)
+
+  const rate = m.recoveryRate([...healthy, ...recovered, ...terminated, ...ground])
+  check('recovery denominator excludes healthy segments', rate.applicable === 3, JSON.stringify(rate))
+  check('recovery rate counts both success modes', Math.abs(rate.rate - 2 / 3) < 1e-9, String(rate.rate))
+  check('no applicable cases means no failure', m.recoveryRate(healthy).rate === 1)
+
+  const eff = m.computeEfficiency({
+    apolloSearchCalls: 10, enrichmentCredits: 40, peopleEnriched: 38,
+    goodProspects: 8, webSearches: 60, modelCalls: 90, anthropicCostUsd: 16,
+  })
+  check('enrichments per good prospect', eff.enrichmentsPerGoodProspect === 5, String(eff.enrichmentsPerGoodProspect))
+  check('cost per good prospect', eff.costPerGoodProspect === 2, String(eff.costPerGoodProspect))
+  check('zero good prospects is infinite cost, not zero',
+    m.computeEfficiency({ apolloSearchCalls: 1, enrichmentCredits: 1, peopleEnriched: 1,
+      goodProspects: 0, webSearches: 1, modelCalls: 1, anthropicCostUsd: 5 }).costPerGoodProspect === Infinity)
+
+  // Thresholds are from the brief and must not drift.
+  check('thresholds match the brief',
+    m.THRESHOLDS.avgPrecision === 0.75 && m.THRESHOLDS.minProfilePrecision === 0.65 &&
+    m.THRESHOLDS.maxBadRate === 0.10 && m.THRESHOLDS.minDiscoveryPrecision === 0.80 &&
+    m.THRESHOLDS.minRejectionAccuracy === 0.90 && m.THRESHOLDS.minSearchRecovery === 0.80 &&
+    m.THRESHOLDS.minBestPersonHitRate === 0.70,
+    JSON.stringify(m.THRESHOLDS))
+}
+
 // ─── Report ──────────────────────────────────────────────────────────────────
 
 process.stdout.write(`\n${passed} passed, ${failed} failed\n`)

@@ -278,15 +278,27 @@ async function runAgentLive<TInput, TOutput>(
       // outright threw away a whole discovery round — every company found and
       // every search paid for — because one enum value was wrong. Hand the
       // model its own rejected output and let it correct itself.
+      //
+      // EVERY tool_use in the assistant turn needs a tool_result immediately
+      // after it, including the rejected submit_result and any client tools the
+      // model called alongside it. Replying with a bare text message instead is
+      // a hard 400 from the API, which is how this path first failed.
       if (steps < maxSteps) {
         messages.push({ role: 'assistant', content: res.content })
         messages.push({
           role: 'user',
-          content:
-            `Your ${SUBMIT} call did not satisfy the schema, so it was rejected. Re-read the tool's ` +
-            `input_schema: every required field must be present, enum fields must use one of the listed ` +
-            `values exactly, and fields you have no answer for must still appear (use null or an empty ` +
-            `array). Call ${SUBMIT} again with the same findings, corrected. Do not search again.`,
+          content: res.toolUses.map<Anthropic.ToolResultBlockParam>((t) => ({
+            type: 'tool_result',
+            tool_use_id: t.id,
+            is_error: true,
+            content:
+              t.name === SUBMIT
+                ? `Rejected: this did not satisfy the schema. Re-read the tool's input_schema — every ` +
+                  `required field must be present, enum fields must use one of the listed values exactly, ` +
+                  `and fields you have no answer for must still appear (use null or an empty array). ` +
+                  `Call ${SUBMIT} again with the same findings, corrected. Do not search again.`
+                : `Skipped: ${SUBMIT} was called in the same turn and was rejected.`,
+          })),
         })
         continue
       }

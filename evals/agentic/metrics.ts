@@ -193,3 +193,20 @@ export function computeEfficiency(input: {
 export function pct(n: number): string {
   return Number.isFinite(n) ? `${(n * 100).toFixed(0)}%` : 'n/a'
 }
+
+/**
+ * Average a rate across profiles, skipping those with an empty denominator.
+ *
+ * A profile that rejected no companies has no rejection accuracy — it is not
+ * 0%. Averaging the zero in dragged the aggregate below threshold and would
+ * have sent an iteration chasing a failure that did not exist. Returns NaN when
+ * nothing is measurable, which `pct` renders as "n/a".
+ */
+export function averageWhereMeasured(samples: { n: number; rate: number }[]): { value: number; profiles: number } {
+  const measured = samples.filter((s) => s.n > 0)
+  if (measured.length === 0) return { value: NaN, profiles: 0 }
+  return {
+    value: measured.reduce((s, x) => s + x.rate, 0) / measured.length,
+    profiles: measured.length,
+  }
+}

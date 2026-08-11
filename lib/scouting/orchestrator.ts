@@ -85,7 +85,13 @@ export interface FunnelCounts {
 export interface ScoutRunResult {
   runId: string | null
   strategy: MissionStrategy | null
-  ranked: (RankedProspect & { person: PersonCandidate; company: string })[]
+  ranked: (RankedProspect & {
+    person: PersonCandidate
+    company: string
+    /** Person-research dossier as text. What the eval judge is allowed to see. */
+    researchSummary: string
+    researchVerdict: string | null
+  })[]
   funnel: FunnelCounts
   usage: {
     anthropic: ReturnType<typeof anthropicUsage>
@@ -101,7 +107,7 @@ export interface ScoutRunResult {
     factsInserted: number
     factsRejected: number
   }
-  rejections: { company: string; reason: string }[]
+  rejections: { company: string; description: string; reason: string }[]
   /** Companies that passed validation and reached Apollo. Feeds discovery precision. */
   enrichedCompanies: { name: string; description: string; note: string }[]
   /** Every person Apollo surfaced per company. Feeds the best-person eval. */
@@ -140,7 +146,7 @@ function companyCandidateFrom(d: DiscoveredCompany, v: CompanyValidation | null)
 export async function runScouting(params: ScoutRunParams): Promise<ScoutRunResult> {
   const log = params.onProgress ?? (() => {})
   const errors: string[] = []
-  const rejections: { company: string; reason: string }[] = []
+  const rejections: { company: string; description: string; reason: string }[] = []
   const discoveryHistory: { segment: string; rounds: DiscoveryRoundHistory[]; rejected: boolean }[] = []
   const concurrency = params.concurrency ?? 3
 
@@ -226,8 +232,16 @@ export async function runScouting(params: ScoutRunParams): Promise<ScoutRunResul
   const claimed = new Set<string>()
   const claimedNames = new Set<string>()
 
-  for (const segment of strategy.segments) {
-    const session = await runDiscoverySession(
+  // Segments run CONCURRENTLY. Rounds within a segment stay sequential, because
+  // each round's action depends on the previous round's diagnosis — that is the
+  // adaptation. Segments do not depend on each other, and serializing them made
+  // discovery the longest phase in the run by a wide margin.
+  //
+  // The cost is that a segment cannot see what its siblings just claimed, so
+  // cross-segment duplicates are possible. The companyKey dedupe below removes
+  // them, and one-person-per-company de-clumping removes the rest downstream.
+  const sessions = await mapWithConcurrency(strategy.segments, concurrency, async (segment) =>
+    runDiscoverySession(
       {
         segment,
         mission: { goal: params.mission.goal, geography: params.mission.geography },
@@ -237,12 +251,14 @@ export async function runScouting(params: ScoutRunParams): Promise<ScoutRunResul
         onRound: (h) =>
           log(
             'discovery',
-            `${segment.name} r${h.round}: "${h.query_used.slice(0, 60)}" → ${h.companies_kept} new, ${h.diagnosis} → ${h.action}`
+            `${segment.name.slice(0, 40)} r${h.round}: "${h.query_used.slice(0, 50)}" → ${h.companies_kept} new, ${h.diagnosis} → ${h.action}`
           ),
       },
       ctx
-    )
+    ).then((session) => ({ segment, session }))
+  )
 
+  for (const { segment, session } of sessions) {
     for (const run of session.agentResults) await trace(run, { segment: segment.name })
     errors.push(...session.errors)
 
@@ -286,13 +302,23 @@ export async function runScouting(params: ScoutRunParams): Promise<ScoutRunResul
     if (!v.validation) {
       errors.push(`company_validation(${v.company.name}): ${v.error}`)
       funnel.companiesRejected++
-      rejections.push({ company: v.company.name, reason: `validation failed: ${v.error}` })
+      rejections.push({
+        company: v.company.name,
+        description: v.company.what_they_do,
+        reason: `validation failed: ${v.error}`,
+      })
       continue
     }
     const gate = shouldEnrich(v.validation)
     if (!gate.pass) {
       funnel.companiesRejected++
-      rejections.push({ company: v.company.name, reason: gate.reason })
+      rejections.push({
+        company: v.company.name,
+        // What discovery believed, so the rejection can be judged on the company
+        // rather than only on the sentence used to dismiss it.
+        description: v.validation.what_they_do || v.company.what_they_do,
+        reason: gate.reason,
+      })
       continue
     }
     accepted.push({ company: v.company, validation: v.validation, agentRunId: v.agentRunId })
@@ -576,12 +602,42 @@ export async function runScouting(params: ScoutRunParams): Promise<ScoutRunResul
       errors.push(`ranking(${r.person.name}): ${run.error}`)
       return null
     }
-    return { ...run.output, person: r.person as PersonCandidate, company: r.person.company_name ?? r.person.company_ref }
+    return {
+      ...run.output,
+      person: r.person as PersonCandidate,
+      company: r.person.company_name ?? r.person.company_ref,
+      // Carried so the eval judge can see the RESEARCH rather than the ranking
+      // agent's own justification. Showing the judge the scorer's prose would
+      // make Precision@20 measure self-consistency instead of quality.
+      researchSummary: personContext,
+      researchVerdict: r.research?.verdict ?? null,
+    }
   })
 
-  const ranked = rankedResults
+  // Order by score, then de-clump by company.
+  //
+  // A list with three people from one manufacturer does not read as curated
+  // research; it reads as a database query. Phase 3 measured 7 of 100 slots
+  // going to a second person at a company already represented. So the best
+  // person at each company is placed first, and only then are the remaining
+  // slots filled with runners-up — which costs a little total score and buys a
+  // lot of the "a human spent hours on this" quality the north star asks for.
+  const scored = rankedResults
     .filter((r): r is NonNullable<typeof r> => r !== null)
     .sort((a, b) => b.total - a.total)
+
+  const seenCompany = new Set<string>()
+  const firstPerCompany: typeof scored = []
+  const runnersUp: typeof scored = []
+  for (const r of scored) {
+    const key = (r.company || 'unknown').toLowerCase()
+    if (seenCompany.has(key)) runnersUp.push(r)
+    else {
+      seenCompany.add(key)
+      firstPerCompany.push(r)
+    }
+  }
+  const ranked = [...firstPerCompany, ...runnersUp]
 
   funnel.prospectsRanked = ranked.length
   log('ranking', `${ranked.length} prospects scored`)
