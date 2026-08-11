@@ -30,6 +30,41 @@ interface Prospect {
   components: Component[]
 }
 
+interface ProofPoint {
+  id: string
+  title: string
+  org: string
+  why: string
+}
+
+interface Positioning {
+  positioning_thesis: string
+  proofPoints: ProofPoint[]
+  recipient_priorities: string[]
+  why_me: string
+  why_now: string
+  do_not_mention: { item: string; reason: string }[]
+  recommended_ask: string
+  confidence: number
+  risks: string
+}
+
+interface Draft {
+  subject: string
+  body: string
+  wordCount: number
+  alternate_angle: string
+  lengthWarning: string | null
+}
+
+interface Brief {
+  positioning: Positioning
+  draft: Draft | null
+  usage: { costUsd: number; calls: number }
+}
+
+type Decision = 'approved' | 'skipped' | null
+
 interface ScoutResult {
   runId: string | null
   funnel: Record<string, number>
@@ -79,6 +114,54 @@ export default function ScoutPage() {
   const [result, setResult] = useState<ScoutResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [open, setOpen] = useState<string | null>(null)
+
+  // Briefs are generated on demand, one prospect at a time — positioning and a
+  // draft cost money, and most prospects never get opened.
+  const [briefs, setBriefs] = useState<Record<string, Brief>>({})
+  const [briefing, setBriefing] = useState<string | null>(null)
+  const [briefError, setBriefError] = useState<Record<string, string>>({})
+  const [decisions, setDecisions] = useState<Record<string, Decision>>({})
+  const [edited, setEdited] = useState<Record<string, string>>({})
+
+  async function buildBrief(p: Prospect) {
+    setBriefing(p.key)
+    setBriefError((e) => ({ ...e, [p.key]: '' }))
+    try {
+      const res = await fetch('/api/positioning', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mission: { goal },
+          person: {
+            name: p.name,
+            title: p.title,
+            company: p.company,
+            location: p.location,
+          },
+          companyContext: p.whyCompany ?? p.whyThem,
+          personContext: p.researchSummary,
+          rankingEvidence: {
+            whyThemSummary: p.whyThem,
+            risks: p.risks,
+            dimensions: p.components.map((c) => ({
+              dimension: c.dimension,
+              normalized: c.normalized,
+              explanation: c.explanation,
+            })),
+          },
+          withEmail: true,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Positioning failed')
+      setBriefs((b) => ({ ...b, [p.key]: data as Brief }))
+      if (data.draft) setEdited((e) => ({ ...e, [p.key]: data.draft.body }))
+    } catch (e) {
+      setBriefError((er) => ({ ...er, [p.key]: e instanceof Error ? e.message : 'Failed' }))
+    } finally {
+      setBriefing(null)
+    }
+  }
 
   async function run() {
     setRunning(true)
@@ -305,6 +388,132 @@ export default function ScoutPage() {
                         {p.researchSummary}
                       </pre>
                     </Section>
+
+                    {/* ─── Positioning + outreach ──────────────────── */}
+                    <div className="border-t border-slate-200 pt-4">
+                      {!briefs[p.key] && (
+                        <div>
+                          <button
+                            onClick={() => buildBrief(p)}
+                            disabled={briefing === p.key}
+                            className="px-3 py-1.5 bg-slate-900 text-white text-xs font-medium rounded-md hover:bg-slate-700 disabled:bg-slate-300"
+                          >
+                            {briefing === p.key ? 'Working…' : 'Build positioning + draft'}
+                          </button>
+                          <span className="ml-2 text-xs text-slate-500">about 30 seconds</span>
+                          {briefError[p.key] && (
+                            <p className="text-xs text-red-700 mt-2">{briefError[p.key]}</p>
+                          )}
+                        </div>
+                      )}
+
+                      {briefs[p.key] && (
+                        <div className="space-y-4">
+                          <div className="bg-indigo-50 border border-indigo-100 rounded p-3">
+                            <div className="text-xs font-medium uppercase tracking-wide text-indigo-500">
+                              Positioning thesis
+                            </div>
+                            <p className="mt-1 text-slate-900">
+                              {briefs[p.key].positioning.positioning_thesis}
+                            </p>
+                            <div className="mt-1 text-xs text-slate-500">
+                              confidence {(briefs[p.key].positioning.confidence * 100).toFixed(0)}%
+                            </div>
+                          </div>
+
+                          <Section title="Strongest proof points">
+                            <ul className="space-y-1.5">
+                              {briefs[p.key].positioning.proofPoints.map((pp) => (
+                                <li key={pp.id}>
+                                  <span className="font-medium">{pp.title}</span>
+                                  <span className="text-slate-500"> — {pp.org}</span>
+                                  <div className="text-slate-600 text-xs mt-0.5">{pp.why}</div>
+                                </li>
+                              ))}
+                            </ul>
+                          </Section>
+
+                          <Section title="Why you, to them">{briefs[p.key].positioning.why_me}</Section>
+                          <Section title="Why now">{briefs[p.key].positioning.why_now}</Section>
+                          <Section title="Recommended ask">
+                            {briefs[p.key].positioning.recommended_ask}
+                          </Section>
+
+                          {briefs[p.key].positioning.do_not_mention.length > 0 && (
+                            <Section title="Do not mention">
+                              <ul className="space-y-0.5">
+                                {briefs[p.key].positioning.do_not_mention.map((d, i) => (
+                                  <li key={i} className="text-slate-600 text-xs">
+                                    <span className="text-slate-900">{d.item}</span> — {d.reason}
+                                  </li>
+                                ))}
+                              </ul>
+                            </Section>
+                          )}
+
+                          {briefs[p.key].draft && (
+                            <div className="border border-slate-200 rounded p-3">
+                              <div className="flex items-center justify-between">
+                                <div className="text-xs font-medium uppercase tracking-wide text-slate-400">
+                                  Draft email
+                                </div>
+                                <span className="text-xs text-slate-500">
+                                  {briefs[p.key].draft!.wordCount} words
+                                  {briefs[p.key].draft!.lengthWarning ? ' · over target' : ''}
+                                </span>
+                              </div>
+                              <div className="mt-2 text-sm">
+                                <span className="text-slate-500">Subject: </span>
+                                <span className="font-medium">{briefs[p.key].draft!.subject}</span>
+                              </div>
+                              <textarea
+                                value={edited[p.key] ?? briefs[p.key].draft!.body}
+                                onChange={(e) => setEdited((x) => ({ ...x, [p.key]: e.target.value }))}
+                                rows={9}
+                                className="mt-2 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                              />
+                              <p className="mt-2 text-xs text-slate-500">
+                                <span className="font-medium">Alternate angle:</span>{' '}
+                                {briefs[p.key].draft!.alternate_angle}
+                              </p>
+
+                              <div className="mt-3 flex items-center gap-2">
+                                <button
+                                  onClick={() => setDecisions((d) => ({ ...d, [p.key]: 'approved' }))}
+                                  className={
+                                    decisions[p.key] === 'approved'
+                                      ? 'px-3 py-1.5 text-xs font-medium rounded-md bg-emerald-600 text-white'
+                                      : 'px-3 py-1.5 text-xs font-medium rounded-md bg-white border border-slate-300 text-slate-700 hover:bg-slate-50'
+                                  }
+                                >
+                                  {decisions[p.key] === 'approved' ? 'Approved' : 'Approve'}
+                                </button>
+                                <button
+                                  onClick={() => buildBrief(p)}
+                                  disabled={briefing === p.key}
+                                  className="px-3 py-1.5 text-xs font-medium rounded-md bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:text-slate-400"
+                                >
+                                  {briefing === p.key ? 'Working…' : 'Regenerate'}
+                                </button>
+                                <button
+                                  onClick={() => setDecisions((d) => ({ ...d, [p.key]: 'skipped' }))}
+                                  className={
+                                    decisions[p.key] === 'skipped'
+                                      ? 'px-3 py-1.5 text-xs font-medium rounded-md bg-slate-700 text-white'
+                                      : 'px-3 py-1.5 text-xs font-medium rounded-md bg-white border border-slate-300 text-slate-700 hover:bg-slate-50'
+                                  }
+                                >
+                                  {decisions[p.key] === 'skipped' ? 'Skipped' : 'Skip'}
+                                </button>
+                                <span className="text-xs text-slate-400 ml-auto">
+                                  Nothing is sent — you remain the approval gate
+                                </span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
 
                     <div className="flex gap-4 pt-1 text-xs">
                       {p.linkedin && (
