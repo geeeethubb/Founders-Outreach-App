@@ -12,7 +12,7 @@
 import { apolloPeopleProvider, type PersonStub } from '@/lib/providers/apollo/people'
 import { apolloStats, isCacheOnly } from '@/lib/providers/apollo/client'
 import { normalizeCompanyName } from '@/lib/providers/apollo/normalize'
-import { rankStubsByTitle, type CompanyArchetype } from './titles'
+import { rankStubsByTitle, peopleDepthFor, type CompanyArchetype } from './titles'
 import { stubPassesCheapFilter, newFilterStats, recordFilter, type FilterStats } from './filter'
 import { personKey } from './dedupe'
 import { mapWithConcurrency } from './concurrency'
@@ -37,6 +37,7 @@ export interface PeopleScoutParams {
   targets: ScoutTarget[]
   /** Fallback only, for targets that carry no titles of their own. */
   titlePatterns: string[]
+  /** Ceiling. The per-company depth is derived from archetype and capped here. */
   maxPerCompany: number
   /**
    * Mission geography, passed to Apollo as person_locations.
@@ -118,7 +119,7 @@ export async function scoutPeople(params: PeopleScoutParams): Promise<PeopleScou
         ? { company_domains: [target.domain] }
         : { company_names: [target.company_name] }
       const titles = target.titles.length ? target.titles : params.titlePatterns
-      const perPage = Math.max(10, params.maxPerCompany * 3)
+      const perPage = Math.max(10, peopleDepthFor(target.archetype, params.maxPerCompany) * 3)
 
       const geo = params.locations?.length ? { locations: params.locations } : {}
 
@@ -162,9 +163,13 @@ export async function scoutPeople(params: PeopleScoutParams): Promise<PeopleScou
     // matches what this company's research said to look for.
     const ordered = rankStubsByTitle(stubs, (s) => s.title, target.titles, target.archetype)
 
+    // Depth is a property of the COMPANY, not of the run: a huge manufacturer
+    // rewards digging, a small vendor does not.
+    const depth = peopleDepthFor(target.archetype, params.maxPerCompany)
+
     let kept = 0
     for (const stub of ordered) {
-      if (kept >= params.maxPerCompany) break
+      if (kept >= depth) break
       const verdict = stubPassesCheapFilter(stub.title, stub.company_name ?? target.company_name)
       recordFilter(filterStats, verdict.keep, verdict.reason, verdict.detail)
       if (!verdict.keep) continue

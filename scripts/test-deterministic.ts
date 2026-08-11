@@ -451,6 +451,20 @@ check('relevant director kept', filterPerson(person(), 500).keep)
       stubPassesCheapFilter(title, 'Acme').keep, JSON.stringify(stubPassesCheapFilter(title, 'Acme')))
   }
 
+  // Pool depth is a property of the COMPANY. The same global depth that moved
+  // chemical/manufacturing 45% -> 75% moved Enterprise AI 65% -> 60%.
+  const { peopleDepthFor, PEOPLE_PER_COMPANY } =
+    require('../lib/scouting/titles') as typeof import('../lib/scouting/titles')
+
+  check('enterprises are mined deeper than startups',
+    PEOPLE_PER_COMPANY.enterprise > PEOPLE_PER_COMPANY.startup,
+    JSON.stringify(PEOPLE_PER_COMPANY))
+  check('depth respects the run cap', peopleDepthFor('enterprise', 2) === 2)
+  check('depth is never zero', peopleDepthFor('startup', 0) === 1)
+  check('every archetype has a depth',
+    (Object.keys(PEOPLE_PER_COMPANY) as (keyof typeof PEOPLE_PER_COMPANY)[])
+      .every((a) => PEOPLE_PER_COMPANY[a] >= 1))
+
   // Stability matters: an unstable sort makes runs undiffable.
   const tied = [{ t: 'Zeta Manager' }, { t: 'Alpha Manager' }]
   check('equal scores keep provider order',

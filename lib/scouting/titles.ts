@@ -137,6 +137,37 @@ export const ARCHETYPE_TITLES: Record<CompanyArchetype, string[]> = {
   other: ['Director', 'Head of Engineering', 'VP Operations', 'Founder'],
 }
 
+/**
+ * How many candidates are worth pulling from one company of each kind.
+ *
+ * A single global depth is wrong in both directions. At a 90,000-person
+ * manufacturer, many people genuinely hold mission-relevant roles, so going
+ * deeper keeps finding real targets. At a 40-person software vendor the relevant
+ * population is a handful of people, and digging past them only surfaces
+ * platform engineers and generic product managers — who then occupy top-20 slots.
+ *
+ * Measured: raising the global depth from 3 to 6 moved the chemical/manufacturing
+ * profile 45% -> 75%, and moved Enterprise AI 65% -> 60%. Same change, opposite
+ * signs, split by archetype.
+ *
+ * This is [ADR-018](../../docs/ARCHITECTURE.md#adr-018) applied one level up:
+ * the company's own research decides how it should be mined, rather than a
+ * constant that has to be right everywhere at once.
+ */
+export const PEOPLE_PER_COMPANY: Record<CompanyArchetype, number> = {
+  startup: 3,
+  growth: 4,
+  midmarket: 5,
+  enterprise: 6,
+  consultancy: 5,
+  research: 3,
+  other: 4,
+}
+
+export function peopleDepthFor(archetype: CompanyArchetype, cap: number): number {
+  return Math.max(1, Math.min(cap, PEOPLE_PER_COMPANY[archetype]))
+}
+
 /** Headcount-based archetype, used when research does not state one. */
 export function archetypeFromSize(employees: number | null | undefined): CompanyArchetype {
   if (employees == null) return 'other'
