@@ -537,11 +537,75 @@ untested.
 
 ---
 
+### Iteration 5 — archetype-aware pool depth · **HYPOTHESIS REJECTED, change kept**
+
+**Hypothesis.** Enterprise AI regressed because pool depth is a global constant.
+Six people per company is right at a 90,000-person manufacturer and wrong at a
+software vendor, where the relevant population is a handful and digging past them
+surfaces platform engineers and generic product managers.
+
+**Change.** Depth derived from the researched archetype — enterprise 6, midmarket
+and consultancy 5, growth 4, startup and research 3 — capped by the run budget.
+
+**Measured.**
+
+| Profile | Before | After | BAD before | BAD after |
+|---|---|---|---|---|
+| Enterprise AI with industrial relevance | 60% | **55%** | 10% | **0%** |
+| Operations / industrial consulting | 65% | **65%** | 5% | 5% |
+
+**The precision hypothesis is wrong.** Depth was not what held Enterprise AI
+back. The change did eliminate both BADs, but converted them into MAYBEs rather
+than GOODs.
+
+**Verdict: KEEP the change, reject the reasoning.** BAD rate 10% → 0% at no real
+precision cost (−5 is one prospect, inside noise), and archetype-derived depth is
+defensible on its own terms. But it must not be credited with fixing anything.
+
+### Why Enterprise AI is actually stuck
+
+Three independent measurements put it at 60%, 55%, 55%. Inspecting the run gives
+a different diagnosis than the one above:
+
+```
+company archetypes:  11 startup · 5 growth · 6 enterprise
+```
+
+**Discovery drifts to startups**, so the profile substantially overlaps
+"Industrial AI startups" rather than covering enterprise software vendors. And
+inside those companies, keep-rate splits sharply by function:
+
+| Function | n | keep-rate |
+|---|---|---|
+| founder / CEO | 22 | **45%** |
+| product | 10 | 20% |
+| deployment / solutions | 6 | 17% |
+| engineering | 7 | 14% |
+| other | 14 | 7% |
+
+At a startup, the founder is the only reliably good target for this mission —
+everyone else is a MAYBE. So a profile whose companies are half startups cannot
+fill 20 slots with GOODs unless it contacts roughly one founder per company,
+which is exactly what the one-person-per-company de-clumping already limits.
+
+**This is a profile-definition problem more than a pipeline one.** "Enterprise AI
+with industrial relevance" as written admits a company population whose
+non-founder employees are mostly wrong for the mission. The concrete next step is
+to make Market Discovery hold the intended archetype — the mission asks for
+enterprise software vendors with real industrial deployment, and returning
+seed-stage startups is a `WRONG_COMPANY_ARCHETYPE` diagnosis the agent has in its
+vocabulary but did not use here.
+
+---
+
 ## 10. Remaining failure modes
 
-**1. Pool depth is archetype-blind.** The single global `maxPeoplePerCompany` is
-right for enterprises and wrong for software vendors. Highest-confidence fix,
-described above.
+**1. Market Discovery does not hold the intended company archetype.** The
+"Enterprise AI" profile asks for enterprise software vendors with real industrial
+deployment and receives 11 startups out of 22 companies. The agent has
+`WRONG_COMPANY_ARCHETYPE` in its diagnosis vocabulary and did not use it. This is
+now the highest-confidence remaining fix, and it replaces the pool-depth
+hypothesis, which iteration 5 disproved.
 
 **2. Best-person hit rate is the weakest agent metric** — 50–83% across profiles,
 against a ≥70% target, and it moves more with company archetype than with any
@@ -584,9 +648,12 @@ only profile below threshold.
 
 **Recommended order:**
 
-1. Archetype-aware `maxPeoplePerCompany` (small, highest confidence).
-2. Re-run the two weakest profiles; expect Enterprise AI back above 65%.
-3. Add a ranking cache key — this is the main thing making iteration slow.
+1. Make Market Discovery enforce the segment's intended company archetype, and
+   diagnose `WRONG_COMPANY_ARCHETYPE` when results drift to the wrong kind of
+   company. This is what actually holds Enterprise AI below the floor.
+2. Re-run Enterprise AI; it has measured 60/55/55 across three configurations.
+3. Add a ranking cache key — every re-run currently re-scores every prospect,
+   which is the dominant wall-clock cost of a cached eval.
 4. Re-score the three v2-judged baselines under v3 so every delta is honest.
 5. **Then** move to TKB and Positioning.
 
