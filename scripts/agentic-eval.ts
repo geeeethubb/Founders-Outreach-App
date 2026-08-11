@@ -93,7 +93,7 @@ async function runProfile(profile: EvalProfile, userId: string): Promise<Profile
       // iteration 3 showed asking discovery for more companies pushes it into
       // weaker ones (97% -> 69% precision), while a deeper pool inside ALREADY
       // validated companies costs no company quality at all.
-      maxPeoplePerCompany: Number(process.env.EVAL_PEOPLE_PER_COMPANY ?? 3),
+      maxPeoplePerCompany: Number(process.env.EVAL_PEOPLE_PER_COMPANY ?? 6),
       maxApolloCalls: 90,
       maxWebSearches: 5,
       maxAgentSteps: 6,
@@ -105,7 +105,7 @@ async function runProfile(profile: EvalProfile, userId: string): Promise<Profile
     // Research more people than the list needs. Precision@20 only measures
     // selection if there is something to select from — ranking 22 people to
     // publish 20 is not a curated list, it is everything that survived.
-    maxProspects: Number(process.env.EVAL_MAX_PROSPECTS ?? 32),
+    maxProspects: Number(process.env.EVAL_MAX_PROSPECTS ?? 60),
     maxDiscoveryRounds: Number(process.env.EVAL_DISCOVERY_ROUNDS ?? 3),
     maxRescoutRounds: Number(process.env.EVAL_RESCOUT_ROUNDS ?? 1),
     concurrency: Number(process.env.EVAL_CONCURRENCY ?? 4),
