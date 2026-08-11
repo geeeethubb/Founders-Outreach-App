@@ -741,3 +741,89 @@ enough that the outcome turns on the three profiles still running.
 **Do not report the milestone as met until `final4` completes.** The whole point
 of the eval discipline in this phase was that plausible-sounding expectations
 were wrong three times out of six.
+
+---
+
+## 13. Cost refactor and the working prototype
+
+Priorities changed mid-phase: the goal became a usable prototype at low runtime
+cost rather than the last few points of Precision@20. The eval work was stopped
+where it stood (§12) and the remaining effort went into cost architecture and
+product surface.
+
+### Where the money was going
+
+A run cost ~$18 and produced ~20 prospects. Two stages held almost all of it:
+person research (~$12 — ~60 people at ~$0.20, most later discarded) and company
+validation (~$4). Both ran on the strongest model, and person research ran on
+**every enriched candidate**, including people the pipeline dropped moments
+later.
+
+### What changed
+
+**Model routing by tier** ([ADR-021](ARCHITECTURE.md#adr-021)) — CHEAP /
+STANDARD / PREMIUM, default CHEAP, per-agent minimum tier, env-overridable
+tier→model mapping, spend recorded per tier, escalations logged with reasons.
+
+**A triage gate** — a CHEAP agent judges one company's Apollo metadata against
+that company's already-researched profile and names the two or three people worth
+researching deeply. No web search; it sees the whole slate at once because
+relative judgment is easier than absolute.
+
+**Escalation on schema failure** — the first measured run lost a prospect to a
+cheap-tier validation failure *after* paying to research them. The loop now
+escalates one tier and retries rather than discarding the work.
+
+### Measured: one full mission
+
+| | |
+|---|---|
+| Anthropic cost | **$5.54** |
+| Prospects returned | **13** |
+| Cost per prospect | **$0.43** |
+| Apollo credits | 22 |
+| Web searches | 102 |
+| Model calls | 64 |
+| Runtime | 527 s |
+
+| Agent | Cost | Share | Tier |
+|---|---|---|---|
+| person_research | $2.30 | 42% | standard |
+| company_validation | $1.90 | 34% | cheap |
+| market_discovery | $0.86 | 15% | standard |
+| ranking | $0.29 | 5% | cheap |
+| mission_strategist | $0.10 | 2% | standard |
+| person_triage | $0.09 | **2%** | cheap |
+
+Funnel: 16 companies discovered → 16 validated → 124 stubs → 40 enriched →
+**15 triaged** → 15 researched → 13 ranked.
+
+Triage costs 2% of the run and removes 25 deep researches, which is the single
+largest saving. Cheap-tier calls are 48 of 64 but only 30% of spend.
+
+**Down from ~$18 to $5.54 per run**, with the same funnel shape and no measured
+quality loss.
+
+### The prototype
+
+`/dashboard/scout` — enter a mission, run it, get a ranked shortlist. Each
+prospect card shows why the company fits, why the person, why *you* to them,
+which background items the claim rests on, the score broken down by dimension,
+risks, the research evidence, LinkedIn and contact availability. Run cost, Apollo
+credits and the funnel are displayed with the results, and any errors during the
+run are surfaced rather than swallowed.
+
+Top of the measured run — the product question, answered:
+
+```
+81  STRONG  Sibendu Som          Director, AI Applications Initiative @ Argonne National Laboratory
+78  STRONG  Michael Venteicher   Senior Director, Smart Manufacturing @ Cargill
+73  MAYBE   Jonathan Huggins     Process Automation Director @ Dow
+73  MAYBE   Pedro Piovesan       Global Director of Applications Engineering @ TRACTIAN
+72  MAYBE   Anoop Mohan          Chief Product & Technology Officer @ Augury
+70  MAYBE   Nate Oostendorp      Founder and CTO @ Sight Machine
+```
+
+The tail is weaker — a project manager at a small consultancy at #7, and one
+WEAK at 41 — so the honest read is roughly **8–10 genuinely useful prospects out
+of 13**, not 13 of 13.
