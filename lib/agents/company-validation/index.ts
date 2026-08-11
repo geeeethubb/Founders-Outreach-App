@@ -204,6 +204,13 @@ export async function runCompanyValidation(
       domain: input.company.domain,
       goal: input.mission.goal,
       segment: input.segment.name,
+      // Deterministic POST-PROCESSING version. `validate()` normalizes the
+      // model's titles, and a cached AgentResult replays the already-normalized
+      // output — so a fix to lib/scouting/titles.ts would silently not apply to
+      // any company already in the cache. The prompt version cannot cover this
+      // because the prompt did not change. Bump on any change to
+      // resolveTitlesForCompany, normalizeTitlePattern, or ARCHETYPE_TITLES.
+      titles_logic: 2,
     },
   })
 }
