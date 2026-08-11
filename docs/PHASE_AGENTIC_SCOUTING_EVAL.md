@@ -232,9 +232,116 @@ they map cleanly onto the pipeline fixes:
 
 ---
 
-## 7. Iteration log
+## 7. Full baseline (all five profiles, judge v2.0.0)
 
-*(Each entry: hypothesis, change, expected, measured, keep/revert.)*
+| Profile | Precision@20 | BAD | Discovery | Best-person |
+|---|---|---|---|---|
+| Industrial AI startups | 55% | 5% | 88% | 75% |
+| Chemical / manufacturing innovation | 10% | 35% | 97% | 67% |
+| Operations / industrial consulting | 45% | 20% | 89% | 92% |
+| Enterprise AI with industrial relevance | 65% | 0% | 82% | 75% |
+| Technically ambitious startups | 65% | 5% | 92% | 67% |
+| **Average** | **48%** | 13% | **90%** | 75% |
+
+$67.49 · 149 Apollo credits · **$1.41 per GOOD prospect** · **3.1 credits per GOOD prospect**
+
+Two secondary findings from the completed run:
+
+**Rejection accuracy was 40%**, far below the 90% target, and the losses were
+real. The judge on ABB: *"This rejection is clearly wrong and represents exactly
+the costly error the mission warns against."* Grantek, a legitimate systems
+integrator since 1980, was also dropped. The MAYBE-passes gate is not permissive
+enough where it matters.
+
+**Two rejections were penalised unfairly.** The "technically ambitious startups"
+profile carries `geography: 'United States'` as a field, but its goal *text*
+never says so — so the agent honoured a constraint the judge could not see and
+was marked wrong for it. That is a defect in the eval fixture, not the pipeline.
+
+---
+
+## 8. Iteration log
+
+### Iteration 1 — person selection · **REVERTED IN PART**
+
+**Hypothesis.** Precision is capped by *which person inside a right company* gets
+contacted. Three specific defects: geography was never passed to Apollo; target
+titles were chosen from company size alone and defaulted to engineering
+leadership; and People Scout took Apollo's first N candidates rather than the
+best N.
+
+**Change.**
+1. Pass mission geography to Apollo as `person_locations`.
+2. Company Validation prompt 2.1.0 — choose the **function** that owns the
+   mission's work first, then the seniority.
+3. Order candidates by title fit before applying the per-company cap.
+
+**Expected.** Removal of the geography BADs (Thailand, Latam) and the
+product-R&D BADs should lift chemical/manufacturing from 45% toward 60%+.
+
+**Measured** (judge v3.0.0 throughout, baseline re-scored with the same judge):
+
+| Profile | Baseline | Iteration 1 | Δ |
+|---|---|---|---|
+| Chemical / manufacturing innovation | 45% | **40%** | −5 |
+| Industrial AI startups | 70% | **65%** | −5 |
+
+Discovery precision rose to 100% on chemical and BAD rate fell 30% → 25%, but
+precision moved the wrong way on both profiles.
+
+**Diagnosis.** Inspecting the run showed the fallback-title rate had *risen*,
+6 → 9 of 19 companies. The function-first prompt made the model produce more
+descriptive titles, more of them failed normalization, and more companies
+therefore fell back to the generic archetype list — which contained the very
+titles that generate BADs.
+
+**Verdict.** Geography (proven to bite: Dow plant managers 21 → 10 when
+US-scoped) and best-candidate ordering are structurally correct and were
+**kept**. The prompt change alone did not earn its place; it was kept only
+because iteration 2 addresses the mechanism that punished it, and it is re-tested
+there.
+
+---
+
+### Iteration 2 — the title normalizer and its fallback list
+
+**Hypothesis.** The real defect is not *which titles the agent chooses* but what
+the deterministic normalizer does to them, plus what it falls back to.
+
+Corporate titles use two opposite comma conventions:
+
+```
+"Solutions Engineering Manager, Process Industries"   -> qualifier follows
+"Director, Digital Manufacturing"                     -> FUNCTION follows
+```
+
+The normalizer discarded everything after the comma, which is right for the first
+and catastrophic for the second: it yields a bare `"Director"`. Searching a
+90,000-person manufacturer for `"Director"` returns *every* director — which is
+precisely how a food-science innovation director and two product-R&D directors
+reached an industrial-digitalisation list.
+
+And `ARCHETYPE_TITLES.enterprise` — the fallback — contained `"Director of
+Innovation"` and `"Director R&D"`. At a food or CPG manufacturer those mean
+**product and flavour** innovation. They produced three of the six remaining BADs
+(General Mills, Unilever, PepsiCo).
+
+**Change.**
+1. When the head before a separator is a bare rank, rejoin the tail instead of
+   discarding it.
+2. Remove ambiguous titles from the enterprise fallback; every entry must name a
+   function, asserted in tests.
+3. Add a `titles_logic` version to the company-validation cache key.
+
+That third item is not incidental. `validate()` normalizes titles, so a **cached**
+`AgentResult` replays the already-normalized output — iteration 2 would have
+measured iteration 1's titles while appearing to test new ones. The prompt version
+cannot cover it, because the prompt did not change.
+
+**Expected.** Fallback rate falls; the three product-R&D BADs and the bare-"Director"
+noise disappear from chemical/manufacturing.
+
+**Measured.** *(pending)*
 
 ---
 
