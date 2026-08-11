@@ -134,7 +134,12 @@ export async function runAgent<TInput, TOutput>(
   const seenUrls = new Set<string>()
   const toolsCalled: ToolCallTrace[] = []
 
-  const usageBefore = anthropicUsage()
+  // Per-call accumulation, NOT a delta against the global counter. Agents run
+  // concurrently, so overlapping deltas double-count: a smoke run summed $1.33
+  // across agent_runs against a true total of $0.92.
+  let tokensIn = 0
+  let tokensOut = 0
+  let costUsd = 0
   let webSearches = 0
   let steps = 0
 
@@ -163,31 +168,26 @@ export async function runAgent<TInput, TOutput>(
     output: TOutput | null,
     status: AgentResult<TOutput>['status'],
     error: string | null
-  ): AgentResult<TOutput> => {
-    const after = anthropicUsage()
-    return {
-      output,
-      status,
-      error,
-      evidence,
-      trace: {
-        agent_id: params.agentId,
-        prompt_version: params.prompt.version,
-        model,
-        model_role: params.modelRole,
-        provider_id: 'anthropic',
-        tools_called: toolsCalled,
-        web_searches: webSearches,
-        tokens_in: after.inputTokens - usageBefore.inputTokens,
-        tokens_out: after.outputTokens - usageBefore.outputTokens,
-        // Includes this agent's share of web-search charges, since
-        // recordWebSearches folds them into the same running total.
-        cost_usd: after.costUsd - usageBefore.costUsd,
-        latency_ms: Date.now() - started,
-        steps,
-      },
-    }
-  }
+  ): AgentResult<TOutput> => ({
+    output,
+    status,
+    error,
+    evidence,
+    trace: {
+      agent_id: params.agentId,
+      prompt_version: params.prompt.version,
+      model,
+      model_role: params.modelRole,
+      provider_id: 'anthropic',
+      tools_called: toolsCalled,
+      web_searches: webSearches,
+      tokens_in: tokensIn,
+      tokens_out: tokensOut,
+      cost_usd: costUsd,
+      latency_ms: Date.now() - started,
+      steps,
+    },
+  })
 
   while (steps < maxSteps) {
     steps++
@@ -199,6 +199,10 @@ export async function runAgent<TInput, TOutput>(
       maxTokens: params.maxTokens ?? 4000,
       tools,
     })
+
+    tokensIn += res.usage.inputTokens
+    tokensOut += res.usage.outputTokens
+    costUsd += res.usage.costUsd
 
     if (res.error) return finish(null, 'failed', res.error)
 
@@ -212,8 +216,10 @@ export async function runAgent<TInput, TOutput>(
         (b as { name?: string }).name === 'web_search'
     ).length
     if (searchesThisTurn > 0) {
+      const searchCost = searchesThisTurn * ANTHROPIC_WEB_SEARCH_COST_PER_CALL
       webSearches += searchesThisTurn
-      recordWebSearches(searchesThisTurn, searchesThisTurn * ANTHROPIC_WEB_SEARCH_COST_PER_CALL)
+      costUsd += searchCost
+      recordWebSearches(searchesThisTurn, searchCost)
     }
 
     const submit = res.toolUses.find((t) => t.name === SUBMIT)

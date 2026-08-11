@@ -11,6 +11,7 @@
 
 import { apolloPeopleProvider, type PersonStub } from '@/lib/providers/apollo/people'
 import { apolloStats, isCacheOnly } from '@/lib/providers/apollo/client'
+import { normalizeCompanyName } from '@/lib/providers/apollo/normalize'
 import { stubPassesCheapFilter, newFilterStats, recordFilter, type FilterStats } from './filter'
 import { personKey } from './dedupe'
 import { mapWithConcurrency } from './concurrency'
@@ -21,10 +22,17 @@ export interface ScoutTarget {
   domain: string | null
   /** Carried through so downstream steps keep the researched company context. */
   company_ref: string
+  /**
+   * Titles chosen from THIS company's research. A founder is right at a
+   * 12-person startup and wrong at a 90,000-person manufacturer, so a single
+   * global title list cannot serve both.
+   */
+  titles: string[]
 }
 
 export interface PeopleScoutParams {
   targets: ScoutTarget[]
+  /** Fallback only, for targets that carry no titles of their own. */
   titlePatterns: string[]
   maxPerCompany: number
   /** Hard ceiling on enrichment — the only step that spends credits. */
@@ -41,33 +49,80 @@ export interface PeopleScoutResult {
   filterStats: FilterStats
   /** Companies Apollo returned nothing for — surfaced, never hidden. */
   emptyCompanies: string[]
+  /** Companies where no predicted title matched — a title-prediction miss. */
+  titleMisses: string[]
   errors: string[]
+}
+
+/**
+ * Reject rows whose employer is not the company we asked about.
+ *
+ * Only a domain-scoped Apollo query is safe. A name-scoped one matched
+ * "Operon" — a 3-person industrial AI startup — to a 412-person Polish music
+ * publisher of the same name, and every downstream stage would have treated
+ * those people as the real target. Names collide; domains do not.
+ */
+function guardIdentity(stubs: PersonStub[], target: ScoutTarget, errors: string[]): PersonStub[] {
+  if (target.domain) return stubs // domain-scoped: Apollo already guaranteed it
+
+  const want = normalizeCompanyName(target.company_name)
+  if (!want) return stubs
+
+  const kept = stubs.filter((s) => {
+    const got = normalizeCompanyName(s.company_name)
+    return got !== null && (got === want || got.includes(want) || want.includes(got))
+  })
+
+  if (kept.length < stubs.length) {
+    errors.push(
+      `${target.company_name}: dropped ${stubs.length - kept.length} of ${stubs.length} people whose employer name did not match (no domain to scope the search)`
+    )
+  }
+  return kept
 }
 
 export async function scoutPeople(params: PeopleScoutParams): Promise<PeopleScoutResult> {
   const filterStats = newFilterStats()
   const emptyCompanies: string[] = []
+  const titleMisses: string[] = []
   const errors: string[] = []
   const creditsBefore = apolloStats().enrichmentCredits
 
   // ─── Search (cheap) ────────────────────────────────────────────────────────
+  // Two passes per company. The title-filtered pass is what we want; the
+  // unfiltered fallback exists because a company can be real and staffed while
+  // none of the predicted titles happen to exist there — that is a prediction
+  // miss, not an empty company, and losing the company to it is unrecoverable.
   const perCompany = await mapWithConcurrency(
     params.targets,
     params.concurrency ?? 3,
     async (target) => {
-      const res = await apolloPeopleProvider.searchStubs({
-        ...(target.domain ? { company_domains: [target.domain] } : { company_names: [target.company_name] }),
-        title_patterns: params.titlePatterns,
-        per_page: Math.max(10, params.maxPerCompany * 3),
-      })
+      const scope = target.domain
+        ? { company_domains: [target.domain] }
+        : { company_names: [target.company_name] }
+      const titles = target.titles.length ? target.titles : params.titlePatterns
+      const perPage = Math.max(10, params.maxPerCompany * 3)
 
-      if (res.error) {
+      const titled = await apolloPeopleProvider.searchStubs({ ...scope, title_patterns: titles, per_page: perPage })
+      if (titled.error) {
         // One company failing does not stop the run (ARCHITECTURE §9).
-        errors.push(`${target.company_name}: ${res.error.slice(0, 120)}`)
-        return { target, stubs: [] as PersonStub[] }
+        errors.push(`${target.company_name}: ${titled.error.slice(0, 120)}`)
+        return { target, stubs: [] as PersonStub[], usedFallbackSearch: false }
       }
-      if (res.items.length === 0) emptyCompanies.push(target.company_name)
-      return { target, stubs: res.items }
+
+      if (titled.items.length > 0) {
+        return { target, stubs: guardIdentity(titled.items, target, errors), usedFallbackSearch: false }
+      }
+
+      const untitled = await apolloPeopleProvider.searchStubs({ ...scope, per_page: perPage })
+      if (untitled.error) {
+        errors.push(`${target.company_name} (fallback): ${untitled.error.slice(0, 120)}`)
+        return { target, stubs: [] as PersonStub[], usedFallbackSearch: true }
+      }
+      if (untitled.items.length === 0) emptyCompanies.push(target.company_name)
+      titleMisses.push(target.company_name)
+
+      return { target, stubs: guardIdentity(untitled.items, target, errors), usedFallbackSearch: true }
     }
   )
 
@@ -120,6 +175,7 @@ export async function scoutPeople(params: PeopleScoutParams): Promise<PeopleScou
     creditsUsed: apolloStats().enrichmentCredits - creditsBefore,
     filterStats,
     emptyCompanies,
+    titleMisses,
     errors: isCacheOnly() ? [...errors, 'APOLLO_CACHE_ONLY is on: no live Apollo calls were made'] : errors,
   }
 }

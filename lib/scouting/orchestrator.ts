@@ -30,6 +30,7 @@ import { scoutPeople, type ScoutTarget } from './people-scout'
 import { persistCompanies, persistContacts } from './persist'
 import { mapWithConcurrency } from './concurrency'
 import { companyKey } from './dedupe'
+import { normalizeTitlePatterns } from './titles'
 import { anthropicUsage, resetAnthropicUsage } from '@/lib/providers/anthropic/client'
 import { apolloStats, resetApolloStats } from '@/lib/providers/apollo/client'
 import { normalizeDomain } from '@/lib/providers/apollo/normalize'
@@ -312,11 +313,15 @@ export async function runScouting(params: ScoutRunParams): Promise<ScoutRunResul
   }
 
   // ─── 5. People Scout (deterministic Apollo) ────────────────────────────────
-  const titlePatterns = Array.from(new Set(strategy.segments.flatMap((s) => s.title_patterns))).slice(0, 20)
+  // Segment-level titles are the fallback; per-company researched titles win.
+  const titlePatterns = normalizeTitlePatterns(strategy.segments.flatMap((s) => s.title_patterns), 20)
   const targets: ScoutTarget[] = accepted.map((a) => ({
     company_name: a.company.name,
-    domain: normalizeDomain(a.company.domain),
+    // Research-confirmed domain beats the discovery guess: it is what stops a
+    // name-scoped Apollo query resolving to a different company entirely.
+    domain: a.validation.confirmed_domain ?? normalizeDomain(a.company.domain),
     company_ref: a.company.name,
+    titles: a.validation.target_titles,
   }))
 
   const scouted = await scoutPeople({

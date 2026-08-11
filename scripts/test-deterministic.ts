@@ -316,6 +316,58 @@ check('relevant director kept', filterPerson(person(), 500).keep)
     allocateBudget([[stub('z0'), stub('z1')]], 500).length === 2)
 }
 
+// ─── Title normalization ─────────────────────────────────────────────────────
+// Every case here is a real string a model produced that returned 0 Apollo rows.
+{
+  const { normalizeTitlePattern, normalizeTitlePatterns, resolveTitlesForCompany, archetypeFromSize } =
+    require('../lib/scouting/titles') as typeof import('../lib/scouting/titles')
+
+  const eq = (a: string[], b: string[]) => JSON.stringify(a) === JSON.stringify(b)
+
+  check('strips trailing scope qualifier after a dash',
+    eq(normalizeTitlePattern('Head of Product - Manufacturing/Process Industries'), ['Head of Product']),
+    JSON.stringify(normalizeTitlePattern('Head of Product - Manufacturing/Process Industries')))
+
+  check('splits slash alternatives and drops parentheticals',
+    eq(normalizeTitlePattern('Founder/CTO (early-stage industrial AI startup)'), ['Founder', 'CTO']),
+    JSON.stringify(normalizeTitlePattern('Founder/CTO (early-stage industrial AI startup)')))
+
+  check('strips comma qualifier',
+    eq(normalizeTitlePattern('Solutions Engineering Manager, Process Industries'), ['Solutions Engineering Manager']),
+    JSON.stringify(normalizeTitlePattern('Solutions Engineering Manager, Process Industries')))
+
+  check('leaves a real title untouched',
+    eq(normalizeTitlePattern('Director of Applied AI'), ['Director of Applied AI']))
+
+  check('drops prose that is not a title',
+    normalizeTitlePattern('someone who owns process optimization end to end').length === 0,
+    JSON.stringify(normalizeTitlePattern('someone who owns process optimization end to end')))
+
+  check('dedupes case-insensitively',
+    eq(normalizeTitlePatterns(['CTO', 'cto', 'Founder/CTO']), ['CTO', 'Founder']),
+    JSON.stringify(normalizeTitlePatterns(['CTO', 'cto', 'Founder/CTO'])))
+
+  check('respects the limit', normalizeTitlePatterns(['A Lead', 'B Lead', 'C Lead'], 2).length === 2)
+
+  // Archetype banding is what encodes "appropriate seniority is not maximum".
+  check('tiny company is a startup', archetypeFromSize(12) === 'startup')
+  check('huge company is an enterprise', archetypeFromSize(90000) === 'enterprise')
+  check('unknown size is not guessed', archetypeFromSize(null) === 'other')
+
+  const usable = resolveTitlesForCompany(['Co-Founder', 'CTO', 'Head of Engineering'], 'startup')
+  check('good researched titles are used as-is', !usable.usedFallback && usable.titles.length === 3)
+
+  const unusable = resolveTitlesForCompany(
+    ['Head of Product - Manufacturing/Process Industries'], 'enterprise')
+  check('unusable titles fall back to the archetype',
+    unusable.usedFallback && unusable.titles.length >= 3,
+    JSON.stringify(unusable))
+  check('fallback keeps the salvageable researched title',
+    unusable.titles[0] === 'Head of Product', JSON.stringify(unusable.titles))
+  check('never returns an empty title list',
+    resolveTitlesForCompany([], 'consultancy').titles.length > 0)
+}
+
 // ─── Report ──────────────────────────────────────────────────────────────────
 
 process.stdout.write(`\n${passed} passed, ${failed} failed\n`)
