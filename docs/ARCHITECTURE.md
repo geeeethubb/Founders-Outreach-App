@@ -579,6 +579,63 @@ the diagnosis histogram is the fastest read on where a run's budget went.
 
 ---
 
+### ADR-021 ★ — Intelligence tiers, and a triage gate before expensive research
+
+**Problem.** A scouting run cost ~$18 and produced ~20 usable prospects. The
+breakdown showed almost all of it in two places:
+
+| Stage | Cost | Why |
+|---|---|---|
+| person research | ~$12 | ~60 people × ~$0.20, most later discarded |
+| company validation | ~$4 | ~20 companies × ~$0.20 |
+
+Both ran on the strongest model, and person research ran on **every enriched
+candidate** — including people the pipeline dropped moments later. The system was
+paying premium prices to research prospects it had already decided against.
+
+**Decision — two changes.**
+
+**1. Model routing by tier.** Roles describe *what a call is for*; tiers describe
+*how much thinking it is worth paying for*, and cost lives on the second axis.
+
+| Tier | Model | Used by |
+|---|---|---|
+| `cheap` | Haiku | company validation, person triage, ranking |
+| `standard` | Sonnet | mission strategy, market discovery, person research |
+| `premium` | Opus | reserved — nothing defaults to it |
+
+Every agent declares a minimum tier and **the default is `cheap`**. Tier→model is
+env-overridable, so swapping models is configuration, not an agent change. Spend
+is recorded per tier and escalations are logged with a reason — an escalation
+path nobody can see becomes the default within a month.
+
+The assignments follow the measured work, not intuition. Validation and ranking
+are *classification against evidence already gathered*; strategy and discovery
+*set direction and judge whether a search space is productive*, which is the
+genuinely hard reasoning in the pipeline.
+
+**2. A triage gate before deep research.** A new `cheap` agent judges one
+company's Apollo metadata against that company's already-researched profile and
+names the two or three people worth researching. It sees the whole slate at once
+— relative judgment across real alternatives is far easier than absolute judgment
+one person at a time — and it needs no web search to do it.
+
+**Measured on a 1-segment run:** triage was **1% of run cost** while cutting 12
+enriched candidates to 5 researched. Person research fell from ~65% of spend to
+49%, and total cost per prospect landed at **$0.46**.
+
+**Why this does not cost quality.** Triage decides *who to research*, never who
+to contact. Ranking still judges full evidence, and the deterministic filters
+(geography, seniority, trainee titles, excluded functions) still run first at
+zero model cost. If triage fails, the company falls back to the deterministic
+title ordering People Scout already applied — the gate degrades, it does not drop.
+
+**The generalizable rule:** spend the expensive model where the decision is hard
+and *changes what happens next*. Everything downstream of a filter should be
+cheaper than the filter's own error cost.
+
+---
+
 ## 4. Providers
 
 ```ts

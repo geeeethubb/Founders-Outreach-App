@@ -14,8 +14,8 @@
 //      FACT must cite (ADR-006).
 
 import type Anthropic from '@anthropic-ai/sdk'
-import { anthropicComplete, recordWebSearches } from '@/lib/providers/anthropic/client'
-import { modelForTier, ANTHROPIC_WEB_SEARCH_COST_PER_CALL } from '@/lib/ai/models'
+import { anthropicComplete, recordWebSearches, recordEscalation } from '@/lib/providers/anthropic/client'
+import { modelForTier, escalate, ANTHROPIC_WEB_SEARCH_COST_PER_CALL } from '@/lib/ai/models'
 import { cached, cacheKey } from '@/lib/providers/cache'
 import type { ModelRole, ModelTier } from '@/lib/ai/models'
 import type {
@@ -173,7 +173,10 @@ async function runAgentLive<TInput, TOutput>(
   const started = Date.now()
   const { system, user } = params.prompt.build(params.input)
   const tier: ModelTier = params.tier ?? 'cheap'
-  const model = modelForTier(tier)
+  // Mutable: a schema failure escalates one tier rather than losing the work.
+  let activeTier: ModelTier = tier
+  let activeModel = modelForTier(tier)
+  let escalated = false
   const maxSteps = params.maxSteps ?? params.ctx.budget.maxAgentSteps ?? 8
   const toolsById = new Map<string, AgentTool<never>>((params.tools ?? []).map((t) => [t.name, t]))
 
@@ -223,7 +226,9 @@ async function runAgentLive<TInput, TOutput>(
     trace: {
       agent_id: params.agentId,
       prompt_version: params.prompt.version,
-      model,
+      // The model that actually produced the result, which is not the starting
+      // model when an escalation fired.
+      model: activeModel,
       model_role: params.modelRole,
       provider_id: 'anthropic',
       tools_called: toolsCalled,
@@ -241,7 +246,7 @@ async function runAgentLive<TInput, TOutput>(
 
     const res = await anthropicComplete({
       role: params.modelRole,
-      tier,
+      tier: activeTier,
       system,
       messages,
       maxTokens: params.maxTokens ?? 4000,
@@ -290,6 +295,31 @@ async function runAgentLive<TInput, TOutput>(
       // after it, including the rejected submit_result and any client tools the
       // model called alongside it. Replying with a bare text message instead is
       // a hard 400 from the API, which is how this path first failed.
+      // ESCALATE rather than lose the work. A cheap model that cannot satisfy
+      // the schema after one correction has told us this instance is beyond it,
+      // and by now the run has already paid for the research this output
+      // describes — a prospect dropped here wastes ~$0.15 of person research and
+      // a shortlist slot. Escalation fires only on failure, so it costs nothing
+      // on the normal path.
+      if (!escalated && tier !== 'premium') {
+        const next = escalate(tier)
+        escalated = true
+        recordEscalation(params.agentId, tier, next, 'schema validation failed after correction')
+        activeTier = next
+        activeModel = modelForTier(next)
+        messages.push({ role: 'assistant', content: res.content })
+        messages.push({
+          role: 'user',
+          content: res.toolUses.map<Anthropic.ToolResultBlockParam>((t) => ({
+            type: 'tool_result',
+            tool_use_id: t.id,
+            is_error: true,
+            content: `Rejected: did not satisfy the schema. Re-read the tool's input_schema and call ${SUBMIT} again with the same findings, corrected.`,
+          })),
+        })
+        continue
+      }
+
       if (steps < maxSteps) {
         messages.push({ role: 'assistant', content: res.content })
         messages.push({
