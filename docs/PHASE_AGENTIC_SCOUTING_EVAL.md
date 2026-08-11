@@ -396,7 +396,76 @@ constraint is not selectivity — it is that this segment's *supply* of people w
 scope can be verified is genuinely thin, which is a finding about the market
 rather than about the code.
 
-**Measured.** *(pending)*
+**Measured.**
+
+| Chemical / manufacturing | Baseline | Iter 2 | **Iter 3** |
+|---|---|---|---|
+| Precision@20 | 45% | 40% | **55%** |
+| BAD rate | 30% | 15% | 30% |
+| Discovery precision | 97% | 79% | **69%** |
+| Qualified pool for 20 slots | 28 | 28 | **42** |
+
+**The hypothesis held — and the change also broke something.** Precision rose 15
+points, confirming the funnel was the binding constraint. But the pool was bought
+by asking discovery for **10 companies per segment instead of 7**, which pushed it
+past the good candidates into weaker ones: company precision fell 79% → 69%, and
+the BAD rate doubled back to 30%.
+
+**Verdict: PARTIAL.** The selectivity finding is real and kept. The method of
+obtaining it is wrong and was replaced in iteration 4.
+
+---
+
+### Iteration 4 — deeper, not wider · **KEPT**
+
+**Hypothesis.** The two effects in iteration 3 are separable. Pool size and
+company quality only traded against each other because the extra candidates were
+bought by *finding more companies*. Mining **already-validated** companies more
+deeply costs no company quality at all.
+
+**Change.** Keep `companiesPerSegment` at 7. Raise `maxPeoplePerCompany` from 3
+to 6, and the researched pool to 60.
+
+**Measured.**
+
+| Chemical / manufacturing | Baseline | Iter 2 | Iter 3 | **Iter 4** |
+|---|---|---|---|---|
+| **Precision@20** | 45% | 40% | 55% | **80%** |
+| **BAD rate** | 30% | 15% | 30% | **5%** |
+| GOOD split (hi / role-based) | 2 / 7 | 3 / 5 | 5 / 6 | **6 / 10** |
+| Qualified pool for 20 slots | 28 | 28 | 42 | **52** |
+| Selection ratio published | 71% | 71% | 48% | **38%** |
+| Cost | $12.55 | $9.47 | $11.23 | **$7.19** |
+| Apollo credits | 34 | 26 | 29 | **23** |
+
+**16 GOOD / 3 MAYBE / 1 BAD.** The profile that began at 10% under the original
+judge, and 45% under the corrected one, now passes every primary threshold — and
+does so **more cheaply than the baseline it replaced**, because credits are no
+longer spent on people who are dropped later.
+
+**Verdict: KEEP**, adopted as the default configuration.
+
+### What actually mattered
+
+The lever was never a smarter agent. Ranked by measured contribution on the worst
+profile:
+
+1. **Selectivity (+25 points).** Publishing 20 of 28 survivors is not selection;
+   Precision@20 was measuring the funnel. Going from a 71% to a 38% publish ratio
+   was worth more than every prompt change combined.
+2. **The judge recalibration (+35 points, measurement only).** Not an
+   improvement to the system — a correction to the instrument. Reported
+   separately for that reason.
+3. **The title normalizer (BAD 30% → 15%).** A deterministic string bug, not a
+   model failure.
+4. **Geography (BAD contribution).** One missing API parameter.
+5. **Prompt changes: no measurable effect.** The function-first prompt (2.1.0)
+   did not move precision on its own and briefly made things worse by raising the
+   fallback rate.
+
+Four of the five levers are deterministic code. That is the phase's most
+transferable result: when an agentic pipeline underperforms, the prompt is rarely
+the first place to look.
 
 ---
 
