@@ -469,7 +469,7 @@ the first place to look.
 
 ---
 
-## 9. Final validation
+## 9. Validation — run `final3` (before archetype-holding)
 
 Run tag `final3`, judge v3.0.0 (batched at 10), adopted configuration: 7
 companies per segment, 6 people per company, 60 researched, 20 published.
@@ -715,3 +715,29 @@ Terry Chung        — Senior Director, Process Engineering & Technology @ Pepsi
 That is the output of a system, not of a database query, and it is the strongest
 evidence that the architecture is right even though two thresholds are not yet
 met.
+
+---
+
+## 12. Status at hand-off
+
+Iteration 6 (archetype-holding) landed after the `final3` suite was measured, so
+the table in §9 predates the single largest fix. Re-validation (`final4`) is in
+progress. Measured so far under the current code:
+
+| Profile | §9 (final3) | With archetype-holding |
+|---|---|---|
+| Industrial AI startups | 70% | **75%** |
+| Enterprise AI with industrial relevance | 55–60% | **80%** |
+| Chemical / manufacturing innovation | 75% | *re-measuring* |
+| Operations / industrial consulting | 65% | *re-measuring* |
+| Technically ambitious startups | 75% | *re-measuring* |
+
+Both re-measured profiles improved, and neither of the two unchanged profiles has
+a reason to regress — but that is a prediction, not a measurement, and the
+remaining three are what decide the milestone. On the §9 figures with the two
+new numbers substituted the average is **74%**, against a 75% target: close
+enough that the outcome turns on the three profiles still running.
+
+**Do not report the milestone as met until `final4` completes.** The whole point
+of the eval discipline in this phase was that plausible-sounding expectations
+were wrong three times out of six.
