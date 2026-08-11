@@ -132,7 +132,21 @@ async function runProfile(profile: EvalProfile, userId: string): Promise<Profile
 
   const judged = await judgeProspects(profile.goal, backgroundSummary, judgeInputs)
   const verdictById = new Map(judged.results.map((j) => [j.candidate_id, j]))
-  const verdicts = top.map((p) => verdictById.get(p.candidate_key)?.verdict ?? 'BAD')
+
+  // An unjudged prospect is UNMEASURED, not BAD. Defaulting missing verdicts to
+  // BAD once scored a profile 0% on a pipeline run identical to one that scored
+  // 80%, because the judge itself had failed. A measurement failure must never
+  // be reportable as a quality result.
+  const unjudged = top.filter((p) => !verdictById.has(p.candidate_key))
+  if (unjudged.length > 0) {
+    throw new Error(
+      `JUDGE FAILURE on ${profile.id}: ${unjudged.length}/${top.length} prospects received no verdict ` +
+        `(${judged.error ?? 'no error reported'}). Refusing to score this profile — a failed judge is ` +
+        `not a 0% result.`
+    )
+  }
+
+  const verdicts = top.map((p) => verdictById.get(p.candidate_key)!.verdict)
   const precision = computePrecision(verdicts)
 
   // ─── Market discovery precision ────────────────────────────────────────────

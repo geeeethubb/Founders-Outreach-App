@@ -92,12 +92,45 @@ const VERDICT_RUBRIC = `  GOOD_HIGH_EVIDENCE   You would send this person a thou
  * spread rather than rating each candidate in isolation, where everything drifts
  * toward MAYBE.
  */
+/**
+ * Judge every prospect, in batches.
+ *
+ * Batching is not only a token-budget concern. A single 20-candidate call is one
+ * all-or-nothing tool call: it once exceeded its output budget, returned nothing,
+ * and the harness scored the profile 0% with every prospect defaulting to BAD —
+ * a pipeline run identical to one that had scored 80%. Smaller batches fail
+ * smaller, and the caller is told exactly how many verdicts are missing.
+ *
+ * Batches stay large enough (10) that the model still calibrates across a spread
+ * rather than rating candidates in isolation, where everything drifts to MAYBE.
+ */
 export async function judgeProspects(
   missionGoal: string,
   backgroundSummary: string,
   prospects: JudgeProspectInput[]
 ): Promise<{ results: ProspectJudgement[]; costUsd: number; error?: string }> {
   if (prospects.length === 0) return { results: [], costUsd: 0 }
+
+  const BATCH = 10
+  if (prospects.length > BATCH) {
+    const results: ProspectJudgement[] = []
+    const errors: string[] = []
+    let costUsd = 0
+    for (let i = 0; i < prospects.length; i += BATCH) {
+      const slice = prospects.slice(i, i + BATCH)
+      const r = await judgeProspects(missionGoal, backgroundSummary, slice)
+      results.push(...r.results)
+      costUsd += r.costUsd
+      if (r.error) errors.push(`batch ${i / BATCH + 1}: ${r.error}`)
+    }
+    return {
+      results,
+      costUsd,
+      ...(results.length < prospects.length
+        ? { error: `only ${results.length}/${prospects.length} prospects judged — ${errors.join('; ') || 'unknown'}` }
+        : {}),
+    }
+  }
 
   const system = `You are an experienced career advisor reviewing a list of people that a research assistant
 assembled for a student's outreach campaign. Your job is to say, bluntly, which of these you would
