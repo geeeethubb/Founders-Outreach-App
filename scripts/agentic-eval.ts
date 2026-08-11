@@ -22,6 +22,7 @@ import {
   judgeProspects,
   judgeCompanies,
   judgeBestPerson,
+  isGood,
   type JudgeVerdict,
 } from '../evals/agentic/judge'
 import {
@@ -348,7 +349,7 @@ async function main() {
     const ok = r.precision.precision >= THRESHOLDS.minProfilePrecision
     console.log(
       `  ${ok ? 'PASS' : 'FAIL'}  ${r.profileName.padEnd(42)} ${pct(r.precision.precision).padStart(5)}  ` +
-        `(${r.precision.good}G/${r.precision.maybe}M/${r.precision.bad}B of ${r.precision.n})`
+        `(${r.precision.good}G [${r.precision.goodHighEvidence}hi/${r.precision.goodRoleBased}role] /${r.precision.maybe}M/${r.precision.bad}B of ${r.precision.n})`
     )
   }
 

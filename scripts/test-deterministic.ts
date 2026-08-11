@@ -415,8 +415,13 @@ check('relevant director kept', filterPerson(person(), 500).keep)
 {
   const m = require('../evals/agentic/metrics') as typeof import('../evals/agentic/metrics')
 
-  const p = m.computePrecision(['GOOD', 'GOOD', 'MAYBE', 'BAD'])
-  check('precision counts GOOD only', p.precision === 0.5, String(p.precision))
+  const p = m.computePrecision(['GOOD_HIGH_EVIDENCE', 'GOOD_ROLE_BASED', 'MAYBE', 'BAD'])
+  check('both GOOD tiers count toward precision', p.precision === 0.5, String(p.precision))
+  check('GOOD tiers are reported separately',
+    p.goodHighEvidence === 1 && p.goodRoleBased === 1, JSON.stringify(p))
+  // The measurement-bug fix: a strong target with a quiet web presence is GOOD.
+  check('role-based GOOD is not penalised',
+    m.computePrecision(['GOOD_ROLE_BASED', 'GOOD_ROLE_BASED']).precision === 1)
   check('MAYBE is neither hit nor miss', p.maybe === 1 && p.badRate === 0.25, JSON.stringify(p))
   check('empty verdicts do not divide by zero', m.computePrecision([]).precision === 0)
 

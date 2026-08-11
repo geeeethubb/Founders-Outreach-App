@@ -16,9 +16,44 @@
 
 import { anthropicStructured } from '@/lib/providers/anthropic/client'
 
-export const JUDGE_PROMPT_VERSION = '2.0.0'
+// 3.0.0 — splits GOOD into HIGH_EVIDENCE and ROLE_BASED.
+//
+// v2.0.0 contained a measurement bug: it told the judge "if nothing specific is
+// known about someone, they cannot be GOOD". That conflated *we could not find
+// much about this person* with *this person is a bad target*, and those are
+// different claims. Audit of the chemical/manufacturing profile found 5 of 11
+// MAYBEs where the judge explicitly praised the fit and then downgraded for a
+// thin web presence — "Role template is an excellent functional fit, but there
+// is zero verifiable information about this specific individual."
+//
+// Most directors at large manufacturers have no public footprint. Requiring one
+// measures internet fame, not whether the prospect is worth an email.
+//
+// The standard for RELEVANCE is unchanged. All 7 BADs in that same audit were
+// genuine — wrong function (CRM/sales, fragrance formulation, S&OP planning) or
+// wrong geography (a plant manager in Thailand on a US-scoped mission) — and
+// every one of them must still be BAD under this version.
+export const JUDGE_PROMPT_VERSION = '3.0.0'
 
-export type JudgeVerdict = 'GOOD' | 'MAYBE' | 'BAD'
+/**
+ * Two GOOD tiers. Both count as GOOD for Precision@20; the split exists so the
+ * report can show how much of the list rests on role fit alone, which is a real
+ * property of the list worth seeing.
+ */
+export type JudgeVerdict = 'GOOD_HIGH_EVIDENCE' | 'GOOD_ROLE_BASED' | 'MAYBE' | 'BAD'
+
+const VERDICTS = new Set<string>(['GOOD_HIGH_EVIDENCE', 'GOOD_ROLE_BASED', 'MAYBE', 'BAD'])
+
+/**
+ * Companies keep the simple three-way scale. The evidence-sparsity problem is
+ * specific to individuals — a company with no web presence is genuinely
+ * suspicious, whereas a director with none is merely ordinary.
+ */
+export type SimpleVerdict = 'GOOD' | 'MAYBE' | 'BAD'
+
+export function isGood(v: JudgeVerdict): boolean {
+  return v === 'GOOD_HIGH_EVIDENCE' || v === 'GOOD_ROLE_BASED'
+}
 
 export interface ProspectJudgement {
   candidate_id: string
@@ -36,15 +71,21 @@ export interface JudgeProspectInput {
   location: string | null
 }
 
-const VERDICT_RUBRIC = `  GOOD   You would genuinely send this person a thoughtful, personalized email for this mission.
-         Their company is a real fit, their role means they could act on it or refer you, and
-         there is a non-generic reason they specifically would be worth writing to.
+const VERDICT_RUBRIC = `  GOOD_HIGH_EVIDENCE   You would send this person a thoughtful email, AND there is substantial
+                       public confirmation of who they are and what they own — their own writing,
+                       talks, projects, press, or a specific documented initiative.
 
-  MAYBE  Defensible but unconvincing. Right company and wrong person, or right person and thin
-         evidence. You would send it only if the list were short.
+  GOOD_ROLE_BASED      You would still send this person a thoughtful email, but mainly because
+                       the ROLE is right: their function, seniority, company and geography all
+                       match the mission and they could plausibly act on it or refer you. The
+                       public record on them personally is thin.
 
-  BAD    You would not send it. The company does not fit the mission, the person could not act on
-         it, the function is unrelated, or the match rests on a keyword rather than substance.`
+  MAYBE                Plausible, but something MATERIAL is uncertain — not merely unpublicized.
+                       Their function is adjacent rather than on-target, their scope is genuinely
+                       ambiguous, or the fit rests on a partial overlap.
+
+  BAD                  You would not send it. Wrong function, wrong geography, wrong seniority,
+                       the company does not fit the mission, or they clearly could not act on it.`
 
 /**
  * Judge one batch of prospects. Batched so the model can calibrate across a
@@ -66,21 +107,41 @@ ${VERDICT_RUBRIC}
 
 CALIBRATION
 
-Be demanding. This list is supposed to read as though a careful human researcher spent hours on it.
-A person who is merely "at a plausible company with a plausible title" is MAYBE, not GOOD. GOOD
-requires that you can articulate why THIS person, specifically, is worth the student's time.
+Be demanding about RELEVANCE. This list is supposed to read as though a careful human researcher
+spent hours on it.
 
-Two errors to avoid in yourself:
+THE ONE THING NOT TO PENALIZE: a thin public record.
+
+Most directors and senior managers at large manufacturers have almost no public web presence. That
+is normal and says nothing about whether they are the right person to contact. Do not treat
+"nothing specific is known about this individual" as a reason to downgrade. If their function,
+seniority, company and geography all fit the mission and they could plausibly act on it, that is
+GOOD_ROLE_BASED — a real target, correctly identified, about whom the internet is simply quiet.
+
+Ask yourself the operative question: *would the student be right to spend an hour writing to this
+person?* If yes, it is one of the two GOOD tiers, and which tier depends only on how much public
+confirmation exists.
+
+MAYBE is for MATERIAL uncertainty, not for missing publicity. Use it when the function is adjacent
+rather than on-target, when the scope is genuinely ambiguous, or when the fit rests on a partial
+overlap that may not hold.
+
+Four errors to avoid in yourself:
 
   1. Do not reward seniority for its own sake. An executive vice-president at a 100,000-person
      company who would never read a cold email from an undergraduate is not a GOOD target. A
      director who owns the exact relevant function is.
   2. Do not reward keyword overlap. "AI" appearing in both the company description and the
      student's background is not a reason. A real overlap in the actual work is.
+  3. Do not reward a famous company with the wrong person inside it. A right-sounding employer
+     does not redeem a commercial, sales, IT, HR, or unrelated-R&D function.
+  4. Do not confuse an unpublicized person with an unsuitable one.
 
-You are judging fit for the mission, not the student's overall quality. Judge each person on the
-evidence shown. Thin evidence is itself informative: if nothing specific is known about someone,
-they cannot be GOOD.`
+Geography, function, seniority and decision influence remain hard requirements. A plant manager on
+the wrong continent, a CRM/sales owner, or a product-formulation scientist is BAD for a mission
+about industrial digital transformation — regardless of how impressive the company is.
+
+You are judging fit for the mission, not the student's overall quality.`
 
     const list = prospects
       .map(
@@ -122,7 +183,7 @@ Give a verdict for every candidate, using their id. One or two sentences of reas
             type: 'object',
             properties: {
               candidate_id: { type: 'string' },
-              verdict: { type: 'string', enum: ['GOOD', 'MAYBE', 'BAD'] },
+              verdict: { type: 'string', enum: ['GOOD_HIGH_EVIDENCE', 'GOOD_ROLE_BASED', 'MAYBE', 'BAD'] },
               reasoning: { type: 'string' },
             },
             required: ['candidate_id', 'verdict', 'reasoning'],
@@ -141,7 +202,7 @@ Give a verdict for every candidate, using their id. One or two sentences of reas
         const id = String(j.candidate_id ?? '')
         const verdict = String(j.verdict ?? '').toUpperCase()
         if (!valid.has(id)) continue
-        if (verdict !== 'GOOD' && verdict !== 'MAYBE' && verdict !== 'BAD') continue
+        if (!VERDICTS.has(verdict)) continue
         out.push({ candidate_id: id, verdict: verdict as JudgeVerdict, reasoning: String(j.reasoning ?? '') })
       }
       // A judge that skipped candidates would silently shrink the denominator
@@ -168,7 +229,7 @@ Give a verdict for every candidate, using their id. One or two sentences of reas
 
 export interface CompanyJudgement {
   company: string
-  verdict: JudgeVerdict
+  verdict: SimpleVerdict
   reasoning: string
 }
 
@@ -259,7 +320,7 @@ target for an AI-in-industry mission. Judge the rejection, not the company.`
         if (verdict !== 'GOOD' && verdict !== 'MAYBE' && verdict !== 'BAD') continue
         out.push({
           company: String(j.company ?? ''),
-          verdict: verdict as JudgeVerdict,
+          verdict: verdict as SimpleVerdict,
           reasoning: String(j.reasoning ?? ''),
         })
       }

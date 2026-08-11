@@ -3,7 +3,7 @@
 // The judge supplies verdicts; every number below is arithmetic over those
 // verdicts. Same split as the scorer: the model judges, the code computes.
 
-import type { JudgeVerdict } from './judge'
+import type { JudgeVerdict, SimpleVerdict } from './judge'
 import type { DiscoveryRoundHistory } from '@/lib/agents/market-discovery'
 
 export interface Thresholds {
@@ -29,7 +29,10 @@ export const THRESHOLDS: Thresholds = {
 
 export interface PrecisionResult {
   n: number
+  /** Both GOOD tiers combined — the Precision@20 numerator. */
   good: number
+  goodHighEvidence: number
+  goodRoleBased: number
   maybe: number
   bad: number
   /** GOOD / n. MAYBE counts as neither a hit nor a miss. */
@@ -39,12 +42,19 @@ export interface PrecisionResult {
 
 export function computePrecision(verdicts: JudgeVerdict[]): PrecisionResult {
   const n = verdicts.length
-  const good = verdicts.filter((v) => v === 'GOOD').length
+  // Both GOOD tiers count as GOOD. The split is reported separately so the list
+  // can be read for how much of it rests on role fit alone, but a strong target
+  // whom the internet happens to be quiet about is still a strong target.
+  const goodHighEvidence = verdicts.filter((v) => v === 'GOOD_HIGH_EVIDENCE').length
+  const goodRoleBased = verdicts.filter((v) => v === 'GOOD_ROLE_BASED').length
+  const good = goodHighEvidence + goodRoleBased
   const maybe = verdicts.filter((v) => v === 'MAYBE').length
   const bad = verdicts.filter((v) => v === 'BAD').length
   return {
     n,
     good,
+    goodHighEvidence,
+    goodRoleBased,
     maybe,
     bad,
     precision: n > 0 ? good / n : 0,
@@ -60,7 +70,7 @@ export function computePrecision(verdicts: JudgeVerdict[]): PrecisionResult {
  * clean win that GOOD implies nor the wasted credit that BAD implies, and
  * scoring it as either would misstate the funnel it feeds.
  */
-export function computeCompanyRate(verdicts: JudgeVerdict[]): { n: number; rate: number; good: number; maybe: number; bad: number } {
+export function computeCompanyRate(verdicts: SimpleVerdict[]): { n: number; rate: number; good: number; maybe: number; bad: number } {
   const n = verdicts.length
   const good = verdicts.filter((v) => v === 'GOOD').length
   const maybe = verdicts.filter((v) => v === 'MAYBE').length

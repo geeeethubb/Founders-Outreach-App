@@ -6,6 +6,64 @@ architecturally and why.
 
 ---
 
+## 2026-08-11 — Phase 7: Agentic scouting on Anthropic
+
+**Type:** implementation + eval · **Behavior change:** additive; V1, Phase 3 and Phase 6 paths intact
+
+Scouting became a set of agents that decide what to do, rather than a fixed pipeline with
+research bolted into it. Anthropic replaced OpenAI for all new research, behind the unchanged
+`WebResearchProvider` interface — the swap was a provider swap, which is what
+[ADR-008](ARCHITECTURE.md#adr-008) existed to buy.
+
+### What was built
+
+- **`lib/agents/runtime/`** — one bounded tool loop serving every agent. The model gets
+  server-side `web_search`, our client tools, and a `submit_result` tool carrying its output
+  schema. Text outside that tool call is ignored, so malformed output is a validation failure at
+  the boundary rather than a parsing problem later. → [ADR-016](ARCHITECTURE.md#adr-016)
+- **Market Discovery as a session** — each round it searches, inspects, diagnoses the search space
+  (`DOMAIN_DRIFT`, `LOW_SUPPLY`, `WRONG_COMPANY_ARCHETYPE`, …) and picks the next action, including
+  killing its own hypothesis. → [ADR-020](ARCHITECTURE.md#adr-020)
+- **Company Validation** — KEEP / MAYBE / REJECT with evidence, plus the real job titles to search
+  for at *that* company. → [ADR-018](ARCHITECTURE.md#adr-018)
+- **Person Research** — KEEP / MAYBE / REJECT / `SEARCH_FOR_DIFFERENT_PERSON`, the one upstream
+  feedback edge. → [ADR-019](ARCHITECTURE.md#adr-019)
+- **Migration 011** — `scouting_runs`, `agent_runs`, `research_facts`, the last with a CHECK
+  constraint making an unsourceable FACT unstorable.
+- **`evals/agentic/`** — five profiles, an independent judge, and metrics for Precision@20, BAD
+  rate, discovery precision, rejection accuracy, search recovery, best-person hit rate, and
+  Apollo/Anthropic efficiency.
+
+### Bugs found by running it, not reading it
+
+- **Apollo returned zero people for every company.** The strategist emitted descriptions where
+  Apollo wants job titles. Fixed structurally with per-company titles plus a deterministic
+  normalizer, not with prompt pleading.
+- **A name-scoped search resolved to a different company** — a 3-person industrial AI startup
+  matched a 412-person Polish music publisher of the same name.
+- **The grounding check was destroying real sourcing.** The evidence pool was built only from text
+  citations, but an agent that answers via a tool call emits none, so every genuine FACT was
+  downgraded. It read as "100% sourced" because numerator and denominator both collapsed to zero.
+  0/9 FACTs kept sources before, 12/12 after. → [ADR-017](ARCHITECTURE.md#adr-017)
+- **`agent_runs` cost exceeded the run cost** ($1.33 vs $0.92) — per-agent cost was a delta against
+  a global counter while agents ran concurrently.
+- **Failed Apollo batches were silent**, making credit exhaustion indistinguishable from "no
+  results"; and **a failed response was cached**, so a `422` replayed from disk long after the
+  account was topped up.
+- **The eval judge was reading the ranking agent's own prose**, which would have made Precision@20
+  measure self-consistency and look excellent doing it.
+
+### What the eval measured
+
+Full results, the iteration log, and the remaining failure modes are in
+[PHASE_AGENTIC_SCOUTING_EVAL.md](PHASE_AGENTIC_SCOUTING_EVAL.md).
+
+The headline finding is that **discovery is not the bottleneck** — company-level precision measured
+88–97% — and essentially all of the loss is in *which person inside a right company* gets
+contacted.
+
+---
+
 ## 2026-08-11 — Phase 6: Grounded research
 
 **Type:** implementation + eval · **Behavior change:** additive; V1 and Phase 3 paths intact
