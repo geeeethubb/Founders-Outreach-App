@@ -15,9 +15,9 @@
 
 import type Anthropic from '@anthropic-ai/sdk'
 import { anthropicComplete, recordWebSearches } from '@/lib/providers/anthropic/client'
-import { anthropicModelFor, ANTHROPIC_WEB_SEARCH_COST_PER_CALL } from '@/lib/ai/models'
+import { modelForTier, ANTHROPIC_WEB_SEARCH_COST_PER_CALL } from '@/lib/ai/models'
 import { cached, cacheKey } from '@/lib/providers/cache'
-import type { ModelRole } from '@/lib/ai/models'
+import type { ModelRole, ModelTier } from '@/lib/ai/models'
 import type {
   AgentResult,
   AgentTool,
@@ -33,6 +33,11 @@ const SUBMIT = 'submit_result'
 export interface RunAgentParams<TInput, TOutput> {
   agentId: string
   modelRole: ModelRole
+  /**
+   * Minimum reasoning tier this agent needs. Defaults to CHEAP.
+   * Escalate only when the extra reasoning changes the decision.
+   */
+  tier?: ModelTier
   prompt: VersionedPrompt<TInput>
   input: TInput
   /** JSON Schema (object body) for the agent's final output. */
@@ -139,7 +144,7 @@ export async function runAgent<TInput, TOutput>(
   const key = cacheKey(`agent_${params.agentId}`, {
     ...params.cacheKeyParts,
     prompt_version: params.prompt.version,
-    model: anthropicModelFor(params.modelRole),
+    model: modelForTier(params.tier ?? 'cheap'),
   })
 
   let wasCached = true
@@ -167,7 +172,8 @@ async function runAgentLive<TInput, TOutput>(
 ): Promise<AgentResult<TOutput>> {
   const started = Date.now()
   const { system, user } = params.prompt.build(params.input)
-  const model = anthropicModelFor(params.modelRole)
+  const tier: ModelTier = params.tier ?? 'cheap'
+  const model = modelForTier(tier)
   const maxSteps = params.maxSteps ?? params.ctx.budget.maxAgentSteps ?? 8
   const toolsById = new Map<string, AgentTool<never>>((params.tools ?? []).map((t) => [t.name, t]))
 
@@ -235,6 +241,7 @@ async function runAgentLive<TInput, TOutput>(
 
     const res = await anthropicComplete({
       role: params.modelRole,
+      tier,
       system,
       messages,
       maxTokens: params.maxTokens ?? 4000,

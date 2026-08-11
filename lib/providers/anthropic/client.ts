@@ -9,7 +9,13 @@
 // provider change, not a rewrite. See docs/ARCHITECTURE.md ADR-016.
 
 import Anthropic from '@anthropic-ai/sdk'
-import { anthropicModelFor, estimateAnthropicCost, type ModelRole } from '@/lib/ai/models'
+import {
+  anthropicModelFor,
+  estimateAnthropicCost,
+  modelForTier,
+  type ModelRole,
+  type ModelTier,
+} from '@/lib/ai/models'
 import { cached, cacheKey } from '../cache'
 
 // ─── Usage accounting ────────────────────────────────────────────────────────
@@ -25,6 +31,9 @@ export interface AnthropicUsage {
   costUsd: number
   errors: number
   byRole: Record<string, number>
+  /** Calls and spend per tier — makes the router auditable after the fact. */
+  byTier: Record<string, { calls: number; costUsd: number }>
+  escalations: { agent: string; from: string; to: string; reason: string }[]
 }
 
 function emptyUsage(): AnthropicUsage {
@@ -39,17 +48,27 @@ function emptyUsage(): AnthropicUsage {
     costUsd: 0,
     errors: 0,
     byRole: {},
+    byTier: {},
+    escalations: [],
   }
 }
 
 let usage = emptyUsage()
 
 export function anthropicUsage(): AnthropicUsage {
-  return { ...usage, byRole: { ...usage.byRole } }
+  return { ...usage, byRole: { ...usage.byRole }, byTier: { ...usage.byTier }, escalations: [...usage.escalations] }
 }
 
 export function resetAnthropicUsage(): void {
   usage = emptyUsage()
+}
+
+/**
+ * Records a tier escalation. Escalation that nobody can see becomes the default
+ * within a month, so every one is logged with its reason.
+ */
+export function recordEscalation(agent: string, from: string, to: string, reason: string): void {
+  usage.escalations.push({ agent, from, to, reason })
 }
 
 /** Recorded by the web-research provider, which is billed per search. */
@@ -114,6 +133,8 @@ export type AnthropicTool = Anthropic.Tool
 
 export interface CompleteParams {
   role: ModelRole
+  /** Overrides role-based model choice. This is the cost lever. */
+  tier?: ModelTier
   system?: string
   messages: AnthropicMessage[]
   maxTokens?: number
@@ -140,7 +161,7 @@ export interface CompleteResult {
  * single failed agent step degrades the run instead of halting it.
  */
 export async function anthropicComplete(params: CompleteParams): Promise<CompleteResult> {
-  const model = anthropicModelFor(params.role)
+  const model = params.tier ? modelForTier(params.tier) : anthropicModelFor(params.role)
   const empty: CompleteResult = {
     text: '',
     model,
@@ -153,8 +174,11 @@ export async function anthropicComplete(params: CompleteParams): Promise<Complet
   if (!anthropicAvailable()) return { ...empty, error: 'ANTHROPIC_API_KEY is not set' }
   if (usage.calls >= callBudget) throw new AnthropicBudgetExceeded(callBudget)
 
+  const tierKey = params.tier ?? 'role:' + params.role
   usage.calls++
   usage.byRole[params.role] = (usage.byRole[params.role] ?? 0) + 1
+  const tierBucket = (usage.byTier[tierKey] ??= { calls: 0, costUsd: 0 })
+  tierBucket.calls++
 
   const maxAttempts = 4
   let lastError = ''
@@ -190,6 +214,7 @@ export async function anthropicComplete(params: CompleteParams): Promise<Complet
       usage.cacheReadTokens += cacheRead
       usage.cacheWriteTokens += cacheWrite
       usage.costUsd += cost
+      tierBucket.costUsd += cost
 
       const text = res.content
         .filter((b): b is Anthropic.TextBlock => b.type === 'text')

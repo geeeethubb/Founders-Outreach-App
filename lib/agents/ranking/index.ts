@@ -136,6 +136,8 @@ export async function runRanking(
 
   return runAgent<RankingInput, RankedProspect>({
     agentId: 'ranking',
+    // Judging supplied evidence against fixed dimensions — no search, no synthesis.
+    tier: 'cheap',
     modelRole: 'reasoning',
     prompt: rankingPrompt,
     input,

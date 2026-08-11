@@ -48,6 +48,52 @@ export function anthropicModelFor(role: ModelRole): string {
   return process.env[ANTHROPIC_ENV_KEYS[role]] || ANTHROPIC_DEFAULTS[role]
 }
 
+// ─── Model routing by tier ───────────────────────────────────────────────────
+//
+// Roles describe WHAT a call is for. Tiers describe HOW MUCH THINKING it is
+// worth paying for, and that is the axis cost lives on.
+//
+// The default is CHEAP. An agent escalates only when the extra reasoning
+// materially changes the decision — and every escalation is recorded, because
+// an escalation path nobody can see becomes the default within a month.
+//
+// Measured motivation: on Sonnet, company validation cost ~$0.20 per company and
+// person research ~$0.20 per person. At ~20 companies and ~60 people that is
+// ~$16 of a ~$18 run. Both are mostly classification against evidence already
+// gathered, which is what the cheap tier is for.
+
+export type ModelTier = 'cheap' | 'standard' | 'premium'
+
+const TIER_DEFAULTS: Record<ModelTier, string> = {
+  cheap: 'claude-haiku-4-5-20251001',
+  standard: 'claude-sonnet-5',
+  premium: 'claude-opus-5',
+}
+
+const TIER_ENV_KEYS: Record<ModelTier, string> = {
+  cheap: 'ANTHROPIC_MODEL_CHEAP',
+  standard: 'ANTHROPIC_MODEL_STANDARD',
+  premium: 'ANTHROPIC_MODEL_PREMIUM',
+}
+
+/**
+ * Resolve a tier to a concrete model id, env-overridable.
+ *
+ * Swapping which Anthropic model backs a tier is a config change here; no agent
+ * logic refers to a model id.
+ */
+export function modelForTier(tier: ModelTier): string {
+  return process.env[TIER_ENV_KEYS[tier]] || TIER_DEFAULTS[tier]
+}
+
+export const TIER_ORDER: ModelTier[] = ['cheap', 'standard', 'premium']
+
+/** One step up, or the same tier if already at the top. */
+export function escalate(tier: ModelTier): ModelTier {
+  const i = TIER_ORDER.indexOf(tier)
+  return TIER_ORDER[Math.min(i + 1, TIER_ORDER.length - 1)]
+}
+
 /**
  * USD per 1M tokens, matched by model-id prefix. Approximate by design — this
  * exists to make runaway usage visible and to compute cost-per-good-prospect,

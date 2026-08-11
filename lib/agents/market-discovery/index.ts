@@ -192,6 +192,8 @@ export async function runMarketDiscoveryRound(
 ): Promise<AgentResult<MarketDiscoveryOutput>> {
   return runAgent<MarketDiscoveryInput, MarketDiscoveryOutput>({
     agentId: 'market_discovery',
+    // Judging whether a search space is productive is the hardest call here.
+    tier: 'standard',
     modelRole: 'reasoning',
     prompt: marketDiscoveryPrompt,
     input,

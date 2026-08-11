@@ -154,6 +154,8 @@ export async function runPersonResearch(
 ): Promise<AgentResult<PersonResearch>> {
   return runAgent<PersonResearchInput, PersonResearch>({
     agentId: 'person_research',
+    // Only runs on the shortlist now, so the better model is affordable here.
+    tier: 'standard',
     modelRole: 'reasoning',
     prompt: personResearchPrompt,
     input,

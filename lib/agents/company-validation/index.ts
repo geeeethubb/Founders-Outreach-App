@@ -189,6 +189,8 @@ export async function runCompanyValidation(
 ): Promise<AgentResult<CompanyValidation>> {
   return runAgent<CompanyValidationInput, CompanyValidation>({
     agentId: 'company_validation',
+    // High volume, and mostly classification against evidence it just gathered.
+    tier: 'cheap',
     modelRole: 'reasoning',
     prompt: companyValidationPrompt,
     input,

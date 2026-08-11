@@ -23,6 +23,7 @@ import {
 import { runCompanyValidation, shouldEnrich, type CompanyValidation } from '@/lib/agents/company-validation'
 import { runPersonResearch, renderPersonResearch, type PersonResearch } from '@/lib/agents/person-research'
 import { runRanking, type RankedProspect } from '@/lib/agents/ranking'
+import { runPersonTriage, type TriageScore } from '@/lib/agents/person-triage'
 import {
   recordAgentRun,
   persistResearchFacts,
@@ -66,6 +67,10 @@ export interface ScoutRunParams {
   maxDiscoveryRounds?: number
   /** Re-scout attempts when person research asks for a different role. */
   maxRescoutRounds?: number
+  /** Hard cap on DEEP person research — the dominant per-run cost. */
+  maxDeepResearch?: number
+  /** How many people per company advance past triage. */
+  researchPerCompany?: number
   concurrency?: number
   /** Log a line per stage. The smoke test wants to watch it work. */
   onProgress?: (stage: string, detail: string) => void
@@ -78,6 +83,7 @@ export interface FunnelCounts {
   companiesRejected: number
   stubsFound: number
   peopleEnriched: number
+  peopleTriaged: number
   peopleResearched: number
   prospectsRanked: number
 }
@@ -151,6 +157,8 @@ export async function runScouting(params: ScoutRunParams): Promise<ScoutRunResul
   const rejections: { company: string; description: string; reason: string }[] = []
   const discoveryHistory: { segment: string; rounds: DiscoveryRoundHistory[]; rejected: boolean }[] = []
   const concurrency = params.concurrency ?? 3
+  const researchPerCompany = params.researchPerCompany ?? 2
+  const triageScores = new Map<string, TriageScore>()
 
   resetAnthropicUsage()
   resetApolloStats()
@@ -167,6 +175,7 @@ export async function runScouting(params: ScoutRunParams): Promise<ScoutRunResul
     companiesRejected: 0,
     stubsFound: 0,
     peopleEnriched: 0,
+    peopleTriaged: 0,
     peopleResearched: 0,
     prospectsRanked: 0,
   }
@@ -437,7 +446,71 @@ export async function runScouting(params: ScoutRunParams): Promise<ScoutRunResul
     return lines.join('\n')
   }
 
-  const researched = await mapWithConcurrency(contactRows, concurrency, async (person) => {
+  // ─── 5b. Triage — the gate that makes deep research affordable ─────────────
+  //
+  // Person research costs ~$0.20 each. Running it on every enriched candidate
+  // was ~$12 of an ~$18 run, and most of it was spent on people the pipeline
+  // then discarded. Triage judges Apollo metadata against the already-researched
+  // company profile on the CHEAP tier, one company at a time, and only the
+  // survivors get researched.
+  const triaged = await mapWithConcurrency(accepted, concurrency, async (a) => {
+    const atCompany = contactRows.filter((p) => p.company_ref === a.company.name)
+    if (atCompany.length === 0) return []
+    // One candidate needs no relative judgment — pay nothing to rank a slate of one.
+    if (atCompany.length === 1) return atCompany
+
+    const run = await runPersonTriage(
+      {
+        company: {
+          name: a.company.name,
+          what_they_do: a.validation.what_they_do,
+          archetype: a.validation.archetype,
+          size_stage: a.validation.size_stage_context,
+          relevance: a.validation.relevance_reasoning,
+        },
+        mission: { goal: params.mission.goal, geography: params.mission.geography },
+        backgroundSummary,
+        candidates: atCompany.map((p) => ({
+          key: p.linkedin_url ?? p.email ?? p.name,
+          name: p.name,
+          title: p.title,
+          seniority: p.seniority,
+          department: p.department,
+          location: p.location,
+          email_status: p.email_status,
+        })),
+        shortlistSize: researchPerCompany,
+      },
+      ctx
+    )
+    await trace(run, { company: a.company.name })
+
+    if (!run.output) {
+      // Triage failing must not silently drop a company's people. Fall back to
+      // the deterministic title ordering People Scout already applied.
+      errors.push(`person_triage(${a.company.name}): ${run.error}`)
+      return atCompany.slice(0, researchPerCompany)
+    }
+
+    const byKey = new Map(atCompany.map((p) => [p.linkedin_url ?? p.email ?? p.name, p]))
+    const picked = run.output.shortlist
+      .map((k) => byKey.get(k))
+      .filter((p): p is (typeof atCompany)[number] => Boolean(p))
+      .slice(0, researchPerCompany)
+
+    for (const s of run.output.scores) triageScores.set(s.key, s)
+    return picked
+  })
+
+  const toResearch = triaged.flat().slice(0, params.maxDeepResearch ?? 15)
+  log(
+    'triage',
+    `${contactRows.length} enriched → ${toResearch.length} advanced to deep research` +
+      ` (${contactRows.length - toResearch.length} judged not worth researching)`
+  )
+
+  // ─── 6. Person Research — shortlist only ───────────────────────────────────
+  const researched = await mapWithConcurrency(toResearch, concurrency, async (person) => {
     const validation = validationByCompany.get(person.company_ref)
     const companyContext = renderCompany(validation, person.company_name ?? 'unknown company')
 
@@ -478,6 +551,7 @@ export async function runScouting(params: ScoutRunParams): Promise<ScoutRunResul
     return { person, research: run.output, companyContext }
   })
 
+  funnel.peopleTriaged = toResearch.length
   funnel.peopleResearched = researched.filter((r) => r.research).length
   log('research', `${funnel.peopleResearched}/${researched.length} person dossiers`)
 

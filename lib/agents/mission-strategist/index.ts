@@ -144,6 +144,8 @@ export async function runMissionStrategist(
 ): Promise<AgentResult<MissionStrategy>> {
   return runAgent<MissionStrategistInput, MissionStrategy>({
     agentId: 'mission_strategist',
+    // Once per run, and it sets the direction for everything downstream.
+    tier: 'standard',
     modelRole: 'reasoning',
     prompt: missionStrategistPrompt,
     input,
