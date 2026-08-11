@@ -452,6 +452,18 @@ until they do:
 **First action when credits are restored:** re-run `npm run eval:phase3 -- 6`.
 Everything else is cached, so it costs ~1,400 enrichment credits and one model pass.
 
+#### One partial signal — do not read too much into it
+
+Iteration 6's first profile completed before the abort and scored
+**50% (10 GOOD / 10 MAYBE / 0 BAD)** against iteration 5's 40% on the same
+profile.
+
+This is **not evidence the changes worked.** The pool was credit-starved to 36
+candidates instead of ~130, so the top 20 was 55% of everything available rather
+than the top 15% — a fundamentally easier selection problem that the metric is
+not comparable across. It is recorded only so the next session knows the number
+exists and does not mistake it for a validated result.
+
 ---
 
 ## 10. Examples — strongest prospects
