@@ -111,6 +111,106 @@ export function archetypeFromSize(employees: number | null | undefined): Company
   return 'enterprise'
 }
 
+// ─── Ranking candidates within a company ─────────────────────────────────────
+
+/** Seniority words, roughly ordered by how much scope they usually imply. */
+const SENIORITY_TIERS: { pattern: RegExp; tier: number }[] = [
+  { pattern: /\b(founder|co-?founder|ceo|cto|chief|president)\b/i, tier: 5 },
+  { pattern: /\b(vp|vice president|svp|evp|partner|principal|managing director)\b/i, tier: 4 },
+  { pattern: /\b(head of|director)\b/i, tier: 3 },
+  { pattern: /\b(manager|lead|supervisor)\b/i, tier: 2 },
+  { pattern: /\b(engineer|scientist|analyst|specialist|associate|consultant)\b/i, tier: 1 },
+]
+
+function seniorityTier(title: string): number {
+  for (const { pattern, tier } of SENIORITY_TIERS) if (pattern.test(title)) return tier
+  return 0
+}
+
+/** The tier that is actually reachable AND empowered at each kind of company. */
+const IDEAL_TIER: Record<CompanyArchetype, number> = {
+  startup: 5,
+  growth: 4,
+  midmarket: 3,
+  enterprise: 3,
+  consultancy: 4,
+  research: 3,
+  other: 3,
+}
+
+function tokens(s: string): string[] {
+  return s.toLowerCase().split(/[^a-z0-9]+/).filter((t) => t.length > 2)
+}
+
+/**
+ * Score how well one real job title matches what we wanted at this company.
+ *
+ * Two signals, both needed:
+ *
+ *   PREFERENCE  Company Validation returns target titles in preference order,
+ *               so an earlier match is worth more than a later one.
+ *   SENIORITY   Distance from the tier that is reachable AND empowered here.
+ *               A founder scores best at a startup and worst at a 90,000-person
+ *               manufacturer, where a director who owns the function wins.
+ *
+ * Exists because Apollo returns matches in an order of its own, and taking the
+ * first N that survive the filter means the person we contact is chosen by
+ * Apollo's sort rather than by fit.
+ */
+export function scoreStubTitle(
+  title: string | null,
+  targetTitles: string[],
+  archetype: CompanyArchetype
+): number {
+  if (!title || !title.trim()) return -1
+
+  const t = title.toLowerCase()
+  let preference = 0
+
+  for (let i = 0; i < targetTitles.length; i++) {
+    const target = targetTitles[i].toLowerCase()
+    // Earlier targets are worth more; the decay keeps later ones meaningful.
+    const weight = 1 / (1 + i * 0.35)
+
+    if (t === target) {
+      preference = Math.max(preference, 12 * weight)
+      continue
+    }
+    if (t.includes(target) || target.includes(t)) {
+      preference = Math.max(preference, 9 * weight)
+      continue
+    }
+    const targetTokens = tokens(target)
+    if (targetTokens.length === 0) continue
+    const titleTokens = new Set(tokens(t))
+    const overlap = targetTokens.filter((tok) => titleTokens.has(tok)).length
+    if (overlap > 0) {
+      preference = Math.max(preference, (6 * weight * overlap) / targetTokens.length)
+    }
+  }
+
+  const gap = Math.abs(seniorityTier(t) - IDEAL_TIER[archetype])
+  const seniorityScore = Math.max(0, 4 - gap * 1.5)
+
+  return preference + seniorityScore
+}
+
+/**
+ * Order a company's candidates best-first. Stable: equal scores keep Apollo's
+ * order, so the function is deterministic and its output diffable across runs.
+ */
+export function rankStubsByTitle<T>(
+  stubs: T[],
+  getTitle: (s: T) => string | null,
+  targetTitles: string[],
+  archetype: CompanyArchetype
+): T[] {
+  return stubs
+    .map((stub, index) => ({ stub, index, score: scoreStubTitle(getTitle(stub), targetTitles, archetype) }))
+    .sort((a, b) => (b.score !== a.score ? b.score - a.score : a.index - b.index))
+    .map((x) => x.stub)
+}
+
 /**
  * The titles People Scout should actually search for a given company.
  * Evidence first, archetype fallback second, never an empty list.

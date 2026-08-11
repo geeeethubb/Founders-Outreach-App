@@ -366,6 +366,47 @@ check('relevant director kept', filterPerson(person(), 500).keep)
     unusable.titles[0] === 'Head of Product', JSON.stringify(unusable.titles))
   check('never returns an empty title list',
     resolveTitlesForCompany([], 'consultancy').titles.length > 0)
+
+  // Ranking candidates within a company. Apollo returns matches in an order of
+  // its own; taking the first N that pass the filter picks by Apollo's sort
+  // rather than by fit.
+  const { scoreStubTitle, rankStubsByTitle } =
+    require('../lib/scouting/titles') as typeof import('../lib/scouting/titles')
+
+  const startupTargets = ['Co-Founder', 'CTO', 'Head of Engineering']
+  check('exact target match beats a partial one',
+    scoreStubTitle('Co-Founder', startupTargets, 'startup') >
+    scoreStubTitle('Engineering Manager', startupTargets, 'startup'))
+
+  check('earlier target titles outrank later ones',
+    scoreStubTitle('Co-Founder', startupTargets, 'startup') >
+    scoreStubTitle('Head of Engineering', startupTargets, 'startup'))
+
+  // The core rule: appropriate seniority is not maximum seniority.
+  const entTargets = ['Director Digital Manufacturing', 'Director Process Technology']
+  check('founder outranks director at a startup',
+    scoreStubTitle('Founder', startupTargets, 'startup') >
+    scoreStubTitle('Director of Operations', startupTargets, 'startup'))
+  check('director outranks CEO at an enterprise',
+    scoreStubTitle('Director Digital Manufacturing', entTargets, 'enterprise') >
+    scoreStubTitle('Chief Executive Officer', entTargets, 'enterprise'),
+    `${scoreStubTitle('Director Digital Manufacturing', entTargets, 'enterprise')} vs ${scoreStubTitle('Chief Executive Officer', entTargets, 'enterprise')}`)
+
+  check('an empty title scores below everything', scoreStubTitle(null, startupTargets, 'startup') === -1)
+
+  const pool = [
+    { t: 'Executive Assistant' },
+    { t: 'Director Digital Manufacturing' },
+    { t: 'Process Engineer' },
+  ]
+  const rankedPool = rankStubsByTitle(pool, (p) => p.t, entTargets, 'enterprise')
+  check('ranking surfaces the intended person first',
+    rankedPool[0].t === 'Director Digital Manufacturing', JSON.stringify(rankedPool.map((p) => p.t)))
+
+  // Stability matters: an unstable sort makes runs undiffable.
+  const tied = [{ t: 'Zeta Manager' }, { t: 'Alpha Manager' }]
+  check('equal scores keep provider order',
+    rankStubsByTitle(tied, (p) => p.t, ['Manager'], 'midmarket')[0].t === 'Zeta Manager')
 }
 
 // ─── Agentic eval metrics ────────────────────────────────────────────────────

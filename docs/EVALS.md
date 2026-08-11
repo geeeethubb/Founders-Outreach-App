@@ -431,7 +431,111 @@ are distinguishable at a glance.
 
 ---
 
-## 10. Offline evals — later, deliberately
+## 10. Phase 7 — agentic scouting evals
+
+The scouting pipeline became a set of decision-making agents, so the eval had to
+grow past "is the final list good?" to "is each agent making good decisions?".
+A list can be mediocre because discovery found the wrong companies, because the
+right company yielded the wrong person, or because ranking mis-ordered a good
+pool — and those need different fixes.
+
+Run with `npm run eval:agentic -- <tag> [profileId ...]`. Results land in
+`.eval-runs/<tag>.json` so runs are comparable.
+
+### The five profiles
+
+| Profile | What it stresses |
+|---|---|
+| Industrial AI startups | small companies where a founder can create a role |
+| Chemical / manufacturing corporate innovation | large operators; appropriate-seniority targeting |
+| Operations / industrial consulting | a segment Phase 6 measured at 20% precision |
+| Enterprise AI with industrial relevance | distinguishing real deployment from a marketing vertical |
+| Technically ambitious startups | differentiation rather than qualification |
+
+A profile is a **mission framing**, not a search. It supplies the goal and
+constraints; the Mission Strategist generates its own hypotheses. Nothing in
+`evals/agentic/profiles.ts` names a company or a person — that would be the
+overfitting the eval exists to detect.
+
+### Primary metric — Precision@20
+
+| Metric | Threshold |
+|---|---|
+| Average Precision@20 | ≥ 75% |
+| Minimum profile Precision@20 | ≥ 65% |
+| BAD rate@20 | ≤ 10% |
+
+`GOOD` means: *I would genuinely send this person a thoughtful, personalized
+email for this mission.* `MAYBE` counts as neither a hit nor a miss.
+
+### Agent-level metrics
+
+| Metric | Question | Threshold |
+|---|---|---|
+| Market Discovery Precision | of companies passed into Apollo, how many were good targets? | ≥ 80% |
+| Company Rejection Accuracy | of companies rejected, how many *should* have been? | ≥ 90% |
+| Search Recovery | when a search space is bad, does the agent recover or correctly abandon it? | ≥ 80% |
+| Best-Person Hit Rate | inside a good company, did we find one of the best available people? | ≥ 70% |
+
+Plus efficiency: Apollo enrichments per GOOD prospect, and Anthropic cost per
+GOOD prospect.
+
+### Judge independence is a structural property, not an intention
+
+The judge:
+
+- runs from a **different prompt with different rubric vocabulary**
+- **never sees** component scores, totals, ranks, or the ranking agent's prose
+- is asked a **different question** — "would you send this?" rather than "score
+  these dimensions"
+- **cannot search the web**, so it evaluates the candidate the pipeline actually
+  produced rather than a better-informed version of them
+
+> The first implementation passed the judge `why_they_fit` — which is the
+> *ranking agent's own justification*. Precision@20 would have measured how
+> consistent the system is with itself, and it would have looked excellent doing
+> it. The judge now receives the person-research dossier and nothing the scorer
+> wrote.
+
+### Search Recovery is measured only where it applies
+
+A segment that was healthy throughout is `not_applicable` and is **excluded from
+the denominator**, so a run of easy segments cannot inflate the rate.
+
+Where a round did diagnose trouble, there are exactly two successes:
+
+- **recovered** — a later round produced companies after the bad diagnosis
+- **correctly_terminated** — the agent killed the hypothesis instead of grinding
+
+and one failure: **kept searching, kept finding nothing**. Abandoning a
+`LOW_SUPPLY` segment scores exactly as highly as rescuing one. An agent that
+cannot give up will always spend its entire budget on its worst segment, because
+refinement always *looks* like progress. See
+[ADR-020](ARCHITECTURE.md#adr-020).
+
+### Best-Person is judged against the real alternatives
+
+The judge sees who was chosen **and every other person Apollo surfaced at that
+company**. "Was this the best person?" is meaningless against an imaginary ideal
+who may not work there. If every alternative was worse, the choice was correct
+even if imperfect.
+
+### Empty denominators are `n/a`, never 0%
+
+A profile that rejected no companies has no rejection accuracy. Averaging a zero
+in dragged the aggregate under threshold and would have sent an iteration
+chasing a failure that did not exist. `averageWhereMeasured` skips them and
+reports how many profiles actually contributed.
+
+### Precision@20 only measures selection if there is selection
+
+The pipeline researches ~32 people per profile to publish 20. Ranking 22 to
+publish 20 is not a curated list — it is everything that survived, and the
+metric would be measuring the funnel rather than the ranking.
+
+---
+
+## 11. Offline evals — later, deliberately
 
 Once ~50 real drafts with outcomes exist, build a fixture set:
 

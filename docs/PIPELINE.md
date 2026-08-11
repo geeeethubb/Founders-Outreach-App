@@ -230,6 +230,50 @@ effect on the consulting profile: 40% of companies rejected pre-enrichment.
 
 ---
 
+### ⚠ Stages 1–5 become agentic (Phase 7)
+
+The stage *sequence* above still holds. What changed is that stages 1–6 are no
+longer single model calls arranged by the orchestrator — they are agents that
+search, judge their own results, and decide what to do next, inside caps the
+code enforces. See [AGENT_RUNTIME.md](AGENT_RUNTIME.md) and
+[ADR-016](ARCHITECTURE.md#adr-016).
+
+```
+MISSION
+  → MISSION STRATEGIST      generates market hypotheses
+  → MARKET DISCOVERY        per hypothesis, a bounded SESSION:
+                              search → inspect → diagnose → choose next action
+                              (accept / refine / narrow / broaden / synonyms /
+                               adjacent / follow company / kill hypothesis)
+  → COMPANY VALIDATION      grounded research → KEEP | MAYBE | REJECT
+                              + the real job titles to search for at THIS company
+  → PEOPLE SCOUT            deterministic Apollo resolution (no judgment left here)
+  → PERSON RESEARCH         KEEP | MAYBE | REJECT | SEARCH_FOR_DIFFERENT_PERSON
+                              └─ re-scout ──> PEOPLE SCOUT (one bounded pass)
+  → RANKING                 component judgments only; code computes the total
+  → PERSISTENCE             companies, contacts, research_facts, agent_runs
+```
+
+**Three things about this diagram matter more than the boxes.**
+
+**Apollo stopped being a discovery tool.** It resolves *people* inside companies
+that web research already validated. Which titles to ask for is decided per
+company from its researched size and archetype — a founder at a 12-person
+startup, a director who owns the function at a 90,000-person manufacturer
+([ADR-018](ARCHITECTURE.md#adr-018)).
+
+**There is exactly one upstream edge.** `SEARCH_FOR_DIFFERENT_PERSON` sends a
+role hypothesis back to People Scout, once, and only when the agent can name a
+searchable job title. Every additional feedback edge multiplies the states a run
+can be in and makes cost unattributable ([ADR-019](ARCHITECTURE.md#adr-019)).
+
+**Rejection is a first-class outcome at three stages.** Discovery may kill its
+own hypothesis, validation may REJECT a company before any credit is spent, and
+research may REJECT a person before ranking sees them. Ranking orders qualified
+prospects; it is not there to rescue bad discovery.
+
+---
+
 ### Stage 4 — People Discovery
 
 | | |
