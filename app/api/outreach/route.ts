@@ -3,6 +3,15 @@ import { createClient } from '@/lib/supabase/server'
 import { listOutreach, MigrationMissingError } from '@/lib/outreach/store'
 import { buildFunnel, type FunnelRow } from '@/lib/outreach/funnel'
 import type { OutreachState } from '@/lib/outreach/states'
+import { isDynamicUsage } from '@/lib/http/dynamic'
+
+// Declared, not inferred. Next tries to statically render a GET handler and
+// discovers it is dynamic by letting `cookies()` throw an internal
+// DynamicServerError. This handler catches everything so a database failure
+// returns JSON rather than a stack trace — which also swallows that signal, and
+// the build then fails with DYNAMIC_SERVER_USAGE. Saying so up front means the
+// static attempt never happens.
+export const dynamic = 'force-dynamic'
 
 /**
  * The review queue and the funnel.
@@ -65,6 +74,10 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(body)
   } catch (error) {
+    // Belt and braces with force-dynamic above: Next signals "this route must
+    // be dynamic" by throwing, and a catch-all must never turn that control
+    // flow into a 500.
+    if (isDynamicUsage(error)) throw error
     if (error instanceof MigrationMissingError) {
       return NextResponse.json({ error: error.message, migrationMissing: true }, { status: 503 })
     }

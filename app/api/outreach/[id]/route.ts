@@ -9,6 +9,11 @@ import {
 } from '@/lib/outreach/store'
 import { checkGrounding, summarizeGrounding } from '@/lib/outreach/grounding'
 import { isOutcome, isOutreachState } from '@/lib/outreach/states'
+import { isDynamicUsage } from '@/lib/http/dynamic'
+
+// This route reads cookies. See lib/http/dynamic.ts for why that has to be
+// declared rather than discovered.
+export const dynamic = 'force-dynamic'
 
 interface PatchBody {
   action: 'approve' | 'skip' | 'unapprove' | 'edit' | 'outcome' | 'state'
@@ -115,6 +120,7 @@ export async function PATCH(
         return NextResponse.json({ error: `Unknown action: ${body.action}` }, { status: 400 })
     }
   } catch (error) {
+    if (isDynamicUsage(error)) throw error
     if (error instanceof MigrationMissingError) {
       return NextResponse.json({ error: error.message, migrationMissing: true }, { status: 503 })
     }
