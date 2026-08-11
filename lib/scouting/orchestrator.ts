@@ -106,6 +106,9 @@ export interface ScoutRunResult {
     apollo: ReturnType<typeof apolloStats>
     costUsd: number
     costPerRankedProspect: number
+    /** Where the money actually went. The first question after any run. */
+    byAgent: Record<string, { calls: number; costUsd: number; webSearches: number }>
+    latencyMs: number
   }
   persistence: {
     migrationMissing: boolean
@@ -159,6 +162,8 @@ export async function runScouting(params: ScoutRunParams): Promise<ScoutRunResul
   const concurrency = params.concurrency ?? 3
   const researchPerCompany = params.researchPerCompany ?? 2
   const triageScores = new Map<string, TriageScore>()
+  const costByAgent: Record<string, { calls: number; costUsd: number; webSearches: number }> = {}
+  const runStartedAt = Date.now()
 
   resetAnthropicUsage()
   resetApolloStats()
@@ -194,6 +199,10 @@ export async function runScouting(params: ScoutRunParams): Promise<ScoutRunResul
   const ctx: ToolContext = { user_id: params.userId, run_id: runId, budget: params.budget }
 
   const trace = async (result: Parameters<typeof recordAgentRun>[2], refs: Record<string, unknown>) => {
+    const a = (costByAgent[result.trace.agent_id] ??= { calls: 0, costUsd: 0, webSearches: 0 })
+    a.calls++
+    a.costUsd += result.trace.cost_usd
+    a.webSearches += result.trace.web_searches
     const rec = await recordAgentRun(params.userId, runId, result, { inputRefs: refs })
     if (rec.migrationMissing) migrationMissing = true
     else if (rec.error) errors.push(`agent_runs: ${rec.error.slice(0, 100)}`)
@@ -220,7 +229,7 @@ export async function runScouting(params: ScoutRunParams): Promise<ScoutRunResul
       strategy: null,
       ranked: [],
       funnel,
-      usage: usageSnapshot(0),
+      usage: usageSnapshot(0, costByAgent, Date.now() - runStartedAt),
       persistence: { migrationMissing, companiesInserted: 0, contactsInserted: 0, agentRunsRecorded, factsInserted, factsRejected },
       rejections,
       enrichedCompanies: [],
@@ -367,7 +376,7 @@ export async function runScouting(params: ScoutRunParams): Promise<ScoutRunResul
       strategy,
       ranked: [],
       funnel,
-      usage: usageSnapshot(0),
+      usage: usageSnapshot(0, costByAgent, Date.now() - runStartedAt),
       persistence: {
         migrationMissing,
         companiesInserted: persistedCompanies.inserted,
@@ -729,7 +738,7 @@ export async function runScouting(params: ScoutRunParams): Promise<ScoutRunResul
   funnel.prospectsRanked = ranked.length
   log('ranking', `${ranked.length} prospects scored`)
 
-  const usage = usageSnapshot(ranked.length)
+  const usage = usageSnapshot(ranked.length, costByAgent, Date.now() - runStartedAt)
 
   if (runId) {
     await updateScoutingRun(runId, {
@@ -766,7 +775,11 @@ export async function runScouting(params: ScoutRunParams): Promise<ScoutRunResul
   }
 }
 
-function usageSnapshot(rankedCount: number): ScoutRunResult['usage'] {
+function usageSnapshot(
+  rankedCount: number,
+  byAgent: Record<string, { calls: number; costUsd: number; webSearches: number }> = {},
+  latencyMs = 0
+): ScoutRunResult['usage'] {
   const anthropic = anthropicUsage()
   const apollo = apolloStats()
   const costUsd = anthropic.costUsd
@@ -775,5 +788,7 @@ function usageSnapshot(rankedCount: number): ScoutRunResult['usage'] {
     apollo,
     costUsd,
     costPerRankedProspect: rankedCount > 0 ? costUsd / rankedCount : 0,
+    byAgent,
+    latencyMs,
   }
 }

@@ -17,7 +17,8 @@
     "smoke:agentic": "tsx scripts/smoke-agentic.ts",
     "probe:anthropic-web": "tsx scripts/probe-anthropic-web.ts",
     "probe:downstream": "tsx scripts/probe-downstream-agents.ts",
-    "eval:agentic": "tsx scripts/agentic-eval.ts"
+    "eval:agentic": "tsx scripts/agentic-eval.ts",
+    "scout": "tsx scripts/scout-mission.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.116.0",
