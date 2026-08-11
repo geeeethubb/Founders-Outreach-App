@@ -108,8 +108,9 @@ function badge(rec: Prospect['recommendation']): string {
 export default function ScoutPage() {
   const [goal, setGoal] = useState(DEFAULT_GOAL)
   const [geography, setGeography] = useState('United States')
-  const [segments, setSegments] = useState(3)
-  const [depth, setDepth] = useState(15)
+  // Defaults match app/api/scout/route.ts, which sizes them to the 300s ceiling.
+  const [segments, setSegments] = useState(2)
+  const [depth, setDepth] = useState(7)
 
   const [running, setRunning] = useState(false)
   const [stage, setStage] = useState(0)
@@ -190,8 +191,9 @@ export default function ScoutPage() {
     setResult(null)
     setStage(0)
 
-    // Rough pacing so the page does not look frozen for ten minutes.
-    const ticker = setInterval(() => setStage((s) => Math.min(s + 1, STAGES.length - 1)), 60_000)
+    // Rough pacing so the page does not look frozen. Seven stages across the
+    // ~4 minutes a capped run takes — narration, not live progress.
+    const ticker = setInterval(() => setStage((s) => Math.min(s + 1, STAGES.length - 1)), 35_000)
 
     try {
       const res = await fetch('/api/scout', {
@@ -244,7 +246,7 @@ export default function ScoutPage() {
             <input
               type="number"
               min={1}
-              max={4}
+              max={3}
               value={segments}
               onChange={(e) => setSegments(Number(e.target.value))}
               disabled={running}
@@ -257,8 +259,8 @@ export default function ScoutPage() {
             </label>
             <input
               type="number"
-              min={5}
-              max={25}
+              min={4}
+              max={10}
               value={depth}
               onChange={(e) => setDepth(Number(e.target.value))}
               disabled={running}
@@ -267,6 +269,13 @@ export default function ScoutPage() {
             <p className="text-xs text-slate-500 mt-1">The main cost driver.</p>
           </div>
         </div>
+
+        <p className="mt-3 text-xs text-slate-500">
+          Runs here are capped at five minutes by the hosting plan, so the ceilings above are
+          lower than the system can actually do. For a deeper sweep — more segments, more
+          research, no time limit — run <code className="text-slate-700">npm run scout</code>{' '}
+          locally.
+        </p>
 
         <button
           onClick={run}
@@ -277,7 +286,8 @@ export default function ScoutPage() {
         </button>
         {running && (
           <p className="text-xs text-slate-500 mt-2">
-            This takes several minutes. Leave the tab open.
+            This takes about four minutes. Leave the tab open — the run is not resumable, and a
+            closed tab still spends the money.
           </p>
         )}
       </div>

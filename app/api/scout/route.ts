@@ -6,7 +6,17 @@ import { RESUME_ITEMS } from '@/evals/phase3/user-profile'
 // A scouting run is many sequential agent calls with web search inside them.
 // Give it room: a truncated response surfaces client-side as a JSON parse error,
 // which is the least debuggable possible symptom.
-export const maxDuration = 800
+//
+// 300 is the Vercel Hobby ceiling, and it is a HARD product constraint, not a
+// config number. A measured full-depth run took 527s — so the budget below is
+// sized to fit here, not the other way round. Timing out is not merely annoying:
+// the Anthropic spend and the Apollo credits are consumed before the function is
+// killed, and nothing is returned. An expensive nothing is the worst outcome
+// available, so the defaults are deliberately conservative.
+//
+// A paid plan raises this ceiling; `npm run scout` has no ceiling at all and is
+// the right tool for a deep run.
+export const maxDuration = 300
 
 interface ScoutBody {
   goal?: string
@@ -49,18 +59,25 @@ export async function POST(request: NextRequest) {
       },
       backgroundItems,
       budget: {
-        maxCompanies: 16,
+        maxCompanies: 10,
         maxPeoplePerCompany: 5,
-        maxApolloCalls: 60,
+        maxApolloCalls: 40,
         maxWebSearches: 4,
         maxAgentSteps: 6,
       },
-      segmentCount: Math.min(4, Math.max(1, body.segments ?? 3)),
-      companiesPerSegment: Math.min(8, Math.max(2, body.companiesPerSegment ?? 5)),
-      maxProspects: 40,
-      // The cost lever. Deep research is ~$0.18 per person; everything upstream
-      // of it is cheap by comparison.
-      maxDeepResearch: Math.min(25, Math.max(5, body.maxDeepResearch ?? 15)),
+      // Every cap below is set by the 300s ceiling, not by what produces the
+      // best list. A measured run at (3 segments, 5/segment, 15 researched) took
+      // 527s and returned 13 prospects; these are roughly 45% of that, which is
+      // the fraction that fits with headroom for one slow model call.
+      //
+      // The clamps are upper bounds, not suggestions: a request for a deeper run
+      // than can finish would spend the money and return nothing.
+      segmentCount: Math.min(3, Math.max(1, body.segments ?? 2)),
+      companiesPerSegment: Math.min(5, Math.max(2, body.companiesPerSegment ?? 4)),
+      maxProspects: 25,
+      // The cost lever AND the wall-clock lever. Deep research is ~$0.18 and
+      // several seconds per person; everything upstream is cheap by comparison.
+      maxDeepResearch: Math.min(10, Math.max(4, body.maxDeepResearch ?? 7)),
       researchPerCompany: 2,
       maxDiscoveryRounds: 2,
       maxRescoutRounds: 0,
