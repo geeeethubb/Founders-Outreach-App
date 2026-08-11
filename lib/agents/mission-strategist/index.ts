@@ -7,6 +7,7 @@
 // Pure with respect to the database. The orchestrator persists the output.
 
 import { runAgent } from '../runtime/loop'
+import type { CompanyArchetype } from '@/lib/scouting/titles'
 import type { AgentResult, ToolContext } from '../runtime/types'
 import { missionStrategistPrompt, type MissionStrategistInput } from './prompt'
 
@@ -15,6 +16,8 @@ export type { MissionStrategistInput }
 export interface SearchSegment {
   name: string
   rationale: string
+  /** The KIND of company this segment hunts. Decides who inside it is worth contacting. */
+  intended_archetype: CompanyArchetype | 'any'
   search_queries: string[]
   title_patterns: string[]
   required_domain_terms: string[]
@@ -41,6 +44,11 @@ const OUTPUT_SCHEMA = {
             type: 'string',
             description: 'Why this segment plausibly yields a real opportunity for THIS person.',
           },
+          intended_archetype: {
+            type: 'string',
+            enum: ['startup', 'growth', 'midmarket', 'enterprise', 'consultancy', 'research', 'any'],
+            description: 'The kind of organization this segment targets. Decides who inside it can create an opportunity.',
+          },
           search_queries: {
             type: 'array',
             items: { type: 'string' },
@@ -66,7 +74,7 @@ const OUTPUT_SCHEMA = {
             description: 'Expected yield of GOOD conversations, 0 to 1.',
           },
         },
-        required: ['name', 'rationale', 'search_queries', 'title_patterns', 'required_domain_terms', 'exclusions', 'priority'],
+        required: ['name', 'rationale', 'intended_archetype', 'search_queries', 'title_patterns', 'required_domain_terms', 'exclusions', 'priority'],
       },
     },
     positioning_angle: {
@@ -77,6 +85,8 @@ const OUTPUT_SCHEMA = {
   },
   required: ['segments', 'positioning_angle', 'reasoning'],
 }
+
+const ARCHETYPE_VALUES: string[] = ['startup', 'growth', 'midmarket', 'enterprise', 'consultancy', 'research', 'any']
 
 function clamp01(n: unknown): number {
   const v = typeof n === 'number' ? n : 0.5
@@ -105,9 +115,13 @@ function validate(raw: unknown): MissionStrategy | null {
     // not a partial result — it is unusable.
     if (!name || queries.length === 0 || titles.length === 0) continue
 
+    const stated = String(s.intended_archetype ?? 'any')
+    const archetype = ARCHETYPE_VALUES.includes(stated) ? (stated as CompanyArchetype | 'any') : 'any'
+
     segments.push({
       name,
       rationale: String(s.rationale ?? '').trim(),
+      intended_archetype: archetype,
       search_queries: queries,
       title_patterns: titles,
       required_domain_terms: strings(s.required_domain_terms, 12),

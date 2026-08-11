@@ -204,6 +204,7 @@ export async function runMarketDiscoveryRound(
     maxTokens: 8000,
     cacheKeyParts: {
       segment: input.segment.name,
+      archetype: input.segment.intended_archetype,
       goal: input.mission.goal,
       geography: input.mission.geography,
       query: input.currentQuery,

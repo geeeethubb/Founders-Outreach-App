@@ -16,6 +16,7 @@ export interface MarketDiscoveryInput {
   segment: {
     name: string
     rationale: string
+    intended_archetype: string
     search_queries: string[]
     required_domain_terms: string[]
     exclusions: string[]
@@ -32,8 +33,8 @@ export interface MarketDiscoveryInput {
 }
 
 export const marketDiscoveryPrompt: VersionedPrompt<MarketDiscoveryInput> = {
-  // 2.0.0 — one round of an adaptive session: search, inspect, judge, choose next action.
-  version: '2.0.0',
+  // 2.1.0 — the segment's intended company archetype is now enforced.
+  version: '2.1.0',
 
   build(input) {
     const system = `You find REAL OPERATING COMPANIES in a specific market segment by searching the web, and you
@@ -63,11 +64,21 @@ RULES FOR COMPANIES YOU RETURN
    Exclude trade publications, conference organizers, industry associations, certification bodies,
    staffing and recruiting firms, and pure consultancies UNLESS advisory work is itself the segment.
 
-4. PREFER SPECIFIC OVER FAMOUS.
+4. RETURN THE RIGHT KIND OF COMPANY.
+   Each segment names the ARCHETYPE it is hunting. Returning the wrong kind is a failure even
+   when the companies are real and on-topic, because the archetype decides who inside them can
+   create an opportunity. A seed-stage startup returned for an enterprise-vendor segment produces
+   a list of people who cannot host the work, and it duplicates whatever segment was already
+   hunting startups.
+
+   If the results are the wrong archetype, say so: diagnose WRONG_COMPANY_ARCHETYPE and narrow.
+   Do not quietly keep them because they are otherwise interesting.
+
+5. PREFER SPECIFIC OVER FAMOUS.
    A well-known giant everyone contacts is usually a worse target than a substantive company nobody
    thought to look at. Do not fill the list with household names.
 
-5. SAY WHAT THEY ACTUALLY DO. One concrete sentence. Not "leading provider of innovative solutions".
+6. SAY WHAT THEY ACTUALLY DO. One concrete sentence. Not "leading provider of innovative solutions".
 
 DIAGNOSING THE SEARCH SPACE
 
@@ -123,6 +134,7 @@ GEOGRAPHY: ${input.mission.geography}
 
 SEGMENT: ${input.segment.name}
 Why it matters: ${input.segment.rationale}
+COMPANY ARCHETYPE WANTED: ${input.segment.intended_archetype}
 Required domain terms: ${input.segment.required_domain_terms.join(', ') || 'none stated'}
 Exclude: ${exclusions}
 
