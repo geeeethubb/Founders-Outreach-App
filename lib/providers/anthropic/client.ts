@@ -249,7 +249,30 @@ export interface StructuredResult<T> {
 }
 
 export async function anthropicStructured<T>(params: StructuredParams<T>): Promise<StructuredResult<T>> {
+  /**
+   * Invalid output is RETRYABLE here, exactly as it is in the agent loop.
+   *
+   * Without this, one malformed entry killed an entire judging batch, and the
+   * eval lost 10 verdicts to a single bad enum value. A structured call that
+   * cannot retry makes every caller's success depend on the model getting it
+   * right first time.
+   */
+  const MAX_ATTEMPTS = 3
+
   const run = async (): Promise<StructuredResult<T>> => {
+    let last: StructuredResult<T> | null = null
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+      const result = await attempt_()
+      if (result.value !== null) return result
+      last = result
+      // A transport error will not be fixed by asking again in the same way;
+      // only schema-validation failures are worth another attempt.
+      if (result.error && !/schema validation|no .* tool call/i.test(result.error)) break
+    }
+    return last!
+  }
+
+  const attempt_ = async (): Promise<StructuredResult<T>> => {
     const res = await anthropicComplete({
       role: params.role,
       system: params.system,

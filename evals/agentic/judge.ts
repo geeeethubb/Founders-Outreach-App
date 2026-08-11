@@ -239,8 +239,11 @@ Give a verdict for every candidate, using their id. One or two sentences of reas
         out.push({ candidate_id: id, verdict: verdict as JudgeVerdict, reasoning: String(j.reasoning ?? '') })
       }
       // A judge that skipped candidates would silently shrink the denominator
-      // and inflate precision. Demand a verdict for every one.
-      return out.length === prospects.length ? out : null
+      // and inflate precision, so every prospect must be covered. Duplicates and
+      // unknown ids are dropped above rather than failing the batch — coverage
+      // is what matters, not an exact array length.
+      const covered = new Set(out.map((o) => o.candidate_id))
+      return prospects.every((p) => covered.has(p.candidate_id)) ? out : null
     },
     cacheKeyParts: {
       v: JUDGE_PROMPT_VERSION,
