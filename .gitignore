@@ -40,3 +40,8 @@ Apollo API.txt
 # Provider response cache + eval run artifacts
 .provider-cache/
 .eval-runs/
+
+# Personal documents — keep locally, never commit
+my_resume.pdf
+*_resume.pdf
+*resume*.pdf
