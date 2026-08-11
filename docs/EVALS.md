@@ -589,3 +589,82 @@ opinion rather than quality, and would actively resist improvement.
 The same reasoning governs the learning system in
 [PRODUCT.md §10](PRODUCT.md#10-outcomes-and-learning): at these volumes, statistics mislead.
 Wait for signal.
+
+---
+
+## 12. Phase 9 — the send loop
+
+Correctness evals, not quality evals. The question is whether the loop behaves, not whether
+a model wrote something good — so most of this is deterministic assertion rather than
+judgment, and there is no LLM judge anywhere in it.
+
+### Claim-safety gate — `npm run probe:grounding`
+
+Two rates, and both matter. A gate with false negatives sends lies; a gate with false
+positives gets switched off, and then it protects nothing.
+
+| Measure | Target | Result |
+|---|---|---|
+| Fabrications blocked | 100% | **8/8** |
+| Real drafts cleared | high | **9/10** — the block was correct |
+
+The eight fabrications are one per detector: invented dollar figure, invented percentage,
+inflated real number, invented programme name, invented acronym, invented superlative,
+invented recipient responsibility, plus a grounded control that must PASS.
+
+**A blocked real draft is not automatically a false positive.** The first run blocked 9 of 10
+and the cause was an impoverished evidence pool, not an over-eager gate
+([ADR-023](ARCHITECTURE.md#adr-023)). Diagnose before loosening.
+
+### Conversation agent — `npm run eval:conversation`
+
+14 hand-written reply fixtures, one agent call each. No judge: the ground truth is written
+down, so a judge would add cost and a second opinion nobody asked for.
+
+| Measure | Target | Result |
+|---|---|---|
+| Classification | — | **14/14** |
+| Action | ≥90% | **14/14** |
+| Critical misses | 0 | **0** |
+| Ungrounded suggested replies | 0 | **0** |
+| Cost | cents | **$0.0009 / reply** |
+
+`CRITICAL_IDS` marks the four where a mistake is a product failure rather than a scoring
+quibble: a hostile reply must CLOSE, a referral must be recognised, an explicit meeting
+request must book, and politeness inflation must not read as interest.
+
+**Fixture discipline.** `acceptable` lists every defensible *action*, because a REFERRAL is
+reasonably FOLLOW_REFERRAL or REPLY and marking the second wrong measures the fixture
+author's taste. `alsoAcceptable` does the same for classifications and is documented as
+settable **only from reasoning about the reply, never from what the agent answered**.
+
+The first run scored 86%. Both misses were label problems: one fixture's own note, written
+before the run, already conceded the ambiguity; the other's reply text contained a temporal
+qualifier the expected answer did not account for, so the **reply was rewritten** rather than
+the expectation widened. Pre-correction and post-correction numbers are both recorded in
+[PHASE_SENDING.md §5](PHASE_SENDING.md).
+
+### Loop correctness — `npm run check:outreach`
+
+Real rows in the real database, then deleted. Requires migration 012; exits 2 with
+instructions if it is missing.
+
+| | |
+|---|---|
+| Persistence | state, evidence pool and grounding survive a round trip |
+| Gate | an ungrounded edit drops an approved row back to `draft` |
+| Idempotency | three concurrent `claimForSend` calls produce **exactly one** winner |
+| Idempotency | a send against a sent row is a no-op; exactly one `emails` row exists |
+| Reply sync | a synced inbound message moves the outreach to `replied`, and re-running changes nothing |
+| Immutability | a sent row cannot be redrafted |
+
+**It does not send email.** Idempotency is verified at the compare-and-swap that provides it.
+Proving you do not send two emails to a stranger by sending two emails to a stranger is a
+poor experimental design.
+
+### Deterministic units — `npm run test:deterministic`
+
+226 assertions. The Phase 9 additions cover the transition table (including *every* state's
+inability to reach `sending`), quantity normalisation and its exclusions (calendar years,
+meeting durations, clock times), both evidence pools, and funnel arithmetic — including that
+a reply rate below 5 sends is withheld rather than reported.

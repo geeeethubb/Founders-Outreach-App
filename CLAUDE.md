@@ -256,9 +256,22 @@ The seven product agents are TypeScript modules, not Claude Code subagents.
 
 ## Current phase
 
-**Phase 0 complete** — audit, architecture docs, and type-only scaffolding.
+**Phase 9 complete** — the production loop closes:
+`MISSION → SCOUT → RESEARCH → RANK → POSITION → DRAFT → APPROVE → SEND → TRACK → OUTCOME`.
 
-**Next: Phase 1** — missions and preferences. Phases 1, 2, and 3 are independent; any order
-works. Everything from Phase 4 on is sequential.
+Phases 0, 3, 6, 7, 8 and 9 have shipped. See [docs/BUILD_LOG.md](docs/BUILD_LOG.md) for what
+each one changed and [docs/PHASE_SENDING.md](docs/PHASE_SENDING.md) for the latest.
+
+**Requires founder action:** apply `supabase/migrations/012_outreach.sql` in the Supabase SQL
+editor. Nothing persists until it runs — `npm run check:outreach` reports this and exits 2.
+
+**Ten agents now, not seven.** Person Triage (Phase 7), Conversation and Follow-Up (Phase 9)
+each earned a place against the test in [docs/AGENTS.md](docs/AGENTS.md): a judgment problem
+no existing agent owned. The test still applies to the eleventh.
+
+**Not built yet:** the `no_response` timer (the most common outcome is currently recorded
+only by hand), send pacing, and a scheduler for `followup_due_at`. The Talent Knowledge Base
+is still the fixture at `evals/phase3/user-profile.ts` — and the claim-safety gate's
+verification corpus is only as complete as that file.
 
 See [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md).

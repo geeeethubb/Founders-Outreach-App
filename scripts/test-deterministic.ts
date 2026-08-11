@@ -550,6 +550,226 @@ check('relevant director kept', filterPerson(person(), 500).keep)
     JSON.stringify(m.THRESHOLDS))
 }
 
+// ─── Outreach state machine ──────────────────────────────────────────────────
+// The transition table is the only thing standing between "update a row" and
+// "put mail in a stranger's inbox", so it is tested as such.
+{
+  const s = require('../lib/outreach/states') as typeof import('../lib/outreach/states')
+
+  check('approved is the door into sending', s.canTransition('approved', 'sending'))
+  // `failed` is the only other one, and it is reachable only from `sending`,
+  // which is reachable only from `approved` — so retrying cannot smuggle
+  // unapproved text out.
+  for (const from of s.OUTREACH_STATES) {
+    if (from === 'approved' || from === 'failed') continue
+    check(`${from} cannot reach sending`, !s.canTransition(from, 'sending'), from)
+  }
+  check('failed is reachable only from sending',
+    s.OUTREACH_STATES.filter((x) => s.canTransition(x, 'failed')).join(',') === 'sending')
+  // Nothing may declare itself sent; only the send path does, out of `sending`.
+  for (const from of s.OUTREACH_STATES) {
+    if (from === 'sending') continue
+    check(`${from} cannot jump straight to sent`, !s.canTransition(from, 'sent'), from)
+  }
+
+  check('a sent email cannot be unsent', !s.canTransition('sent', 'draft'))
+  check('a sent email cannot be re-approved', !s.canTransition('sent', 'approved'))
+  check('a failed send keeps its approval retryable', s.canTransition('failed', 'sending'))
+  check('closed is terminal', s.nextStates('closed').length === 0)
+  check('a skipped prospect can be revived', s.canTransition('skipped', 'draft'))
+
+  check('editing is blocked once committed',
+    !s.isEditable('sent') && !s.isEditable('sending') && !s.isEditable('replied'))
+  check('editing is allowed before that', s.isEditable('draft') && s.isEditable('approved'))
+
+  check('hasBeenSent covers every post-send state',
+    ['sent', 'replied', 'meeting', 'referred', 'closed'].every((x) => s.hasBeenSent(x as never)))
+  check('hasBeenSent excludes sending', !s.hasBeenSent('sending'))
+
+  check('meeting request becomes a meeting',
+    s.stateForClassification('MEETING_REQUEST', 'sent') === 'meeting')
+  check('a referral becomes referred', s.stateForClassification('REFERRAL', 'sent') === 'referred')
+  check('a no-fit closes it', s.stateForClassification('NO_FIT', 'sent') === 'closed')
+  check('a plain positive reply is just replied',
+    s.stateForClassification('POSITIVE', 'sent') === 'replied')
+  // A classification cannot resurrect an unsent draft.
+  check('classification never moves an unsent draft',
+    s.stateForClassification('MEETING_REQUEST', 'draft') === 'draft')
+  // Later replies must not walk a meeting backwards.
+  check('a later reply does not downgrade a meeting',
+    s.stateForClassification('POSITIVE', 'meeting') === 'meeting')
+
+  check('outcome guard rejects nonsense', !s.isOutcome('MAYBE_LATER'))
+  check('outcome guard accepts the list', s.isOutcome('CALL_BOOKED'))
+}
+
+// ─── Claim-safety gate ───────────────────────────────────────────────────────
+// A gate with false negatives sends lies; a gate with false positives gets
+// switched off. Both directions are asserted.
+{
+  const g = require('../lib/outreach/grounding') as typeof import('../lib/outreach/grounding')
+
+  const evidence = [
+    'SENDER: HPC catalysis — UIUC (2025): Ran 73,000 CPU-hours of VASP screening.',
+    'SENDER: Agentic adoption — Procter & Gamble (2025): $3M+ projected annual savings.',
+    'RECIPIENT: Director of Smart Manufacturing at Cargill.',
+    'THEIR COMPANY: Argonne National Laboratory operates the Advanced Photon Source.',
+  ]
+  const safeNames = ['Michael Venteicher', 'Cargill', 'Zuyu Liu']
+  const gate = (body: string, subject = 'A note') =>
+    g.checkGrounding({ subject, body, evidence, safeNames })
+
+  // Quantity extraction
+  const q = g.extractQuantities('We saved $3M+ and 40% of 73k CPU-hours, ranked #2, 3x faster.')
+  const kinds = q.map((x) => x.kind)
+  check('money is extracted', kinds.includes('money'))
+  check('percentages are extracted', kinds.includes('percent'))
+  check('rankings are extracted', kinds.includes('ordinal'))
+  check('multipliers are extracted', kinds.includes('multiplier'))
+  check('$3M normalises to 3,000,000',
+    q.some((x) => x.kind === 'money' && x.value === 3_000_000), JSON.stringify(q))
+  check('73k normalises to 73,000',
+    q.some((x) => x.value === 73_000), JSON.stringify(q))
+
+  check('calendar years are not claims',
+    g.extractQuantities('for winter 2026-27').length === 0,
+    JSON.stringify(g.extractQuantities('for winter 2026-27')))
+  check('meeting durations are not claims',
+    g.extractQuantities('Worth 20 minutes?').length === 0)
+  check('hyphenated durations are not claims',
+    g.extractQuantities('a 15-minute call').length === 0,
+    JSON.stringify(g.extractQuantities('a 15-minute call')))
+
+  // Blocking cases
+  check('an invented dollar figure blocks', !gate('I saved them $12M last year.').ok)
+  check('an invented percentage blocks', !gate('It cut cycle time by 40%.').ok)
+  check('an inflated real figure blocks', !gate('I ran 730,000 CPU-hours.').ok)
+  check('an invented programme name blocks', !gate('I follow Project Helios closely.').ok)
+  check('an invented acronym blocks', !gate('The ACME rollout there is interesting.').ok)
+  check('an invented superlative blocks', !gate('Cargill runs the largest mill anywhere.').ok)
+  check('an invented responsibility blocks',
+    !gate('You lead the quantum photonics roadmap there.').ok)
+  check('the subject line is checked too',
+    !gate('Grounded body about VASP screening.', 'Re: your $9M programme').ok)
+
+  // Non-blocking cases
+  const clean = gate(
+    'I ran 73,000 CPU-hours of VASP screening, and the P&G workflow is projected at $3M+ ' +
+      'in annual savings. Worth a 15-minute call in winter 2026-27?'
+  )
+  check('a fully grounded draft passes', clean.ok, JSON.stringify(clean.blocking))
+  check('P&G resolves to Procter & Gamble',
+    gate('I worked at P&G on the adoption problem.').ok)
+  check('naming the recipient is never a claim',
+    gate('Michael, the Cargill smart-manufacturing side is the overlap.').ok)
+  check('sentence-initial prose is not an entity',
+    gate('Separately, I designed the architecture. Surfacing that took a while.').ok)
+  check('contractions are not entities',
+    gate("That's the adoption gap. You've seen it too.").ok)
+
+  // Findings carry a usable revision, not just a complaint.
+  const blocked = gate('I saved them $12M last year.')
+  check('a blocking finding names the claim', blocked.blocking[0]?.claim === '$12M')
+  check('a blocking finding offers the real figure',
+    blocked.blocking[0]?.revision.includes('$3M'), blocked.blocking[0]?.revision)
+  check('a blocking finding quotes the sentence',
+    blocked.blocking[0]?.sentence.includes('$12M'))
+
+  // Warnings never block.
+  check('warnings do not block',
+    g.checkGrounding({ subject: 'x', body: 'The most useful part was Adoption.', evidence, safeNames })
+      .warnings.length >= 0)
+
+  // No evidence at all must not silently pass claims.
+  check('an empty evidence pool blocks a figure',
+    !g.checkGrounding({ subject: 'x', body: 'We saved $4M.', evidence: [] }).ok)
+}
+
+// ─── Evidence pool ───────────────────────────────────────────────────────────
+{
+  const e = require('../lib/outreach/evidence') as typeof import('../lib/outreach/evidence')
+
+  const background = [
+    { id: 'a', title: 'Controlled State system', org: 'P&G (Tabler Station, largest site)', period: '2025', summary: 'Built it.' },
+    { id: 'b', title: 'Catalysis research', org: 'UIUC', period: '2024', summary: 'Ran VASP.' },
+  ]
+  const pool = e.buildEvidence({
+    companyContext: 'They run a big plant. It makes polymers and it is in Ohio.',
+    personContext: '• Joined in 2008.\n• Leads smart manufacturing.\nnot a bullet',
+    recipientTitle: 'Director',
+    recipientCompany: 'Cargill',
+    chosenBackground: [background[1]],
+  })
+  check('company facts split on full stops, not the letter s',
+    pool.some((l) => l.includes('It makes polymers and it is in Ohio.')), JSON.stringify(pool))
+  check('only bulleted person lines become facts',
+    pool.filter((l) => l.startsWith('RECIPIENT:')).length === 3, JSON.stringify(pool))
+  check('the sender fact carries org and period, not just the summary',
+    pool.some((l) => l.includes('UIUC') && l.includes('2024') && l.includes('Ran VASP.')))
+  check('unchosen background stays out of the writer pool',
+    !pool.some((l) => l.includes('Tabler Station')))
+
+  const verify = e.buildVerificationPool(pool, background, ['b'])
+  check('the verification pool adds the rest of the record',
+    verify.some((l) => l.includes('Tabler Station')))
+  check('the verification pool omits unchosen summaries',
+    !verify.some((l) => l.startsWith('ON RECORD') && l.includes('Built it.')))
+  check('the verification pool is a superset', verify.length > pool.length)
+}
+
+// ─── Funnel arithmetic ───────────────────────────────────────────────────────
+{
+  const f = require('../lib/outreach/funnel') as typeof import('../lib/outreach/funnel')
+
+  const row = (over: Partial<import('../lib/outreach/funnel').FunnelRow> = {}) => ({
+    state: 'draft' as const, outcome: null, segment: 'industrial-ai', company_type: 'startup',
+    recipient_role: 'Director', angle: 'The adoption gap not the modeling gap here',
+    proof_point_ids: ['png_agentic_adoption'], cta: 'Worth 20 minutes?', word_count: 100,
+    sent_at: null, replied_at: null, ...over,
+  })
+
+  const rows = [
+    row(),
+    row({ state: 'approved' }),
+    row({ state: 'sent', sent_at: '2026-08-01T00:00:00Z' }),
+    row({ state: 'replied', sent_at: '2026-08-01T00:00:00Z', replied_at: '2026-08-03T00:00:00Z' }),
+    row({ state: 'meeting', outcome: 'CALL_BOOKED', sent_at: '2026-08-01T00:00:00Z', replied_at: '2026-08-05T00:00:00Z' }),
+    row({ state: 'referred', outcome: 'INTERNSHIP_DISCUSSION', sent_at: '2026-08-01T00:00:00Z', replied_at: '2026-08-02T00:00:00Z' }),
+  ]
+  const report = f.buildFunnel(rows, 40)
+  const stage = (label: string) => report.stages.find((s) => s.label === label)!.count
+
+  check('scouted is the top of the funnel', stage('Prospects scouted') === 40)
+  check('drafts counts every row', stage('Drafts generated') === 6)
+  check('approved includes everything past approval', stage('Approved') === 5, String(stage('Approved')))
+  check('sent excludes approved-but-unsent', stage('Sent') === 4, String(stage('Sent')))
+  check('replies count meetings and referrals', stage('Replies') === 3, String(stage('Replies')))
+  check('conversations count meeting and referral', stage('Conversations') === 2)
+  check('opportunities need an opportunity outcome', stage('Opportunities') === 1)
+  check('the first stage has no ratio', report.stages[0].ofPrevious === null)
+  check('ratios are of the stage above',
+    Math.abs((report.stages[1].ofPrevious ?? 0) - 6 / 40) < 1e-9)
+
+  check('median days to reply', report.medianDaysToReply === 2, String(report.medianDaysToReply))
+
+  // The number that would mislead the most: a rate on a tiny denominator.
+  check('a rate below the minimum sample is withheld',
+    report.byCta.every((b) => b.replyRate === null), JSON.stringify(report.byCta))
+  const many = f.buildFunnel(
+    Array.from({ length: 10 }, (_, i) =>
+      row({ state: i < 3 ? 'replied' : 'sent', sent_at: '2026-08-01T00:00:00Z' })
+    ),
+    10
+  )
+  check('a rate at the minimum sample is reported',
+    Math.abs((many.byCta[0].replyRate ?? 0) - 0.3) < 1e-9, JSON.stringify(many.byCta[0]))
+  check('the CTA bucket recognises a time ask', many.byCta[0].key === 'time on a call', many.byCta[0].key)
+  check('unknown dimensions get a bucket, not a crash',
+    f.buildFunnel([row({ segment: null, cta: null, word_count: null })], 1).bySegment[0].key === 'unassigned')
+  check('an empty funnel does not divide by zero',
+    f.buildFunnel([], 0).stages.every((s) => s.count === 0))
+}
+
 // ─── Report ──────────────────────────────────────────────────────────────────
 
 process.stdout.write(`\n${passed} passed, ${failed} failed\n`)

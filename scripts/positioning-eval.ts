@@ -13,6 +13,7 @@ import fs from 'fs'
 config({ path: path.join(process.cwd(), '.env.local') })
 
 import { RESUME_ITEMS } from '../evals/phase3/user-profile'
+import { buildEvidence } from '../lib/outreach/evidence'
 
 const RUN_FILE = path.join(process.cwd(), '.eval-runs', 'prototype-run.json')
 
@@ -163,26 +164,20 @@ async function main() {
     const drafted: { p: RankedProspect; subject: string; body: string; words: number; allowed: string[] }[] = []
 
     for (const { p, pos } of positioned) {
-      // Company-level facts count as evidence too. Restricting the writer to
-      // person-level facts alone starved the thin-record prospects, and the
-      // judge marked them down for exactly that.
-      const companyFacts = p.why_they_fit
-        .split(/(?<=.)s+/)
-        .map((s) => s.trim())
-        .filter((s) => s.length > 30)
-        .slice(0, 3)
-        .map((s) => `THEIR COMPANY: ${s}`)
-
-      const allowed = [
-        ...companyFacts,
-        ...pos.top_proof_points.map((pp) => `SENDER: ${byId.get(pp.background_id)?.summary ?? pp.background_id}`),
-        `RECIPIENT: ${p.person.title ?? 'unknown title'} at ${p.company}`,
-        ...p.researchSummary
-          .split('\n')
-          .filter((l) => l.trim().startsWith('•'))
-          .map((l) => `RECIPIENT: ${l.replace(/^\s*•\s*/, '')}`)
-          .slice(0, 5),
-      ]
+      // Built by the same function the product uses, so the eval cannot pass on
+      // an evidence pool the real path never sees. The hand-rolled copy this
+      // replaces had a dropped backslash — `/(?<=.)s+/` splits on the letter
+      // "s", not on a full stop, which shredded every company fact into
+      // fragments like "ection the candidate already ha".
+      const allowed = buildEvidence({
+        companyContext: p.why_they_fit,
+        personContext: p.researchSummary,
+        recipientTitle: p.person.title,
+        recipientCompany: p.company,
+        chosenBackground: pos.top_proof_points
+          .map((pp) => byId.get(pp.background_id))
+          .filter((b): b is NonNullable<typeof b> => !!b),
+      })
 
       const res = await runOutreach(
         {

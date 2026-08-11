@@ -19,7 +19,11 @@
     "probe:downstream": "tsx scripts/probe-downstream-agents.ts",
     "eval:agentic": "tsx scripts/agentic-eval.ts",
     "scout": "tsx scripts/scout-mission.ts",
-    "eval:positioning": "tsx scripts/positioning-eval.ts"
+    "eval:positioning": "tsx scripts/positioning-eval.ts",
+    "eval:conversation": "tsx scripts/conversation-eval.ts",
+    "probe:grounding": "tsx scripts/probe-grounding.ts",
+    "check:outreach": "tsx scripts/outreach-e2e.ts",
+    "pilot:prepare": "tsx scripts/prepare-pilot.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.116.0",

@@ -6,6 +6,97 @@ architecturally and why.
 
 ---
 
+## 2026-08-11 — Phase 9: Approval, send, response tracking
+
+**Type:** implementation + eval · **Behavior change:** additive; the V1 email layer is untouched
+
+Closed the production loop: `APPROVE → PERSIST → SEND → TRACK → RESPOND → OUTCOME`.
+Full write-up in [PHASE_SENDING.md](PHASE_SENDING.md).
+
+### The audit decided the design
+
+The email layer works and is not to be rewritten, so the question was "what is the smallest
+thing I can add so the existing sender works for scouted prospects?" Answer: write an
+`emails` row for every send. `syncReplies` already finds replies by re-listing the Gmail
+threads recorded there — so **reply tracking required zero changes to `lib/email/*`**.
+
+### Added
+
+```
+supabase/migrations/012_outreach.sql   outreach + outreach_events, RLS, CAS-friendly indexes
+lib/outreach/states.ts                 transition table, outcomes, classification -> state
+lib/outreach/grounding.ts              the deterministic claim-safety gate
+lib/outreach/evidence.ts               ONE evidence builder, for the writer and the gate
+lib/outreach/store.ts                  upserts, edits, transitions, compare-and-swap claim
+lib/outreach/send.ts                   idempotent send over lib/email/resend.ts
+lib/outreach/replies.ts                joins synced replies to outreach on the thread id
+lib/outreach/funnel.ts                 deterministic funnel arithmetic
+lib/agents/conversation/*              reads a reply, recommends an action, drafts a response
+lib/agents/followup/*                  one bounded follow-up suggestion, starts from "no"
+app/api/outreach/**                    list/funnel, PATCH, send, sync, conversation, followup
+app/dashboard/outreach/*               the review queue
+app/dashboard/scout/OutreachPanel.tsx  approve / edit / skip / send, server-backed
+evals/conversation/fixtures.ts         14 reply fixtures
+scripts/{conversation-eval,outreach-e2e,prepare-pilot,probe-grounding}.ts
+```
+
+### ADRs
+
+[ADR-022](ARCHITECTURE.md#adr-022) `outreach` owns relationship state, `emails` stays the
+message · [ADR-023](ARCHITECTURE.md#adr-023) the gate is deterministic and blocking, and
+needs a wider pool than the writer · [ADR-024](ARCHITECTURE.md#adr-024) idempotency is a
+compare-and-swap, not a check.
+
+### Five things running it found
+
+1. **An infinite loop in the gate.** `String.replace` with a `/g/` regex resets that
+   regex's `lastIndex`; one object used for both scanning and rewriting restarted the scan
+   from zero and allocated to 4GB. Found by running it.
+2. **The gate blocked 9 of 10 real drafts, and was right.** The evidence pool held proof-point
+   *summaries* only, so the site name and the scale — which live on the résumé item's `org` —
+   reached the draft via the positioning brief instead. Fixed with two pools, not a looser gate.
+3. **`/(?<=.)s+/` was splitting company facts on the letter "s"**, producing evidence lines
+   like `"ection the candidate already ha"`. A dropped backslash, invisible until the gate
+   read the same pool.
+4. **A 3-char prefix match let "there" ground itself against "the"**, waving through an
+   invented recipient responsibility.
+5. **The state machine and the send path disagreed** about retrying a failed send — caught by
+   a test asserting the invariant rather than the implementation.
+
+### Measured
+
+| | |
+|---|---|
+| Claim gate | 9/10 real drafts clear · **8/8 fabrications blocked** (the 10th block was correct) |
+| Conversation agent | **14/14** classification and action · 0 critical misses · 0 ungrounded replies |
+| Deterministic tests | 226 pass (was 139) |
+| Approve → Send cost | **$0** — no model call on the path |
+| Pilot preparation | 5 prospects, all clear the gate, **$0** (cached) |
+
+### Blocked on founder action
+
+`012_outreach.sql` must be applied by hand (this repo has no migration runner, by design).
+Until then nothing persists; `npm run check:outreach` says so and exits 2.
+
+---
+
+## 2026-08-11 — Phase 8: Positioning and outreach drafting
+
+**Type:** implementation + eval · **Behavior change:** additive
+
+Two agents — Positioning decides the argument, Outreach writes it — plus their evaluators
+and the prospect card. Split on purpose: a flat draft is otherwise undiagnosable as a
+writing problem or a positioning problem. Full write-up in
+[PHASE_POSITIONING.md](PHASE_POSITIONING.md).
+
+Positioning **4.28** and email **4.38** on the strongest three (both pass);
+**3.85 / 4.03 across all ten** (both fail, recorded as failures). The small sample was the
+strongest three — an optimistic instrument, and the finding rather than an accident.
+Positioning quality tracks prospect quality, so the fix is a better shortlist, not a better
+prompt. $0.17 per outreach-ready prospect against a $0.20 target.
+
+---
+
 ## 2026-08-11 — Phase 7: Agentic scouting on Anthropic
 
 **Type:** implementation + eval · **Behavior change:** additive; V1, Phase 3 and Phase 6 paths intact

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import OutreachPanel, { type Grounding, type OutreachSnapshot } from './OutreachPanel'
 
 interface Component {
   dimension: string
@@ -55,15 +56,16 @@ interface Draft {
   wordCount: number
   alternate_angle: string
   lengthWarning: string | null
+  grounding: Grounding | null
 }
 
 interface Brief {
   positioning: Positioning
   draft: Draft | null
+  outreachId: string | null
+  persistError: string | null
   usage: { costUsd: number; calls: number }
 }
-
-type Decision = 'approved' | 'skipped' | null
 
 interface ScoutResult {
   runId: string | null
@@ -120,8 +122,8 @@ export default function ScoutPage() {
   const [briefs, setBriefs] = useState<Record<string, Brief>>({})
   const [briefing, setBriefing] = useState<string | null>(null)
   const [briefError, setBriefError] = useState<Record<string, string>>({})
-  const [decisions, setDecisions] = useState<Record<string, Decision>>({})
-  const [edited, setEdited] = useState<Record<string, string>>({})
+  // Server-backed, unlike the briefs above: this is the state a refresh keeps.
+  const [snapshots, setSnapshots] = useState<Record<string, OutreachSnapshot>>({})
 
   async function buildBrief(p: Prospect) {
     setBriefing(p.key)
@@ -137,7 +139,11 @@ export default function ScoutPage() {
             title: p.title,
             company: p.company,
             location: p.location,
+            email: p.email,
+            linkedin: p.linkedin,
           },
+          runId: result?.runId ?? null,
+          score: p.score,
           companyContext: p.whyCompany ?? p.whyThem,
           personContext: p.researchSummary,
           rankingEvidence: {
@@ -155,7 +161,22 @@ export default function ScoutPage() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Positioning failed')
       setBriefs((b) => ({ ...b, [p.key]: data as Brief }))
-      if (data.draft) setEdited((e) => ({ ...e, [p.key]: data.draft.body }))
+      if (data.draft && data.outreachId) {
+        setSnapshots((s) => ({
+          ...s,
+          [p.key]: {
+            id: data.outreachId,
+            // The server decides the state: a draft with blocking findings
+            // lands in `draft`, a clean one in `ready_for_review`.
+            state: data.draft.grounding?.ok ? 'ready_for_review' : 'draft',
+            subject: data.draft.subject,
+            body: data.draft.body,
+            wordCount: data.draft.wordCount,
+            grounding: data.draft.grounding,
+            recipientEmail: p.email,
+          },
+        }))
+      }
     } catch (e) {
       setBriefError((er) => ({ ...er, [p.key]: e instanceof Error ? e.message : 'Failed' }))
     } finally {
@@ -451,65 +472,37 @@ export default function ScoutPage() {
                             </Section>
                           )}
 
-                          {briefs[p.key].draft && (
-                            <div className="border border-slate-200 rounded p-3">
-                              <div className="flex items-center justify-between">
-                                <div className="text-xs font-medium uppercase tracking-wide text-slate-400">
-                                  Draft email
-                                </div>
-                                <span className="text-xs text-slate-500">
-                                  {briefs[p.key].draft!.wordCount} words
-                                  {briefs[p.key].draft!.lengthWarning ? ' · over target' : ''}
-                                </span>
-                              </div>
-                              <div className="mt-2 text-sm">
-                                <span className="text-slate-500">Subject: </span>
-                                <span className="font-medium">{briefs[p.key].draft!.subject}</span>
-                              </div>
-                              <textarea
-                                value={edited[p.key] ?? briefs[p.key].draft!.body}
-                                onChange={(e) => setEdited((x) => ({ ...x, [p.key]: e.target.value }))}
-                                rows={9}
-                                className="mt-2 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                              />
-                              <p className="mt-2 text-xs text-slate-500">
-                                <span className="font-medium">Alternate angle:</span>{' '}
-                                {briefs[p.key].draft!.alternate_angle}
-                              </p>
+                          {briefs[p.key].persistError && (
+                            <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded p-2">
+                              This draft was not saved: {briefs[p.key].persistError}. It will be lost
+                              on refresh.
+                            </p>
+                          )}
 
-                              <div className="mt-3 flex items-center gap-2">
-                                <button
-                                  onClick={() => setDecisions((d) => ({ ...d, [p.key]: 'approved' }))}
-                                  className={
-                                    decisions[p.key] === 'approved'
-                                      ? 'px-3 py-1.5 text-xs font-medium rounded-md bg-emerald-600 text-white'
-                                      : 'px-3 py-1.5 text-xs font-medium rounded-md bg-white border border-slate-300 text-slate-700 hover:bg-slate-50'
-                                  }
-                                >
-                                  {decisions[p.key] === 'approved' ? 'Approved' : 'Approve'}
-                                </button>
-                                <button
-                                  onClick={() => buildBrief(p)}
-                                  disabled={briefing === p.key}
-                                  className="px-3 py-1.5 text-xs font-medium rounded-md bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:text-slate-400"
-                                >
-                                  {briefing === p.key ? 'Working…' : 'Regenerate'}
-                                </button>
-                                <button
-                                  onClick={() => setDecisions((d) => ({ ...d, [p.key]: 'skipped' }))}
-                                  className={
-                                    decisions[p.key] === 'skipped'
-                                      ? 'px-3 py-1.5 text-xs font-medium rounded-md bg-slate-700 text-white'
-                                      : 'px-3 py-1.5 text-xs font-medium rounded-md bg-white border border-slate-300 text-slate-700 hover:bg-slate-50'
-                                  }
-                                >
-                                  {decisions[p.key] === 'skipped' ? 'Skipped' : 'Skip'}
-                                </button>
-                                <span className="text-xs text-slate-400 ml-auto">
-                                  Nothing is sent — you remain the approval gate
-                                </span>
-                              </div>
-                            </div>
+                          {snapshots[p.key] ? (
+                            <OutreachPanel
+                              outreach={snapshots[p.key]}
+                              onChange={(next) => setSnapshots((s) => ({ ...s, [p.key]: next }))}
+                              footnote={
+                                <>
+                                  <span className="font-medium">Alternate angle:</span>{' '}
+                                  {briefs[p.key].draft?.alternate_angle}
+                                  <button
+                                    onClick={() => buildBrief(p)}
+                                    disabled={briefing === p.key}
+                                    className="ml-3 underline hover:text-slate-700 disabled:text-slate-300"
+                                  >
+                                    {briefing === p.key ? 'Working…' : 'Regenerate'}
+                                  </button>
+                                </>
+                              }
+                            />
+                          ) : (
+                            briefs[p.key].draft && (
+                              <p className="text-xs text-slate-500">
+                                Draft generated but not saved — approval and sending need it stored.
+                              </p>
+                            )
                           )}
                         </div>
                       )}

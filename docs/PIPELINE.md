@@ -469,6 +469,45 @@ outcome would be invisible to analytics, and the system would learn only from pe
 
 ---
 
+### ⚠ Stages 10–12 as built (Phase 9)
+
+The design above survived contact intact; three details are worth recording because they
+differ from what the plan assumed.
+
+**The surface is `/dashboard/outreach`, not `/dashboard/drafts`.** V1's drafts queue is
+template-driven and campaign-shaped. Scouted outreach carries a positioning brief, an
+evidence pool and a grounding result that queue has no concept of, so it got its own page.
+V1's stays untouched and working.
+
+**State lives on `outreach`, not on `outreach_drafts.status`.** One table, one row per
+(user, contact), holding the relationship rather than the message
+([ADR-022](ARCHITECTURE.md#adr-022)). It points at an `emails` row, which is what keeps
+Stage 12 working with no change to `lib/email/sync.ts` at all.
+
+**Stage 9 (Quality Control) is now partly deterministic and blocking.** The plan had evals
+gating the draft; what shipped is a regex-and-set-arithmetic claim gate that runs at approval
+*and again at send*, because editing is how an unsupported claim gets back into a draft that
+already passed. Unresolved quantities, proper nouns, ranking words and
+recipient-responsibility claims block with no override
+([ADR-023](ARCHITECTURE.md#adr-023)).
+
+**Not yet built, from the stages above:** send pacing (drafts are sent one at a time, by
+hand, so there is nothing to pace yet), `max_active_outreach`, one-per-company, and the
+`no_response` timer. The last one matters most — until it exists, the most common outcome is
+recorded only when the user selects it by hand.
+
+Sequence as built:
+
+```
+draft ──▶ ready_for_review ──▶ approved ──▶ sending ──▶ sent ──▶ replied ──▶ meeting
+  │              │                │            │                    │        referred
+  └──▶ skipped ◀─┘                └──▶ failed ─┘                    └──▶ closed
+```
+
+Full write-up: [PHASE_SENDING.md](PHASE_SENDING.md).
+
+---
+
 ### Stage 13 — Learning
 
 | | |

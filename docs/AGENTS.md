@@ -25,12 +25,25 @@ They are not Claude Code subagents. See
 7. **No agent calls another agent.** Composition is the orchestrator's job. This keeps the
    pipeline a readable sequence instead of an uninspectable swarm.
 
-### Why exactly seven
+### Why exactly seven — and what has been added since
 
-Seven maps to the seven distinct *judgment* problems in the pipeline. Discovery, dedupe,
-scoring arithmetic, sending, and reply polling are deliberately absent — those are
-deterministic and belong in code. Do not add an eighth agent without a judgment problem that
-none of these owns.
+Seven maps to the seven distinct *judgment* problems in the original pipeline. Discovery,
+dedupe, scoring arithmetic, sending, and reply polling are deliberately absent — those are
+deterministic and belong in code. Do not add an agent without a judgment problem that none
+of the existing ones owns.
+
+Three have earned their place since, each against that test:
+
+| Agent | The judgment problem no existing agent owned | Phase |
+|---|---|---|
+| **Person Triage** | "which 2–3 of these Apollo candidates are worth paying to research?" — a *selection* decision made before evidence exists, where Ranking needs evidence to work at all ([ADR-021](ARCHITECTURE.md#adr-021)) | 7 |
+| **Conversation** | "what did this reply actually mean?" — `"sounds interesting, my plate is full"` and `"sounds interesting, let's talk"` differ by intent, not by keyword | 9 |
+| **Follow-Up** | "is there anything left worth saying to someone who did not answer?" — a judgement whose correct answer is usually *no* | 9 |
+
+Everything around them stayed deterministic: persistence, the Gmail API, timestamps, status
+transitions, dedupe, retries, sending, and funnel arithmetic are all code. Classification →
+state, in particular, is a lookup table in `lib/outreach/states.ts` — the agent judges what
+the reply meant, the code decides what that implies.
 
 ---
 
@@ -394,6 +407,55 @@ upstream is judgment and should be near-deterministic; only this stage benefits 
 Exactly one agent touches the outside world, and it is the one whose entire job is grounding.
 Everything else is a pure function. That is the property that makes this a pipeline rather
 than a swarm.
+
+The Phase 9 additions keep the property: **Conversation** and **Follow-Up** call nothing,
+read nothing, and write nothing. They are handed the thread, the reply and the evidence pool,
+and they return a judgement. The route persists it.
+
+---
+
+## Conversation Agent (Phase 9)
+
+**Judgment problem:** what did this reply actually mean, and what should happen next?
+
+**Input:** mission · sender · recipient · the email we sent · the thread so far · the newest
+inbound message · the same verified-facts pool the writer had, plus the reply itself.
+
+**Output:** `classification` (9 values) · `action` (5 values) · one-sentence `summary` ·
+`suggested_subject` / `suggested_body` · `follow_up_after_days` · `confidence` · `reasoning`.
+
+**Boundaries.** Cannot send. Cannot change state — `stateForClassification()` does that, in
+code. Cannot search. An action requiring a response but producing none is invalid output and
+is retried, so the user never gets an empty box where a draft should be.
+
+**The failure it is built against** is politeness inflation. *"This sounds like interesting
+work, unfortunately my plate is completely full"* is `NOT_NOW`, not `POSITIVE`, and reading
+it as positive wastes the user's best follow-up energy on a closed door.
+
+**The suggested response is held to the same claim gate as the cold email.** A warm reply
+invites embellishment, which is exactly when grounding slips.
+
+---
+
+## Follow-Up Agent (Phase 9)
+
+**Judgment problem:** is there anything left worth saying to someone who did not answer?
+
+**It starts from no.** Silence is information; a second email that adds nothing converts a
+neutral non-response into an active negative. Recommending *against* sending is a correct
+answer, not a failure, and the output schema requires a `rationale` either way.
+
+**Output:** `should_follow_up` · `rationale` · `new_value` (what this adds that the first
+email did not) · `send_after_days` · `subject` · `body`.
+
+**Boundaries enforced in `validate()`, not in the prompt:** ten banned openers
+("just following up", "circling back", "in case this got buried", …) reject the draft
+outright, and a body over 90 words is rejected. A draft that needs one of those phrases to
+work is a draft with nothing new to say.
+
+**One suggested follow-up per cold outreach**, enforced against `outreach.followup_count` in
+the route. The counter increments on a *no* as well as a *yes* — the cap is on how many times
+it is asked, or a no can be re-rolled into a yes.
 
 ---
 

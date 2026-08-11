@@ -381,6 +381,40 @@ alone. On approval, a draft **creates** an `emails` row and links to it.
 [PIPELINE.md §5](PIPELINE.md#stage-10--human-approval), the highest-signal learning data
 available at these volumes.
 
+> **⚠ As built (Phase 9): this table is called `outreach`, and it holds more.**
+>
+> The spec's reasoning above was right and is preserved verbatim. What changed is scope: the
+> shipped table also carries the **relationship** — the send result, the reply, the
+> classification, the follow-up state and the outcome — not only the pre-approval workspace
+> ([ADR-022](ARCHITECTURE.md#adr-022)). "Replied", "meeting" and "referred" are facts about a
+> person, not about a message, and putting them on a per-message row would need a second row
+> for a follow-up carrying the same relationship state: two rows, one truth.
+>
+> Renamed and reshaped from the spec:
+>
+> | spec | as built |
+> |---|---|
+> | `status` (8 values) | `state` (11), a tested transition table in `lib/outreach/states.ts` |
+> | `citations` | `allowed_claims` (the evidence pool) + `grounding` (the gate result) |
+> | `original_body` / `user_edited` | `body` (agent) / `body_edited` (user) / `edited_at` |
+> | `positioning_id` | `positioning` jsonb — a **snapshot**, so a prompt-version bump cannot rewrite history |
+> | `mission_id` | `mission_goal` text — missions (Phase 1) do not exist yet |
+> | — | `send_attempts`, `send_error`, `gmail_thread_id`, `rfc822_message_id` |
+> | — | `reply_classification`, `reply_action`, `suggested_reply`, `conversation_id` |
+> | — | `followup_count`, `followup_suggestion`, `followup_due_at` |
+> | — | `outcome`, `outcome_at`, `outcome_note` |
+> | — | `segment`, `company_type`, `recipient_role`, `score` — denormalised for the funnel |
+>
+> Constraints that carry weight: `unique (user_id, contact_id)` — one live outreach per
+> person; `unique (email_id) where email_id is not null` — one outreach per message. A
+> companion `outreach_events` table records every transition with its actor, so retries and
+> reverts stay legible.
+>
+> `outcomes` / `outcome_events` below are **not built**; `outreach.outcome` collapses them
+> while the volume is this small ([ADR-003](ARCHITECTURE.md#adr-003)).
+>
+> Migration: `supabase/migrations/012_outreach.sql`.
+
 ---
 
 ### `pipeline_runs` and `pipeline_tasks`

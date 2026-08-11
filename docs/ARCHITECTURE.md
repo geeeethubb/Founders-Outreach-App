@@ -636,6 +636,88 @@ cheaper than the filter's own error cost.
 
 ---
 
+### ADR-022 ★ — `outreach` owns relationship state; `emails` stays the message
+
+**Decision.** Phase 9 adds one table, `outreach`, holding one row per (user,
+contact): the approval state machine, the positioning snapshot, the draft and
+the user's edit, the send result, the reply, and the outcome. It **points at**
+an `emails` row rather than replacing it.
+
+**Why not widen `emails.status`.** The obvious move is to add `approved`,
+`replied` and `skipped` to the existing check constraint. Three reasons not to:
+
+1. V1 screens read `emails.status` and expect exactly `draft | scheduled | sent
+   | failed`. Widening it silently changes what four working pages display.
+2. `emails` is a *message*. "Replied", "meeting" and "referred" are facts about a
+   **relationship**, and a follow-up would need a second message row carrying
+   the same relationship state — two rows, one truth, guaranteed to diverge.
+3. `lib/email/sync.ts` finds replies by re-listing the Gmail threads recorded on
+   `emails`. That mechanism works and is explicitly not to be rewritten. Writing
+   an `emails` row for every send keeps reply sync working *for free*.
+
+**Consequence.** Reply tracking required no change to the email layer at all.
+`lib/outreach/replies.ts` runs after `syncReplies` and joins on the Gmail thread
+id both sides already record. Zero lines of the hardest-won code in the repo
+were touched.
+
+---
+
+### ADR-023 ★ — The claim-safety gate is deterministic, and blocking
+
+**Decision.** Before a draft can be approved or sent, `lib/outreach/grounding.ts`
+resolves every quantity, proper noun, ranking word and recipient-responsibility
+claim against stored evidence. Unresolved claims in those categories are
+**blocking**, with no override. Ambiguous categories warn and never block.
+
+**Why not an LLM judge.** Asking a model "is this email grounded?" measures
+whether the text *reads* grounded. The failure being prevented is a plausible
+sentence with an invented number in it — precisely the input a judge is worst at
+and a regex is best at. This is ADR-006 and ADR-011 applied to the last mile.
+
+**Why the gate needs a wider pool than the writer.** Two different questions:
+
+| | asks | pool |
+|---|---|---|
+| writer | what may I **argue** from? | the ≤3 chosen proof points |
+| gate | is this claim **true**? | the user's whole record |
+
+Collapsing them fails both ways. Give the writer everything and the résumé is
+re-dumped, destroying the selectivity positioning exists to enforce. Restrict the
+gate to the chosen three and it blocks true statements: eight of ten measured
+drafts said "P&G's largest global manufacturing site", which is on the user's
+record — on a *different* item from the one being cited. So `buildEvidence`
+feeds the writer and `buildVerificationPool` feeds the gate, the latter adding
+identity lines only (title, org, period), which no model ever sees.
+
+**Measured.** 9/10 real drafts clear; 8/8 fabrications blocked. The tenth block
+was correct — "Operator Agent", a product name no research mentions.
+
+---
+
+### ADR-024 — Idempotency is a compare-and-swap, not a check
+
+**Decision.** Sending claims the row with a single conditional UPDATE
+(`state IN ('approved','failed') AND sent_at IS NULL → 'sending'`). Postgres
+serialises row updates, so of N concurrent requests exactly one gets a row back.
+
+**Why not check-then-send.** `if (state === 'approved') { send() }` has a window
+between the read and the write, and a double-clicked button lands squarely in it.
+Only the database can close it, because only the database serialises.
+
+**Layered, because the cost of being wrong is a stranger's inbox:**
+
+1. `sent_at IS NOT NULL` short-circuits to success before anything runs, so a
+   client retry is indistinguishable from a single click
+2. the compare-and-swap admits one caller
+3. a unique index on `outreach.email_id` means only one row can record a result
+4. `unique (user_id, contact_id)` means one live outreach per person
+
+A failed send goes to `failed`, never to `sent` (ADR-010) — the approved draft is
+preserved and retryable, and `failed` is reachable only from `sending`, which is
+reachable only from `approved`. Retrying can never smuggle out unapproved text.
+
+---
+
 ## 4. Providers
 
 ```ts
