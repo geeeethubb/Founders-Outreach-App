@@ -331,7 +331,69 @@ record than a final pass, and it is the raw material for improving the Outreach 
 
 ---
 
-## 8. Offline evals — later, deliberately
+## 8. Scouting evals (Phase 3 — implemented)
+
+The first gate that actually ships. It sits **before** research and positioning:
+it asks whether the people the system surfaced are worth spending those
+expensive stages on at all.
+
+Implemented in `evals/phase3/`, run with `npm run eval:phase3 -- <iteration>`.
+Results and iteration history: [PHASE_3_EVAL.md](PHASE_3_EVAL.md).
+
+### Four deterministic checks
+
+| Check | Rule | Threshold |
+|---|---|---|
+| **Data completeness** | name, title, company, Apollo id, and a resolvable company relationship | ≥ 95% |
+| **Duplicate rate** | residual duplicates after dedupe, cross-checked on LinkedIn URL and name+company | < 2% |
+| **Seniority calibration** | in a strategically appropriate band **for the company's size** | ≥ 80% |
+| **Resume grounding** | every "why I fit them" cites only real resume item ids | 100% |
+
+LinkedIn URL and email availability are **tracked but never fail a prospect** —
+Apollo does not always expose them, and dropping otherwise-strong people for a
+provider gap would distort the funnel rather than improve it.
+
+Seniority calibration deliberately treats *appropriate* as distinct from
+*maximum*: a C-suite exec at a 40,000-person corporation scores as **too
+senior**, because they will not answer a cold student email, while a Director at
+the same company is correct. See `lib/scouting/seniority.ts`.
+
+### LLM-as-judge — Precision@20
+
+A **separate prompt** (`evals/phase3/judge.ts`) that never sees the scorer's
+numbers, explanations, or ranking. It is asked a different question — "would a
+careful advisor keep this person on a high-priority list?" — and returns
+GOOD / MAYBE / BAD.
+
+The independence is the point. A judge shown the scores would anchor on them,
+and Precision@20 would measure self-consistency rather than quality.
+
+```
+Precision@20 = GOOD verdicts in the top 20 / 20
+```
+
+The denominator is 20 by definition, not the number judged: a profile that could
+only produce 14 prospects has genuinely underperformed at @20.
+
+### Pass thresholds
+
+Average Precision@20 ≥ 75%, no individual profile below 65%, and all four
+deterministic checks passing.
+
+### Why the judge's bar is set where it is
+
+GOOD requires *all* of: the company operates where the user's background is a
+real asset; the role touches that work; the person can create, sponsor or refer;
+a cold email has a realistic chance of a reply; and you could state a specific
+reason **this** person would care about **this** user.
+
+"Not obviously bad" is MAYBE, not GOOD. That strictness is deliberate — the top
+20 is supposed to feel curated, not scraped, and a looser bar would let the
+metric rise while the product got worse.
+
+---
+
+## 9. Offline evals — later, deliberately
 
 Once ~50 real drafts with outcomes exist, build a fixture set:
 

@@ -13,7 +13,7 @@ import path from 'path'
 import type { CompanyCandidate, PersonCandidate } from '@/lib/providers/types'
 import { apolloStats, resetApolloStats, setApolloBudget } from '@/lib/providers/apollo/client'
 import { cacheStats, resetCacheStats } from '@/lib/providers/cache'
-import { companyKey } from '@/lib/scouting/dedupe'
+import { companyKey, normalizeLinkedIn } from '@/lib/scouting/dedupe'
 import { interleave, mapWithConcurrency } from '@/lib/scouting/concurrency'
 import { DEFAULT_SCOUT_OPTIONS, scoutProfile, type ScoutDiagnostics, type ScoutOptions } from '@/lib/scouting/pipeline'
 import { scoreBatch, SCORER_PROMPT_VERSION, type ScoutScore, type ScoringUsage } from '@/lib/scouting/score'
@@ -80,10 +80,19 @@ function chunk<T>(items: T[], size: number): T[][] {
   return out
 }
 
+/** Stable cross-profile identity: Apollo id first, then LinkedIn, then name+company. */
+function identityKey(p: { person: ScoredProspect['person'] }): string {
+  const apolloId = p.person.provenance.external_id
+  if (apolloId) return `a:${apolloId}`
+  if (p.person.linkedin_url) return `l:${normalizeLinkedIn(p.person.linkedin_url)}`
+  return `nc:${p.person.name.toLowerCase()}|${(p.person.company_name ?? '').toLowerCase()}`
+}
+
 async function runProfile(
   profile: SearchProfile,
   opts: ScoutOptions,
-  usage: { scoring: ScoringUsage; judging: JudgeUsage }
+  usage: { scoring: ScoringUsage; judging: JudgeUsage },
+  claimed: Set<string>
 ): Promise<ProfileResult> {
   process.stdout.write(`\n─── ${profile.label} ───\n`)
 
@@ -93,6 +102,7 @@ async function runProfile(
       ...opts.companyFilter,
       minEmployees: profile.companySize.min,
       maxEmployees: profile.companySize.max,
+      requiredDomainTerms: profile.requiredDomainTerms,
     },
   }
 
@@ -137,7 +147,38 @@ async function runProfile(
 
   // Deterministic ranking — highest total first.
   scored.sort((a, b) => b.score.total - a.score.total)
-  const top20 = scored.slice(0, TOP_N)
+
+  // Two selection rules, both from docs/PRODUCT.md §3:
+  //
+  // 1. Cross-profile dedupe — profiles overlap by design (an industrial-AI
+  //    startup founder is also a technically ambitious startup founder), so
+  //    without this the same person occupies a slot in two top-20s.
+  //
+  // 2. ONE PERSON PER COMPANY — "a second contact at the same company is not
+  //    drafted until the first resolves. Two cold emails into one company in
+  //    the same week reads as a mail merge and costs the user credibility."
+  //    Measured in iteration 4: 7/100 slots went to a second or third person at
+  //    the same firm, and the consulting profile drew half its top 20 from four
+  //    companies. Those slots are better spent on a different company.
+  //
+  // In both cases the freed slot goes to the next-best candidate.
+  const top20: ScoredProspect[] = []
+  const companiesTaken = new Set<string>()
+  for (const candidate of scored) {
+    if (top20.length >= TOP_N) break
+
+    const key = identityKey(candidate)
+    if (claimed.has(key)) continue
+
+    const company = candidate.company
+      ? companyKey(candidate.company)
+      : companyKey({ domain: candidate.person.company_domain, name: candidate.person.company_name ?? '' })
+    if (companiesTaken.has(company)) continue
+
+    claimed.add(key)
+    companiesTaken.add(company)
+    top20.push(candidate)
+  }
   process.stdout.write(`  scored: ${scored.length} · top20 range ${top20[top20.length - 1]?.score.total ?? 0}–${top20[0]?.score.total ?? 0}\n`)
 
   // ── Judge (blind to scores) ──
@@ -178,9 +219,11 @@ export async function runEval(
   process.stdout.write(`\n╔══ ITERATION ${iteration} ══╗\n`)
   process.stdout.write(`scorer prompt v${SCORER_PROMPT_VERSION} · judge prompt v${JUDGE_PROMPT_VERSION}\n`)
 
+  // Shared across profiles so no person occupies a slot in two top-20s.
+  const claimed = new Set<string>()
   const results: ProfileResult[] = []
   for (const profile of profiles) {
-    results.push(await runProfile(profile, opts, usage))
+    results.push(await runProfile(profile, opts, usage, claimed))
   }
 
   const allTop = results.flatMap((r) => r.top20)

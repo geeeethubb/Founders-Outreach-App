@@ -20,6 +20,7 @@
 import type { CompanyCandidate, PersonCandidate, PeopleSearchQuery } from '@/lib/providers/types'
 import { apolloPeopleProvider, type PersonStub } from '@/lib/providers/apollo/people'
 import { enrichOrganization } from '@/lib/providers/apollo/organizations'
+
 import { normalizeDomain } from '@/lib/providers/apollo/normalize'
 import { dedupeCompanies, dedupePeople, companyKey } from './dedupe'
 import {
@@ -109,15 +110,21 @@ function toSearchQuery(spec: ScoutQuery, page: number): PeopleSearchQuery & Reco
   } as PeopleSearchQuery & Record<string, unknown>
 }
 
-/** Stage 1: collect obfuscated identifier stubs across all queries. */
+/**
+ * Stage 1: collect obfuscated identifier stubs, kept GROUPED BY QUERY.
+ *
+ * Grouping matters because the enrichment budget has to be allocated across
+ * queries, and queries are not equal — see `allocateBudget`.
+ */
 export async function collectStubs(
   queries: ScoutQuery[],
   diag: ScoutDiagnostics
-): Promise<PersonStub[]> {
+): Promise<PersonStub[][]> {
   const seen = new Set<string>()
-  const stubs: PersonStub[] = []
+  const groups: PersonStub[][] = []
 
   for (const spec of queries) {
+    const group: PersonStub[] = []
     const pages = spec.pages ?? 1
     for (let page = 1; page <= pages; page++) {
       diag.queriesRun++
@@ -126,15 +133,77 @@ export async function collectStubs(
       for (const stub of result.items) {
         if (seen.has(stub.apollo_id)) continue
         seen.add(stub.apollo_id)
-        stubs.push(stub)
+        group.push(stub)
       }
       // No more pages available — stop paging this query early.
       if (result.items.length === 0) break
     }
+    groups.push(group)
   }
 
-  diag.stubsUnique = stubs.length
-  return stubs
+  diag.stubsUnique = groups.reduce((n, g) => n + g.length, 0)
+  return groups
+}
+
+/**
+ * Allocate the enrichment budget across queries by PRIORITY, not evenly.
+ *
+ * Iteration 3 truncated the flat stub list, which starved the later two-thirds
+ * of the search strategy. Iteration 4 spread the budget uniformly and profile 1
+ * regressed 65% -> 35%: the naive truncation had been accidentally concentrating
+ * enrichment on that profile's strongest queries, which are listed first.
+ *
+ * The lesson is that queries differ in expected yield and budget should follow
+ * that. Queries are authored in priority order (and Phase 4's Mission Strategist
+ * will emit an explicit `expected_yield`), so earlier queries get a larger share.
+ * Unused quota — a query that returned fewer stubs than its share — is
+ * redistributed rather than wasted.
+ *
+ * The decay is deliberately STEEP (geometric, 0.7). A gentle reciprocal decay
+ * recovered profile 1 only from 35% to 40%, versus 65% under the accidental
+ * concentration. Precision@20 depends only on the top of the list, not on pool
+ * breadth, so spending the budget on the highest-yield queries beats spreading
+ * it — breadth buys candidates nobody will ever contact.
+ */
+const BUDGET_DECAY = 0.7
+
+export function allocateBudget(groups: PersonStub[][], budget: number): PersonStub[] {
+  if (groups.length === 0 || budget <= 0) return []
+
+  const weights = groups.map((_, i) => Math.pow(BUDGET_DECAY, i))
+  const totalWeight = weights.reduce((a, b) => a + b, 0)
+
+  const quotas = weights.map((w) => Math.floor((w / totalWeight) * budget))
+  const taken = groups.map((g, i) => Math.min(quotas[i], g.length))
+
+  // Redistribute leftovers to whichever groups still have stubs available.
+  // Loop until no group can absorb more — a fixed pass count cannot absorb a
+  // large leftover (one sparse query plus one deep query leaves most of the
+  // budget unspent).
+  let remaining = budget - taken.reduce((a, b) => a + b, 0)
+  while (remaining > 0) {
+    let progressed = false
+    for (let i = 0; i < groups.length && remaining > 0; i++) {
+      if (taken[i] < groups[i].length) {
+        taken[i]++
+        remaining--
+        progressed = true
+      }
+    }
+    if (!progressed) break // every group exhausted; budget exceeds supply
+  }
+
+  // Interleave the selected slices so the downstream scoring batches still mix
+  // candidates from different queries.
+  const selected = groups.map((g, i) => g.slice(0, taken[i]))
+  const out: PersonStub[] = []
+  const maxLen = Math.max(0, ...selected.map((s) => s.length))
+  for (let rank = 0; rank < maxLen; rank++) {
+    for (const slice of selected) {
+      if (rank < slice.length) out.push(slice[rank])
+    }
+  }
+  return out
 }
 
 /** Company payload embedded in an enriched person record. */
@@ -241,10 +310,9 @@ export async function scoutProfile(
 ): Promise<ScoutResult> {
   const diagnostics = newDiagnostics()
 
-  const stubs = await collectStubs(queries, diagnostics)
-  const enriched = await apolloPeopleProvider.enrichMany(
-    stubs.slice(0, opts.maxPeopleToEnrich).map((s) => s.apollo_id)
-  )
+  const stubGroups = await collectStubs(queries, diagnostics)
+  const budgeted = allocateBudget(stubGroups, opts.maxPeopleToEnrich)
+  const enriched = await apolloPeopleProvider.enrichMany(budgeted.map((s) => s.apollo_id))
   diagnostics.peopleEnriched = enriched.items.length
 
   // Derive companies first — the person filter needs employee count for

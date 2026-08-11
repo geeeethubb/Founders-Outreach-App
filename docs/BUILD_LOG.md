@@ -6,6 +6,107 @@ architecturally and why.
 
 ---
 
+## 2026-08-10 — Phase 3: Provider abstraction + Apollo integration (eval-driven)
+
+**Type:** implementation + eval harness · **Behavior change:** additive; V1 untouched
+
+Full report: [PHASE_3_EVAL.md](PHASE_3_EVAL.md)
+
+### What shipped
+
+- `lib/providers/` — `CompanyProvider` / `PeopleProvider` / `WebResearchProvider`
+  interfaces, an Apollo client (retry, rate limiting, call budget, credit
+  accounting), and a content-addressed disk cache.
+- `lib/scouting/` — deterministic discovery, dedupe, size-aware seniority
+  calibration, junk filtering, and a relevance scorer where **the LLM emits
+  components and code computes the total** (ADR-004 in practice).
+- `lib/ai/models.ts` — the central model registry from ADR-008.
+- `supabase/migrations/010_companies_scouting.sql` — companies as a first-class
+  entity (ADR-001), provenance tables, `contacts` extensions (ADR-012).
+- `evals/phase3/` — 5 search profiles, 4 deterministic checks, an independent
+  LLM judge, Precision@20.
+- `scripts/test-deterministic.ts` — 68 assertions over the deterministic core.
+
+### Architecture finding: Apollo discovery must be people-first
+
+Company-first discovery failed. Apollo's `q_organization_keyword_tags` matches
+company **names** lexically, so searching "artificial intelligence + manufacturing"
+returned AI magazines, certification bodies, conference organizers and
+universities — and 9 queries yielded 1 usable candidate.
+
+Applying the same keywords at the **people** search layer works, because the
+title filter anchors each query to a real operating company. Recorded as
+[ADR-013](ARCHITECTURE.md#adr-013).
+
+### Entitlement finding: search rows are obfuscated
+
+`mixed_people/api_search` returns `last_name_obfuscated`, boolean `has_email`
+flags, no LinkedIn, no seniority. Search rows are identifiers only; full records
+need `people/bulk_match`, which costs credits. Modeled as a distinct `PersonStub`
+type so obfuscated rows can never be mistaken for prospect data.
+
+Also: `mixed_people/search` is deprecated (422), and company descriptions are
+absent from person records entirely — **0 of 140** — requiring a separate
+`organizations/enrich` call.
+
+### Eval results — 6 iterations, stopped by a real blocker
+
+| Iteration | Change | Avg P@20 | Min P@20 |
+|---|---|---|---|
+| 1 | People-first inversion | 65%¹ | 65%¹ |
+| 2 | + description hydration, scorer v4 | 75%¹ | 75%¹ |
+| 3 | Full 5-profile baseline | 47% | 30% |
+| 4 | + search rebalance, cross-profile dedupe | **44%** | **15%** |
+| 5 | + priority-weighted budget, domain filter | 31%² | 0%² |
+| 6 | + one person per company | aborted² | |
+
+¹ single profile · ² invalidated by Apollo credit exhaustion
+
+**Final status (iteration 4, the last valid full run):** all four deterministic
+checks pass — data completeness 99%, duplicate rate **0.0%**, seniority
+calibration 99%, resume grounding 100%. **Precision@20 does not pass**: 44%
+average against a 75% threshold.
+
+⛔ **Blocker: Apollo lead credits exhausted.** Search rows are obfuscated, so
+every usable prospect costs one enrichment credit; ~700 per full run drained the
+account. Iterations 5–6 are not valid measurements and iteration 6 was aborted
+rather than allowed to report meaningless numbers. **Thresholds were not
+weakened.**
+
+Failure modes found and fixed: search (keyword name-matching), data (no company
+descriptions — 0/140), scoring (compression from batching in discovery order),
+profile match (adjacent-but-off-mission verticals), company (wrong end of each
+size band), dedupe (cross-profile collisions, 6% → 0%), budget (enrichment spent
+on the first queries only — and the over-correction that regressed profile 1
+from 65% to 35%), product-rule violation (7% of top-20 slots on a second person
+at the same company).
+
+Diagnosis of the residual gap: 25% of non-GOOD verdicts cite thin company
+information; the larger share is domain drift in Apollo's noisy consulting
+keyword space. The first is what Phase 6 fixes.
+
+### Bugs the tests caught
+
+- `normalizeLinkedIn` stripped the trailing slash **before** the query string, so
+  one profile produced two dedupe keys — a silent threat to the duplicate threshold.
+- "Technical Recruiter" survived the irrelevant-function filter because the
+  override term `technical` rescued it. Split into hard- and soft-excluded functions.
+- A cache-key bug: `JSON.stringify(payload, sortedKeys)` uses the array argument
+  as a recursive property **allowlist**, not a key sort, collapsing all nine
+  search queries onto one cache entry.
+
+### Security
+
+`Apollo API.txt` — a committed credential-shaped string — untracked and
+gitignored. **The key still needs rotating**, and history still contains it.
+
+### Not done
+
+Migration 010 is **not applied** (migrations are manual per CLAUDE.md).
+`lib/scouting/persist.ts` degrades gracefully until it is.
+
+---
+
 ## 2026-08-10 — Phase 0: Repository audit and V2 architecture
 
 **Type:** documentation + type-only scaffolding · **Behavior change:** none

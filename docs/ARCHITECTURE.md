@@ -352,6 +352,49 @@ would fork every existing query, screen, and RLS policy for a naming preference.
 
 ---
 
+### ADR-013 ★ — Apollo discovery is people-first, not company-first
+
+**Problem.** [PIPELINE.md](PIPELINE.md) describes discovery as company-first:
+find companies, rank them, then find people inside the good ones. Phase 3
+implemented that against Apollo and it failed.
+
+**Evidence.** Apollo's `q_organization_keyword_tags` matches company **names and
+descriptions lexically**, not semantically. A search for
+`['artificial intelligence', 'manufacturing']` returned AI magazines,
+certification bodies, conference organizers, staffing agencies and universities —
+almost no operating companies. Nine queries produced **one** usable candidate.
+
+**Decision.** For Apollo, invert the funnel. Query
+`mixed_people/api_search` with `person_titles` + `person_seniorities` +
+`q_organization_keyword_tags` + `organization_num_employees_ranges`, then enrich
+via `people/bulk_match`, then derive companies from the enriched person records.
+
+**Why it works.** The title filter anchors each query to a real operating
+company. The same keyword that returned magazines under company-first returns
+DuBois Chemicals and Sunburst Chemicals when paired with "Director of
+Manufacturing". Apollo's person records also embed a **richer** org payload than
+its company search returns, so company data arrives for free.
+
+**Scope.** This is a **provider-level** strategy, not a change to the conceptual
+pipeline. [PIPELINE.md](PIPELINE.md) stages 2–5 still describe what the system
+does; ADR-013 records how the Apollo adapter achieves it. A provider with real
+semantic company search (PitchBook, or an embedding-based index) can implement
+company-first behind the same `CompanyProvider` interface without changing the
+scouting pipeline.
+
+**Cost.** Company discovery is bounded by which companies happen to employ
+someone matching a title query. Genuinely relevant companies with no matching
+title in Apollo are invisible. Accepted for now; a semantic company provider
+would fix it.
+
+**Corollary — enrichment is the budget.** Apollo search rows are obfuscated
+(`last_name_obfuscated`, boolean `has_email`, no LinkedIn, no seniority), so
+every usable prospect costs one `people/bulk_match` credit. Pool depth is bounded
+by credit budget, not search recall. Deterministic filtering therefore runs
+**before** enrichment wherever possible.
+
+---
+
 ## 4. Providers
 
 ```ts

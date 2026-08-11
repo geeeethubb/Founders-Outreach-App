@@ -41,6 +41,7 @@ export type CompanyRejectReason =
   | 'too_small'
   | 'too_large'
   | 'geography'
+  | 'off_domain'
   | null
 
 export interface CompanyFilterResult {
@@ -55,13 +56,31 @@ export interface CompanyFilterOptions {
   /** Lowercased country substrings to allow. Empty = allow all. */
   allowedCountries?: string[]
   requireDomain?: boolean
+  /**
+   * Lowercased substrings; the company must match at least one across its name,
+   * description, industry or keywords.
+   *
+   * Apollo's keyword tags are lexical, so some keyword spaces are extremely
+   * noisy: "operations consulting" returns golf-club, hospitality and mortgage
+   * advisories alongside industrial ones, and "manufacturing consulting"
+   * returns real-estate and lighting firms. A required-domain check is a cheap
+   * deterministic way to demand actual evidence of the target domain rather
+   * than trusting the provider's tag. Empty = no requirement.
+   */
+  requiredDomainTerms?: string[]
 }
 
 export function filterCompany(
   company: CompanyCandidate,
   opts: CompanyFilterOptions = {}
 ): CompanyFilterResult {
-  const { minEmployees, maxEmployees, allowedCountries = [], requireDomain = true } = opts
+  const {
+    minEmployees,
+    maxEmployees,
+    allowedCountries = [],
+    requireDomain = true,
+    requiredDomainTerms = [],
+  } = opts
 
   const haystack = `${company.name} ${company.description ?? ''} ${company.industry ?? ''} ${company.sub_industries.join(' ')}`
 
@@ -93,6 +112,17 @@ export function filterCompany(
     const country = company.country.toLowerCase()
     if (!allowedCountries.some((c) => country.includes(c))) {
       return { keep: false, reason: 'geography', detail: company.country }
+    }
+  }
+
+  if (requiredDomainTerms.length > 0) {
+    const lower = haystack.toLowerCase()
+    if (!requiredDomainTerms.some((term) => lower.includes(term))) {
+      return {
+        keep: false,
+        reason: 'off_domain',
+        detail: 'no evidence of the target domain in name, description, industry or keywords',
+      }
     }
   }
 

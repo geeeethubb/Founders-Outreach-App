@@ -16,6 +16,7 @@ import { computeTotal, deriveRecommendation, DIMENSION_MAX, SCOUT_DIMENSIONS, ty
 import { assessSeniority, sizeBand, normalizeSeniority } from '../lib/scouting/seniority'
 import { dedupeCompanies, dedupePeople, countResidualDuplicates, companyKey, normalizeLinkedIn } from '../lib/scouting/dedupe'
 import { interleave } from '../lib/scouting/concurrency'
+import { allocateBudget } from '../lib/scouting/pipeline'
 import { filterCompany, filterPerson } from '../lib/scouting/filter'
 import type { CompanyCandidate, PersonCandidate } from '../lib/providers/types'
 
@@ -248,6 +249,20 @@ check('recruiting described company rejected',
   !filterCompany(company({ name: 'Neutral Co', description: 'We are a recruiting agency for manufacturers' })).keep)
 check('real chemical company kept', filterCompany(company()).keep)
 check('company below size floor rejected', !filterCompany(company({ employee_count: 5 }), { minEmployees: 50 }).keep)
+
+// Required-domain terms: Apollo's "operations consulting" keyword returns
+// golf-club and hospitality advisories alongside industrial ones.
+{
+  const terms = ['manufactur', 'industrial', 'chemical', 'process']
+  const golf = company({ name: 'GGA Partners', description: 'Advisory firm for private golf and club leisure businesses', industry: 'management consulting', sub_industries: [] })
+  const industrial = company({ name: 'Life Cycle Engineering', description: 'Reliability and industrial operations consulting for manufacturing plants', industry: 'management consulting', sub_industries: [] })
+  check('off-domain consultancy rejected', !filterCompany(golf, { requiredDomainTerms: terms }).keep)
+  check('off-domain rejection is labelled', filterCompany(golf, { requiredDomainTerms: terms }).reason === 'off_domain')
+  check('industrial consultancy kept', filterCompany(industrial, { requiredDomainTerms: terms }).keep)
+  check('no domain terms means no requirement', filterCompany(golf, {}).keep)
+  check('domain term can match keywords',
+    filterCompany(company({ name: 'Opaque Co', description: null, industry: null, sub_industries: ['process optimization'] }), { requiredDomainTerms: terms }).keep)
+}
 check('company above size ceiling rejected', !filterCompany(company({ employee_count: 90000 }), { maxEmployees: 5000 }).keep)
 
 check('sales VP rejected as irrelevant function',
@@ -267,6 +282,38 @@ check('relevant director kept', filterPerson(person(), 500).keep)
   check('interleave mixes across the pool', out[0] === 0 && out[1] === 4 && out[2] === 8, out.slice(0, 4).join(','))
   check('interleave is deterministic', interleave(items, 4).join(',') === out.join(','))
   check('interleave no-ops on small input', interleave([1, 2], 8).length === 2)
+}
+
+// ─── Budget allocation ───────────────────────────────────────────────────────
+// Queries are not equal. Earlier (higher-priority) queries must get a larger
+// share of the enrichment budget — spreading it uniformly regressed profile 1
+// from 65% to 35% in iteration 4.
+{
+  const stub = (id: string) => ({ apollo_id: id, first_name: null, title: null, company_name: null, has_email: false, query_ref: {} })
+  const groups = [
+    Array.from({ length: 50 }, (_, i) => stub(`a${i}`)),
+    Array.from({ length: 50 }, (_, i) => stub(`b${i}`)),
+    Array.from({ length: 50 }, (_, i) => stub(`c${i}`)),
+  ]
+
+  const out = allocateBudget(groups, 60)
+  check('allocateBudget respects the budget', out.length === 60, `got ${out.length}`)
+  check('allocateBudget returns unique stubs', new Set(out.map((s) => s.apollo_id)).size === out.length)
+
+  const counts = { a: 0, b: 0, c: 0 }
+  for (const s of out) counts[s.apollo_id[0] as 'a' | 'b' | 'c']++
+  check('earlier queries get a larger share', counts.a > counts.c, JSON.stringify(counts))
+  check('later queries are not starved', counts.c > 0, JSON.stringify(counts))
+
+  // A query that returned little must not waste its quota.
+  const lopsided = [[stub('x0')], Array.from({ length: 80 }, (_, i) => stub(`y${i}`))]
+  const redistributed = allocateBudget(lopsided, 40)
+  check('unused quota is redistributed', redistributed.length === 40, `got ${redistributed.length}`)
+
+  check('allocateBudget handles empty input', allocateBudget([], 20).length === 0)
+  check('allocateBudget handles zero budget', allocateBudget(groups, 0).length === 0)
+  check('allocateBudget caps at available stubs',
+    allocateBudget([[stub('z0'), stub('z1')]], 500).length === 2)
 }
 
 // ─── Report ──────────────────────────────────────────────────────────────────
