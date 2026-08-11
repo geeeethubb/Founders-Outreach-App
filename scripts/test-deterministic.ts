@@ -403,6 +403,25 @@ check('relevant director kept', filterPerson(person(), 500).keep)
   check('ranking surfaces the intended person first',
     rankedPool[0].t === 'Director Digital Manufacturing', JSON.stringify(rankedPool.map((p) => p.t)))
 
+  // Trainees cannot create, sponsor, or refer — the whole test. A "Research
+  // Assistant, Masters Student" reached a published top-20 before this existed.
+  const { stubPassesCheapFilter } = require('../lib/scouting/filter') as typeof import('../lib/scouting/filter')
+  for (const title of [
+    'Research Assistant, Masters Student',
+    'PhD Candidate',
+    'Graduate Student',
+    'Manufacturing Co-op',
+    'Engineering Trainee',
+  ]) {
+    check(`filter rejects trainee title: ${title}`,
+      !stubPassesCheapFilter(title, 'Acme').keep, title)
+  }
+  // ...but must not reject real roles that merely contain a similar word.
+  for (const title of ['Assistant Director of Manufacturing', 'Director of Process Technology', 'Head of Deployment']) {
+    check(`filter keeps real role: ${title}`,
+      stubPassesCheapFilter(title, 'Acme').keep, JSON.stringify(stubPassesCheapFilter(title, 'Acme')))
+  }
+
   // Stability matters: an unstable sort makes runs undiffable.
   const tied = [{ t: 'Zeta Manager' }, { t: 'Alpha Manager' }]
   check('equal scores keep provider order',

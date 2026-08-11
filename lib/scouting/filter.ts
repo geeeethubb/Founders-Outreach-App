@@ -35,6 +35,20 @@ const EXCLUDED_NAME_PATTERNS: { pattern: RegExp; reason: string }[] = [
   { pattern: /\b(government|municipal|city of|county of|department of)\b/i, reason: 'government body' },
 ]
 
+/**
+ * People who are themselves still in training.
+ *
+ * They cannot create a role, sponsor a project, or make a referral that carries
+ * weight — which is the entire test. A "Research Assistant, Masters Student"
+ * reached a published top-20 because IC_TITLE happens to contain "associate" and
+ * "intern" but not "student" or "research assistant".
+ *
+ * Deliberately narrow and phrase-anchored. A bare /\bassistant\b/ would reject
+ * "Assistant Director of Manufacturing", who is a perfectly good target.
+ */
+const TRAINEE_TITLE =
+  /\b(student|phd candidate|doctoral candidate|undergraduate|research assistant|teaching assistant|graduate assistant|trainee|apprentice|co-?op)\b/i
+
 export type CompanyRejectReason =
   | 'excluded_business_type'
   | 'no_domain'
@@ -235,6 +249,12 @@ export function stubPassesCheapFilter(
   const t = title ?? ''
 
   if (!t.trim()) return { keep: false, reason: 'missing_identity', detail: 'no title' }
+
+  // Checked before everything else: no seniority override can rescue someone who
+  // is still in training, because the question is whether they could act on this.
+  if (TRAINEE_TITLE.test(t)) {
+    return { keep: false, reason: 'seniority', detail: `student/trainee title "${t}"` }
+  }
 
   if (HARD_EXCLUDED_FUNCTION.test(t)) {
     return { keep: false, reason: 'irrelevant_function', detail: 'recruiting/HR/legal/finance/support' }
