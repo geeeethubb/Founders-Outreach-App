@@ -267,10 +267,20 @@ async function main() {
 
   console.log(`\nAGENTIC SCOUTING EVAL — tag "${tag}", ${profiles.length} profile(s), Precision@${TOP_N}`)
 
+  fs.mkdirSync(OUT_DIR, { recursive: true })
+
   const reports: ProfileReport[] = []
   for (const profile of profiles) {
     try {
-      reports.push(await runProfile(profile, userId))
+      const report = await runProfile(profile, userId)
+      reports.push(report)
+      // Write each profile as it lands. A five-profile run takes hours, and
+      // waiting for the final JSON to cluster failures wastes most of that time
+      // — the first profile's failure modes are usually the whole story.
+      fs.writeFileSync(
+        path.join(OUT_DIR, `${tag}--${profile.id}.json`),
+        JSON.stringify(report, null, 2)
+      )
     } catch (e) {
       console.error(`\nPROFILE ${profile.id} CRASHED:`, e instanceof Error ? e.message : e)
       throw e

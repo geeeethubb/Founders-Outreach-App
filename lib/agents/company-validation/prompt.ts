@@ -9,8 +9,8 @@ export interface CompanyValidationInput {
 }
 
 export const companyValidationPrompt: VersionedPrompt<CompanyValidationInput> = {
-  // 2.0.0 — adds KEEP/MAYBE/REJECT, archetype, and evidence-derived target titles.
-  version: '2.0.0',
+  // 2.1.0 — target titles are chosen by FUNCTION first, then seniority.
+  version: '2.1.0',
 
   build(input) {
     const system = `You verify whether a company is real, correctly identified, and genuinely relevant to a mission —
@@ -70,15 +70,38 @@ This is not a description field. Get this wrong and the company yields zero peop
 Rules: 2-5 words. No parentheses. No slashes. No commas. No industry qualifiers. One title per
 entry. Titles that plausibly EXIST AT THIS SPECIFIC COMPANY, given its size and type.
 
-Match the seniority to the organization, because appropriate seniority is not maximum seniority:
+CHOOSE THE FUNCTION FIRST, THEN THE SENIORITY. In that order.
 
-  A 12-person startup       Founder, Co-Founder, CEO, CTO, Head of Engineering
-  A 200-person scale-up     CTO, VP Engineering, Head of Deployment, Director of Solutions
+Step 1 — which function inside THIS company would own the work the mission describes, or would
+care most about someone with that background? Answer that before thinking about titles at all.
+
+Step 2 — within that function, pick the seniority that is both REACHABLE and EMPOWERED here.
+
+  A 12-person startup       Founder, Co-Founder, CEO, CTO, Head of Product
+  A 200-person scale-up     CTO, VP Product, Head of Deployment, Director of Solutions
   A 90,000-person operator  Director Digital Manufacturing, Director Process Technology,
                             Manager Advanced Manufacturing, Director of Innovation
                             (NOT the CEO — they will never see the message and would not decide it)
   A consultancy             Partner, Principal, Managing Director, practice leaders
-  A research institution    Principal Investigator, Group Leader, Research Director`
+  A research institution    Principal Investigator, Group Leader, Research Director
+
+THE MOST COMMON MISTAKE: defaulting to the generic engineering-leadership chain — VP Engineering,
+Head of Engineering, Director of Engineering — at every software company. At a company that SELLS
+software into an industry, those roles usually own internal software delivery: hiring, platform,
+infrastructure, release. They are frequently the wrong door for someone whose value is domain
+expertise in the customer's world.
+
+When the mission is about applying technical work inside an industry, the people who care are
+usually the ones whose job touches that industry directly:
+
+  - the founder or CEO, at a company small enough that they still do
+  - product leadership for the industry vertical
+  - deployment, solutions, implementation, field, applied, or forward-deployed engineering
+  - the person who owns customer outcomes rather than the codebase
+
+Include a generic engineering title only when you have a specific reason to believe that role owns
+the domain work at THIS company — for example, an engineering leader who publicly works on the
+industry problem itself. Otherwise prefer the functions above.`
 
     const user = `MISSION: ${input.mission.goal}
 GEOGRAPHY: ${input.mission.geography}
