@@ -212,6 +212,24 @@ Everything else stops here.
 
 ---
 
+### ⚠ Stages 2–6 reorder in the Apollo adapter (Phase 6)
+
+The conceptual sequence below is unchanged, but the **Apollo implementation**
+interleaves research earlier, because enrichment is the only step that costs hard
+currency. See [ARCHITECTURE.md ADR-014](ARCHITECTURE.md#adr-014).
+
+```
+DISCOVER (stubs, free) → CHEAP FILTER (free) → COMPANY RESEARCH (stage 6, early)
+  → PRELIMINARY RELEVANCE → SHORTLIST → ENRICHMENT (credits) → PERSON RESEARCH
+  → RANKING (stages 3+5)
+```
+
+Company research moves *before* people discovery completes, so no credit is spent
+on a person whose company has already been shown to be off-mission. Measured
+effect on the consulting profile: 40% of companies rejected pre-enrichment.
+
+---
+
 ### Stage 4 — People Discovery
 
 | | |

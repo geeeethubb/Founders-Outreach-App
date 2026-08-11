@@ -395,6 +395,58 @@ by credit budget, not search recall. Deterministic filtering therefore runs
 
 ---
 
+### ADR-014 ★ — Research runs before enrichment, not after
+
+**Problem.** Phase 3 spent an Apollo lead credit on every candidate *before*
+knowing whether their company was worth anything, then discovered at scoring time
+that 40% of them were golf-club advisories, ERP implementers and MEP engineering
+firms. Enrichment is the only hard-currency step in the pipeline, and the account
+ran dry.
+
+**Decision.** Reorder the funnel so cheap signal is spent first and credits last:
+
+```
+DISCOVER → CHEAP FILTER → COMPANY RESEARCH → PRELIMINARY RELEVANCE
+  → SHORTLIST → APOLLO ENRICHMENT → PERSON RESEARCH → FINAL SCORE
+```
+
+Apollo search stubs are obfuscated but carry a **company name**, which is enough
+to research the company by name before any credit is spent. Measured on the
+consulting profile: 269 stubs → 246 after a free filter → 90 researched → **36
+rejected** → 118 shortlisted. Those 36 companies' people are never enriched.
+
+**Consequence.** The deterministic `requiredDomainTerms` substring filter from
+Phase 3 is retired. A researched, sourced verdict on what a company actually does
+is a strictly better instrument than substring matching on an Apollo keyword blob,
+and it explains itself.
+
+**Cost.** One web-grounded call per unique company. At ~$0.03 each this is far
+cheaper than the enrichment credits it saves, and it is cached per company.
+
+---
+
+### ADR-015 — Provider caches must be keyed by entity, not by request
+
+**Problem.** Phase 3 cached Apollo enrichment per *batch of ten people*, keyed on
+the batch composition. The moment the pipeline changed which people it selected,
+every batch was a miss — so 1,373 already-purchased records were unreachable and
+would have been re-bought. This was silently wasting the scarcest resource in the
+system from the day it was written.
+
+**Decision.** Cache expensive per-entity results under a **stable entity key**
+(`person_enriched/<apollo_id>`), independent of the request that produced them.
+Request-level caching is still fine for cheap, idempotent calls like search.
+
+**Corollary — never cache a failure.** A transient parse error or rate limit
+written to cache is replayed forever and starts to look like a stable property of
+the input. `cached()` now takes a `shouldCache` predicate, and research dossiers
+opt out when `research_failed` is set.
+
+**Generalizes to:** company dossiers, person dossiers, and any future provider
+result that costs money per entity.
+
+---
+
 ## 4. Providers
 
 ```ts

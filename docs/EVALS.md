@@ -393,7 +393,45 @@ metric rise while the product got worse.
 
 ---
 
-## 9. Offline evals — later, deliberately
+## 9. Phase 6 additions — research evals in the scouting loop
+
+Implemented in `evals/phase6/checks.ts`, running alongside the four Phase 3
+checks. Full results: [PHASE_6_EVAL.md](PHASE_6_EVAL.md).
+
+| Check | Rule | Threshold | Measured (consulting) |
+|---|---|---|---|
+| **BAD rate@20** | Share of the top 20 a careful advisor would strike off | ≤ 10% | 15% ❌ |
+| **Research coverage** | Final top 20 with grounded company context | ≥ 95% | 100% ✅ |
+| **Fact grounding** | FACT-typed claims carrying a source URL | 100% | 269/269 ✅ |
+| **Cost per GOOD top-20 prospect** | Total model spend ÷ GOOD verdicts | operational | $0.98 |
+
+### Why BAD rate is tracked separately from precision
+
+They move independently. A list can be 50% GOOD with 0% BAD (lots of defensible
+maybes) or 50% GOOD with 30% BAD (erratic). The second is far worse for trust:
+every BAD entry teaches the operator to second-guess the whole list, including
+the good half.
+
+### Fact grounding is true by construction
+
+`validateClaims()` downgrades a `FACT` without a resolvable URL to `INFERENCE`,
+and separately downgrades any FACT citing a URL the web search did not return.
+So the check is a **regression guard on an invariant**, not a hopeful
+measurement — which is the same pattern as the claim-citation gate in §3.6.
+
+### A limit of Precision@20 this phase exposed
+
+When research and judge independently agree that a candidate *pool* is mediocre,
+Precision@20 correctly reports a low number while the system is behaving
+correctly. That is a supply problem wearing a ranking problem's clothes.
+
+Pair it with a **supply-quality metric** — the share of researched companies
+rated mission-relevant (60% on the consulting profile; 40% rejected) — so the two
+are distinguishable at a glance.
+
+---
+
+## 10. Offline evals — later, deliberately
 
 Once ~50 real drafts with outcomes exist, build a fixture set:
 

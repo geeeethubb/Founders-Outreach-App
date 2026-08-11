@@ -6,6 +6,82 @@ architecturally and why.
 
 ---
 
+## 2026-08-11 — Phase 6: Grounded research
+
+**Type:** implementation + eval · **Behavior change:** additive; V1 and Phase 3 paths intact
+
+Full report: [PHASE_6_EVAL.md](PHASE_6_EVAL.md)
+
+### What shipped
+
+- `lib/providers/web/openai-search.ts` — `WebResearchProvider` on the OpenAI
+  Responses `web_search` tool, returning real `url_citation` provenance.
+- `lib/research/` — company and person dossier agents emitting
+  FACT/INFERENCE/UNKNOWN claims. A FACT without a resolvable source URL is
+  **downgraded to INFERENCE**, and a FACT citing a URL the search never returned
+  is downgraded too. Sourcing is an invariant, not an instruction.
+- `lib/scouting/pipeline-v2.ts` — research-before-enrichment ordering
+  ([ADR-014](ARCHITECTURE.md#adr-014)).
+- Per-person enrichment index + backfill ([ADR-015](ARCHITECTURE.md#adr-015)).
+- `evals/phase6/` — BAD rate@20, research coverage, fact grounding, and
+  **cost per GOOD top-20 prospect**.
+
+### Measured (consulting profile, Phase 3's worst at 15%)
+
+| | Phase 3 | Phase 6 |
+|---|---|---|
+| Precision@20 | 15% | **20%** |
+| BAD rate@20 | 25% | **15%** |
+| Research coverage | 0% | **100%** |
+| Fact grounding | n/a | **100%** (269/269) |
+| Apollo credits | ~700 | **0** |
+| Cost per GOOD prospect | — | **$0.98** |
+
+Domain drift is fixed and measurable: **36 of 90 companies (40%) rejected** with
+sourced reasoning before any credit was spent.
+
+### The finding that redirects the roadmap
+
+Research did not lift consulting precision — and inspecting why is the most
+valuable output of the phase. The research is **correct** and the judge
+**agrees with it**: Avid Engineers really is MEP/building systems, Semco Carbon
+really is graphite machining. After removing the genuinely-wrong companies, what
+Apollo can surface for US industrial consulting is largely MEP firms, ERP
+implementers and restructuring shops.
+
+**The binding constraint is candidate supply, not research or ranking.** Phase 3
+could only suspect this; Phase 6 has 90 sourced dossiers demonstrating it. The
+recommended next step is therefore research-led *discovery* — let the research
+layer name companies and use Apollo purely for people lookup.
+
+### Bugs found and fixed
+
+- Batch-keyed enrichment cache made 1,373 purchased Apollo records unreachable
+  whenever selection changed — silently wasting credits since Phase 3.
+- Failed research dossiers were being cached, making transient errors permanent.
+- Researcher JSON truncation: reasoning tokens count against
+  `max_completion_tokens`.
+- Company research initially rejected *Sunburst Chemicals*, a real chemicals
+  manufacturer, for "lacking an AI dimension" — a false negative that would have
+  gutted the corporate-innovation profile.
+
+### Blocked
+
+⛔ **OpenAI API credits exhausted** (`429 insufficient_quota`) partway through the
+full 5-profile run. Apollo credits were already exhausted but were successfully
+worked around; the OpenAI blocker cannot be. Scorer v5.0.0 and judge v1.2.0 are
+implemented and committed but **unvalidated**.
+
+### Security
+
+The exposed Apollo key is confirmed **public on GitHub** (`e5029ca` is an
+ancestor of `origin/main`; repo visibility is public). Rotation is required and
+only the founder can do it — see
+[SECURITY_CREDENTIAL_EXPOSURE.md](SECURITY_CREDENTIAL_EXPOSURE.md).
+`my_resume.pdf` untracked and gitignored.
+
+---
+
 ## 2026-08-10 — Phase 3: Provider abstraction + Apollo integration (eval-driven)
 
 **Type:** implementation + eval harness · **Behavior change:** additive; V1 untouched
