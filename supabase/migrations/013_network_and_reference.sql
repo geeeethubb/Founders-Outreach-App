@@ -110,6 +110,30 @@ alter table contact_index
     setweight(to_tsvector('english', coalesce(body_text, '')), 'C')
   ) stored;
 
+-- ⚠ `search_contact_index` does NOT use this index, and that is understood
+-- rather than accidental.
+--
+-- Postgres uses an index for a disjunction only when EVERY disjunct is
+-- independently indexable on the same relation. The predicate there is
+-- `tsq is null or ci.search_vector @@ tsq` — the first branch does not reference
+-- contact_index at all, so the whole OR degrades to a filter and the scan is
+-- sequential. Const-folding cannot rescue it either: a `language sql` body is
+-- planned with boundParams = NULL, so p_query is a runtime Param, never a
+-- constant, no matter how IMMUTABLE websearch_to_tsquery is.
+--
+-- Left in place deliberately:
+--   * it costs little, and it IS used by any direct `search_vector @@ q` query
+--     from the SQL editor, PostgREST, or a future simpler code path
+--   * the STORED column it implies is not dead weight regardless — it is what
+--     makes ts_rank cheap, instead of recomputing three to_tsvector calls over
+--     body_text research paragraphs per row per query
+--
+-- Not worth fixing at this scale: measured, the gap is ~1.6ms vs ~10ms per call
+-- at 33x the current corpus, in front of a multi-second model turn. If the
+-- network ever grows enough to matter, the fix is to make this function
+-- `language plpgsql` and branch on `p_query is null` into two separately-planned
+-- queries — NOT to inline websearch_to_tsquery into the predicate, which re-parses
+-- the query string roughly twice per row.
 create index if not exists contact_index_search_idx     on contact_index using gin (search_vector);
 create index if not exists contact_index_user_idx       on contact_index (user_id);
 create index if not exists contact_index_seniority_idx  on contact_index (user_id, seniority_band);

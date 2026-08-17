@@ -609,6 +609,16 @@ classifies the new people and nobody else. Measured: 897 contacts for **$1.59**,
 with structured filters and a relevance floor, because `ts_rank` cannot be expressed through
 PostgREST. See [ADR-025](ARCHITECTURE.md#adr-025).
 
+**The GIN index is not used by that function, knowingly.** Its predicate is
+`tsq is null or search_vector @@ tsq`, and Postgres indexes a disjunction only when every
+branch is independently indexable — so the scan is sequential. Const-folding cannot help: a
+`language sql` body is planned with `boundParams = NULL`, so `p_query` is never a constant.
+The index stays because it costs little and serves any direct `@@` query, and the STORED
+column it implies is what makes `ts_rank` cheap either way. Measured, the gap is ~8ms per call
+at 33× the current corpus, in front of a multi-second model turn. If it ever matters, the fix
+is `language plpgsql` with two separately-planned branches — not inlining
+`websearch_to_tsquery` into the predicate, which re-parses the query about twice per row.
+
 ```sql
 create table network_matches (
   id uuid primary key, user_id uuid not null,
