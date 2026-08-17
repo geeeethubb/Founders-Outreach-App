@@ -568,6 +568,77 @@ overvalue whatever the responders had in common.
 
 ---
 
+### `contact_index` and `network_matches` (Phase 10 — shipped)
+
+Two tables, and the split between them is the whole design.
+
+```sql
+create table contact_index (
+  contact_id  uuid primary key references contacts(id) on delete cascade,
+  user_id     uuid not null,
+  headline    text,      -- name · title · company        weight A
+  tags_text   text,      -- flattened classification       weight B
+  body_text   text,      -- research, hooks, facts         weight C
+  search_vector tsvector generated always as (
+    setweight(to_tsvector('english', coalesce(headline,  '')), 'A') ||
+    setweight(to_tsvector('english', coalesce(tags_text, '')), 'B') ||
+    setweight(to_tsvector('english', coalesce(body_text, '')), 'C')
+  ) stored,
+  -- deterministic, free
+  seniority_band, function_area, geo_city, geo_state, geo_country, geo_region, company_norm,
+  -- classified once, cached by hash
+  industry, sub_industry, function, company_type, company_stage,
+  technical_domains text[], business_domains text[], opportunity_types text[], tags text[],
+  relevance jsonb,          -- {recruiting: 0.9, mentorship: 0.4, …} — dispositions, not verdicts
+  -- relationship, computed from emails/conversations/outreach
+  relationship_status, touches, replies, last_contacted_at, last_reply_at,
+  -- freshness
+  evidence_level, source_hash, index_version, classifier_version, classified_at
+);
+```
+
+**Why weighted bands rather than one blob.** Ranking over a single text column makes a plant
+manager whose *title* says "manufacturing" indistinguishable from a marketer whose research
+paragraph mentions it once. That is the difference between a retrieval layer and a grep.
+
+**Why `source_hash`.** Classification is the only part of indexing that costs money, and the
+hash covers exactly the material the classifier reads. Re-indexing after a scouting run
+classifies the new people and nobody else. Measured: 897 contacts for **$1.59**, once.
+
+**A search function, not a view** — `search_contact_index(...)` does ranked full-text search
+with structured filters and a relevance floor, because `ts_rank` cannot be expressed through
+PostgREST. See [ADR-025](ARCHITECTURE.md#adr-025).
+
+```sql
+create table network_matches (
+  id uuid primary key, user_id uuid not null,
+  run_id uuid references scouting_runs(id) on delete cascade,
+  contact_id uuid references contacts(id) on delete cascade,
+  mission_goal text, score numeric, confidence numeric,
+  reason text, evidence text[], matched_by text[],
+  stage text check (stage in ('retrieved','shortlisted','rejected')), rank int,
+  unique (run_id, contact_id)
+);
+```
+
+**Scores live here and never on the contact.** A person weak for winter industrial AI may be
+strong for summer consulting or for mentorship. Writing a "quality" number back onto
+`contacts` would let the first mission that ran poison every later one — which is precisely
+the thing this milestone exists to make impossible.
+
+### `outreach_edits` (Phase 10 — shipped)
+
+Append-only pairs of (what the agent wrote, what the user sent).
+
+`outreach.body` / `body_edited` already hold the latest pair, but a redraft overwrites them,
+and the interesting question — *what does this user consistently change?* — needs more than
+one sample to answer.
+
+**Nothing reads it yet, deliberately.** Rewriting global style rules from a single edit is
+exactly the overfitting the campaign-reference design replaces.
+
+---
+
 ## 4. Extended V1 tables
 
 ### `contacts` — becomes the person entity
@@ -607,6 +678,29 @@ alter table campaigns
 
 Per-campaign autonomy is the flag from [PRODUCT.md §6](PRODUCT.md#6-human-approval). It
 defaults to `approval_required` and is never set globally.
+
+**Phase 10 — the reference email** (`013_network_and_reference.sql`, shipped):
+
+```sql
+alter table campaigns
+  add column if not exists reference_subject       text,
+  add column if not exists reference_body          text,
+  add column if not exists reference_notes         text,
+  add column if not exists target_audience         text,
+  add column if not exists reference_style         jsonb,
+  add column if not exists reference_style_version text,
+  add column if not exists reference_hash          text,
+  add column if not exists reference_updated_at    timestamptz;
+```
+
+One real email the user wrote, defining how this campaign should sound
+([ADR-028](ARCHITECTURE.md#adr-028)). `reference_style` caches the Style Analyst's output;
+`reference_hash` covers the reference plus the analyst's prompt version, so the analysis is
+paid for once per campaign and recomputed exactly when the email changes.
+
+**There is deliberately no `variables` column and there never will be.** This is a style,
+structure and intent example, not a template. Placeholders are a blocking gate
+([ADR-029](ARCHITECTURE.md#adr-029)), not a feature.
 
 ### `emails`
 
@@ -670,6 +764,8 @@ each time — keeps policies to a single index lookup. V1 established this patte
 
 Each migration is standalone and additive. None blocks V1 functionality.
 
+**Planned** (from Phase 0; phases 1, 2, 4, 5 have not shipped, so several of these do not exist):
+
 | # | File | Phase | Contents |
 |---|---|---|---|
 | 008 | `008_missions.sql` | 1 | `missions`, `mission_strategies` |
@@ -680,6 +776,17 @@ Each migration is standalone and additive. None blocks V1 functionality.
 | 013 | `013_positioning_outreach.sql` | 7–8 | `positioning_angles`, `outreach_drafts`, `evaluations` |
 | 014 | `014_outcomes.sql` | 10 | `outcomes`, `outcome_events`, `emails` extensions |
 | 015 | `015_cleanup.sql` | 10 | Drop dead tables; complete the `rfc822_message_id` rename |
+
+**As actually built.** The phases that shipped collapsed several of the above, so the file
+numbering diverged from the plan. This is the real sequence on disk:
+
+| # | File | Phase | Applied | Contents |
+|---|---|---|---|---|
+| 001–007 | V1 migrations | — | ✅ | The V1 schema |
+| 010 | `010_companies_scouting.sql` | 3 | ✅ | `companies`, provenance tables, `contacts` extensions |
+| 011 | `011_agent_runs.sql` | 7 | ✅ | `scouting_runs`, `agent_runs`, `research_facts` |
+| 012 | `012_outreach.sql` | 9 | ✅ | `outreach`, `outreach_events` |
+| 013 | `013_network_and_reference.sql` | 10 | ⛔ **needs founder action** | `contact_index`, `search_contact_index()`, `network_matches`, `outreach_edits`, campaign reference columns, `scouting_runs.search_mode` / `internal_decision`, `outreach.campaign_id` / `prospect_source` / `draft_mode` |
 
 **Migrations are applied by hand in the Supabase SQL editor**, as V1's 001–007 were. There is
 no migration runner in this project. Each file must therefore be idempotent

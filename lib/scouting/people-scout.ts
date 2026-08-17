@@ -16,6 +16,7 @@ import { rankStubsByTitle, peopleDepthFor, type CompanyArchetype } from './title
 import { stubPassesCheapFilter, newFilterStats, recordFilter, type FilterStats } from './filter'
 import { personKey } from './dedupe'
 import { mapWithConcurrency } from './concurrency'
+import { findOwned, ownedToCandidate, newReuseStats, recordReuse, type OwnedIndex, type ReuseStats } from '@/lib/network/reuse'
 import type { PersonCandidate } from '@/lib/providers/types'
 
 export interface ScoutTarget {
@@ -50,6 +51,18 @@ export interface PeopleScoutParams {
   /** Hard ceiling on enrichment — the only step that spends credits. */
   maxEnrich: number
   concurrency?: number
+  /**
+   * People this user already owns, keyed by every identifier we hold.
+   *
+   * A stub whose `apollo_id` is already in the database is resolved from
+   * storage instead of being enriched again. Apollo's search step is free and
+   * its enrichment step is not, so this is where "do not repay for information
+   * we already have" is actually enforced — 635 of the 897 stored contacts
+   * carry an apollo_id, and every one of them was bought once already.
+   *
+   * Omit it and behaviour is exactly as before.
+   */
+  owned?: OwnedIndex | null
 }
 
 export interface PeopleScoutResult {
@@ -69,6 +82,10 @@ export interface PeopleScoutResult {
    * this the right person?" is judged against what was actually available.
    */
   candidatePool: Record<string, string[]>
+  /** How many selected people came from the database instead of a credit. */
+  reuse: ReuseStats
+  /** Contact ids of the reused people, so the caller can badge them. */
+  reusedContactIds: string[]
   errors: string[]
 }
 
@@ -178,16 +195,47 @@ export async function scoutPeople(params: PeopleScoutParams): Promise<PeopleScou
     }
   }
 
+  // ─── Reuse before purchase ─────────────────────────────────────────────────
+  // A stub carries only an apollo_id, a first name and a title — search rows are
+  // obfuscated. The apollo_id is therefore the only identifier available at this
+  // point, and it is also the strongest one we have, so it is the right and only
+  // check to make here.
+  const capped = selected.slice(0, params.maxEnrich)
+  const reuse = newReuseStats()
+  const reusedPeople: (PersonCandidate & { company_ref: string })[] = []
+  const reusedContactIds: string[] = []
+  const toEnrich: typeof capped = []
+
+  for (const s of capped) {
+    const match = params.owned ? findOwned(params.owned, { apolloId: s.stub.apollo_id }) : { person: null, matchedBy: null as null }
+    recordReuse(reuse, match.matchedBy)
+    if (match.person) {
+      reusedPeople.push(ownedToCandidate(match.person, s.target.company_ref))
+      reusedContactIds.push(match.person.contactId)
+    } else {
+      toEnrich.push(s)
+    }
+  }
+
   // ─── Enrich (spends credits) ───────────────────────────────────────────────
-  const toEnrich = selected.slice(0, params.maxEnrich)
   const targetById = new Map(toEnrich.map((s) => [s.stub.apollo_id, s.target]))
 
-  const enrichedRes = await apolloPeopleProvider.enrichMany(toEnrich.map((s) => s.stub.apollo_id))
+  const enrichedRes =
+    toEnrich.length > 0
+      ? await apolloPeopleProvider.enrichMany(toEnrich.map((s) => s.stub.apollo_id))
+      : { items: [] as PersonCandidate[], error: undefined }
   if (enrichedRes.error) errors.push(`enrichment: ${enrichedRes.error.slice(0, 160)}`)
 
   // Dedupe across companies: the same person can surface under two targets.
   const seen = new Set<string>()
   const people: (PersonCandidate & { company_ref: string })[] = []
+
+  for (const person of reusedPeople) {
+    const key = personKey(person)
+    if (seen.has(key)) continue
+    seen.add(key)
+    people.push(person)
+  }
 
   for (const person of enrichedRes.items) {
     const key = personKey(person)
@@ -212,6 +260,8 @@ export async function scoutPeople(params: PeopleScoutParams): Promise<PeopleScou
     emptyCompanies,
     titleMisses,
     candidatePool,
+    reuse,
+    reusedContactIds,
     errors: isCacheOnly() ? [...errors, 'APOLLO_CACHE_ONLY is on: no live Apollo calls were made'] : errors,
   }
 }

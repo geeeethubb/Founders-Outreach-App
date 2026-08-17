@@ -36,6 +36,10 @@ import { persistCompanies, persistContacts } from './persist'
 import { mapWithConcurrency } from './concurrency'
 import { companyKey } from './dedupe'
 import { normalizeTitlePatterns } from './titles'
+import { runInternalPhase, scoreInternalProspects, type InternalPhaseResult } from './internal-first'
+import type { ProspectSource, ScoutedProspect } from './prospect'
+import { loadOwnedIndex, findOwned, type OwnedIndex } from '@/lib/network/reuse'
+import { summarizeDecision, type SearchMode } from '@/lib/network/sufficiency'
 import { anthropicUsage, resetAnthropicUsage } from '@/lib/providers/anthropic/client'
 import { apolloStats, resetApolloStats } from '@/lib/providers/apollo/client'
 import { normalizeDomain } from '@/lib/providers/apollo/normalize'
@@ -72,34 +76,56 @@ export interface ScoutRunParams {
   /** How many people per company advance past triage. */
   researchPerCompany?: number
   concurrency?: number
+  /**
+   * Where prospects may come from. Default `internal_first`: search the
+   * existing network, and only spend on external discovery when it is not
+   * enough. See lib/network/sufficiency.ts.
+   */
+  searchMode?: SearchMode
+  /** How many strong internal candidates make external discovery unnecessary. */
+  internalTarget?: number
+  /** Cap on internal searches the retrieval agent may run. */
+  maxInternalSearches?: number
   /** Log a line per stage. The smoke test wants to watch it work. */
   onProgress?: (stage: string, detail: string) => void
 }
 
 export interface FunnelCounts {
   segments: number
+  /** Contacts the internal index held at the moment the run started. */
+  networkIndexed: number
+  /** Internal candidates the retrieval agent shortlisted. */
+  internalRetrieved: number
+  /** Of those, how many cleared the strong bar. */
+  internalStrong: number
   companiesDiscovered: number
   companiesValidated: number
   companiesRejected: number
   stubsFound: number
   peopleEnriched: number
+  /** People resolved from the database instead of an Apollo credit. */
+  peopleReused: number
   peopleTriaged: number
   peopleResearched: number
   prospectsRanked: number
 }
 
+export interface InternalSummary {
+  decision: InternalPhaseResult['decision']
+  poolAssessment: string
+  missingProfile: string[]
+  searchLog: InternalPhaseResult['searchLog']
+  indexed: number
+  classified: number
+  costUsd: number
+}
+
 export interface ScoutRunResult {
   runId: string | null
   strategy: MissionStrategy | null
-  ranked: (RankedProspect & {
-    person: PersonCandidate
-    company: string
-    /** Discovery-side company name — the key for candidatePool / enrichedCompanies. */
-    companyRef: string
-    /** Person-research dossier as text. What the eval judge is allowed to see. */
-    researchSummary: string
-    researchVerdict: string | null
-  })[]
+  ranked: ScoutedProspect[]
+  /** The internal-first phase, always present so "why did/didn't it search externally" is answerable. */
+  internal: InternalSummary
   funnel: FunnelCounts
   usage: {
     anthropic: ReturnType<typeof anthropicUsage>
@@ -109,6 +135,8 @@ export interface ScoutRunResult {
     /** Where the money actually went. The first question after any run. */
     byAgent: Record<string, { calls: number; costUsd: number; webSearches: number }>
     latencyMs: number
+    /** Apollo enrichments avoided by reusing a stored contact. */
+    apolloCallsAvoided: number
   }
   persistence: {
     migrationMissing: boolean
@@ -175,14 +203,44 @@ export async function runScouting(params: ScoutRunParams): Promise<ScoutRunResul
 
   const funnel: FunnelCounts = {
     segments: 0,
+    networkIndexed: 0,
+    internalRetrieved: 0,
+    internalStrong: 0,
     companiesDiscovered: 0,
     companiesValidated: 0,
     companiesRejected: 0,
     stubsFound: 0,
     peopleEnriched: 0,
+    peopleReused: 0,
     peopleTriaged: 0,
     peopleResearched: 0,
     prospectsRanked: 0,
+  }
+
+  const searchMode: SearchMode = params.searchMode ?? 'internal_first'
+  const internalTarget = params.internalTarget ?? Math.max(6, Math.min(15, params.maxProspects))
+  let apolloCallsAvoided = 0
+
+  // Populated by the internal phase. Declared here so every early return can
+  // report it — a run that failed at strategy still needs to say whether the
+  // existing network was consulted.
+  let internalSummary: InternalSummary = {
+    decision: {
+      decision: searchMode === 'external_only' ? 'INTERNAL_SKIPPED' : 'EXTERNAL_DISCOVERY_NEEDED',
+      runExternal: searchMode !== 'internal_only',
+      strongCount: 0,
+      usableCount: 0,
+      targetCount: internalTarget,
+      shortfall: internalTarget,
+      reasons: ['The internal phase did not run.'],
+      missingProfile: [],
+    },
+    poolAssessment: '',
+    missingProfile: [],
+    searchLog: [],
+    indexed: 0,
+    classified: 0,
+    costUsd: 0,
   }
 
   // ─── Run row ───────────────────────────────────────────────────────────────
@@ -195,6 +253,7 @@ export async function runScouting(params: ScoutRunParams): Promise<ScoutRunResul
   if (started.migrationMissing) migrationMissing = true
   if (started.error) errors.push(`scouting_runs: ${started.error.slice(0, 120)}`)
   const runId = started.runId
+  if (runId) await updateScoutingRun(runId, { searchMode })
 
   const ctx: ToolContext = { user_id: params.userId, run_id: runId, budget: params.budget }
 
@@ -228,8 +287,9 @@ export async function runScouting(params: ScoutRunParams): Promise<ScoutRunResul
       runId,
       strategy: null,
       ranked: [],
+      internal: internalSummary,
       funnel,
-      usage: usageSnapshot(0, costByAgent, Date.now() - runStartedAt),
+      usage: usageSnapshot(0, costByAgent, Date.now() - runStartedAt, 0),
       persistence: { migrationMissing, companiesInserted: 0, contactsInserted: 0, agentRunsRecorded, factsInserted, factsRejected },
       rejections,
       enrichedCompanies: [],
@@ -244,6 +304,100 @@ export async function runScouting(params: ScoutRunParams): Promise<ScoutRunResul
   funnel.segments = strategy.segments.length
   log('strategy', `${strategy.segments.length} segments: ${strategy.segments.map((s) => s.name).join(' | ')}`)
   if (runId) await updateScoutingRun(runId, { strategy })
+
+  // ─── 1b. EXISTING NETWORK FIRST ────────────────────────────────────────────
+  //
+  // Before a single credit is spent: who do we already have?
+  //
+  // The strategist's segment vocabulary is handed over as search hints, because
+  // the words a mission is stated in are rarely the words the index was written
+  // in — "summer consulting role" does not match a row that says "Engagement
+  // Manager, operational excellence".
+  const internalPhase = await runInternalPhase({
+    userId: params.userId,
+    runId,
+    mission: params.mission,
+    backgroundSummary,
+    strategyHints: strategy.segments.flatMap((s) => [s.name, ...s.title_patterns.slice(0, 3)]).slice(0, 12),
+    targetCount: internalTarget,
+    mode: searchMode,
+    ctx,
+    maxSearches: params.maxInternalSearches ?? 8,
+    onProgress: log,
+    trace: trace as never,
+  })
+  errors.push(...internalPhase.errors)
+
+  funnel.networkIndexed = internalPhase.facets.indexed
+  funnel.internalRetrieved = internalPhase.ranked.length
+  funnel.internalStrong = internalPhase.decision.strongCount
+
+  internalSummary = {
+    decision: internalPhase.decision,
+    poolAssessment: internalPhase.poolAssessment,
+    missingProfile: internalPhase.missingProfile,
+    searchLog: internalPhase.searchLog,
+    indexed: internalPhase.facets.indexed,
+    classified: internalPhase.facets.classified,
+    costUsd: internalPhase.costUsd,
+  }
+
+  log('decision', summarizeDecision(internalPhase.decision))
+  for (const reason of internalPhase.decision.reasons) log('decision', reason)
+  if (runId) await updateScoutingRun(runId, { internalDecision: internalSummary })
+
+  // Score the internal candidates on the same instrument the external pipeline
+  // uses, so the two can be merged into one honest ranking.
+  const internalScored = internalPhase.ranked.length
+    ? await scoreInternalProspects({
+        userId: params.userId,
+        mission: { goal: params.mission.goal, timeframe: params.mission.timeframe },
+        positioningAngle: strategy.positioning_angle,
+        backgroundItems: params.backgroundItems,
+        candidates: internalPhase.ranked.slice(0, params.maxProspects),
+        ctx,
+        concurrency,
+        trace: trace as never,
+        onProgress: log,
+      })
+    : { prospects: [] as ScoutedProspect[], errors: [] }
+  errors.push(...internalScored.errors)
+
+  // ─── The internal-first stop ───────────────────────────────────────────────
+  // This is the branch that saves the money. Nothing below here has run, so no
+  // web search, no Apollo search, and no enrichment has been paid for.
+  if (!internalPhase.decision.runExternal) {
+    const rankedInternalOnly = [...internalScored.prospects].sort((a, b) => b.total - a.total)
+    funnel.prospectsRanked = rankedInternalOnly.length
+    const usage = usageSnapshot(rankedInternalOnly.length, costByAgent, Date.now() - runStartedAt, apolloCallsAvoided)
+    if (runId) {
+      await updateScoutingRun(runId, {
+        status: 'succeeded',
+        stats: { funnel, usage: { anthropic: usage.anthropic, apollo: usage.apollo, costUsd: usage.costUsd } },
+        completed: true,
+      })
+    }
+    return {
+      runId,
+      strategy,
+      ranked: rankedInternalOnly,
+      internal: internalSummary,
+      funnel,
+      usage,
+      persistence: { migrationMissing, companiesInserted: 0, contactsInserted: 0, agentRunsRecorded, factsInserted, factsRejected },
+      rejections,
+      enrichedCompanies: [],
+      candidatePool: {},
+      discoveryHistory,
+      peopleFilter: null,
+      errors,
+    }
+  }
+
+  // Everything the user already owns, loaded once. Used to skip enrichment for
+  // people we have already bought, and to label rediscoveries as such.
+  const owned: OwnedIndex = await loadOwnedIndex(params.userId)
+  if (owned.error) errors.push(`owned index: ${owned.error.slice(0, 100)}`)
 
   // ─── 2. Market Discovery — an adaptive session per segment ─────────────────
   // Sequential so each segment can be told what earlier ones already claimed —
@@ -371,12 +525,16 @@ export async function runScouting(params: ScoutRunParams): Promise<ScoutRunResul
 
   if (accepted.length === 0) {
     if (runId) await updateScoutingRun(runId, { status: 'succeeded', stats: { funnel }, completed: true })
+    // Not empty-handed: whatever the existing network produced still stands.
+    const rankedInternalOnly = [...internalScored.prospects].sort((a, b) => b.total - a.total)
+    funnel.prospectsRanked = rankedInternalOnly.length
     return {
       runId,
       strategy,
-      ranked: [],
+      ranked: rankedInternalOnly,
+      internal: internalSummary,
       funnel,
-      usage: usageSnapshot(0, costByAgent, Date.now() - runStartedAt),
+      usage: usageSnapshot(rankedInternalOnly.length, costByAgent, Date.now() - runStartedAt, apolloCallsAvoided),
       persistence: {
         migrationMissing,
         companiesInserted: persistedCompanies.inserted,
@@ -418,12 +576,21 @@ export async function runScouting(params: ScoutRunParams): Promise<ScoutRunResul
     maxPerCompany: params.budget.maxPeoplePerCompany,
     maxEnrich: params.maxProspects,
     concurrency,
+    // Reuse before purchase. Everything already in `contacts` is resolved from
+    // storage rather than re-enriched.
+    owned,
   })
   funnel.stubsFound = scouted.stubsFound
   funnel.peopleEnriched = scouted.people.length
+  funnel.peopleReused = scouted.reuse.reused
+  apolloCallsAvoided += scouted.reuse.reused
   errors.push(...scouted.errors.slice(0, 3))
   const peopleFilter = scouted.filterStats
-  log('people', `${scouted.stubsFound} stubs → ${scouted.stubsKept} kept → ${scouted.people.length} enriched (${scouted.creditsUsed} credits)`)
+  log(
+    'people',
+    `${scouted.stubsFound} stubs → ${scouted.stubsKept} kept → ${scouted.people.length} resolved ` +
+      `(${scouted.reuse.reused} reused from the database, ${scouted.creditsUsed} credits spent)`
+  )
   if (scouted.stubsFound > 0 && scouted.stubsKept === 0) {
     errors.push(
       `people filter rejected all ${scouted.stubsFound} stubs: ${JSON.stringify(peopleFilter.rejected)}`
@@ -602,8 +769,10 @@ export async function runScouting(params: ScoutRunParams): Promise<ScoutRunResul
         maxPerCompany: 1,
         maxEnrich: Math.min(rescoutTargets.length, params.maxProspects),
         concurrency,
+        owned,
       })
       errors.push(...second.errors.slice(0, 2))
+      apolloCallsAvoided += second.reuse.reused
 
       const fresh = second.people.filter(
         (p) => !alreadyHave.has((p.linkedin_url ?? p.email ?? p.name).toLowerCase())
@@ -694,7 +863,24 @@ export async function runScouting(params: ScoutRunParams): Promise<ScoutRunResul
       errors.push(`ranking(${r.person.name}): ${run.error}`)
       return null
     }
-    return {
+
+    // Was this person already ours? External discovery finding someone we
+    // already had is a MERGE, never a duplicate — persistContacts has already
+    // updated the existing row, and this is where the fact becomes visible.
+    const match = findOwned(owned, {
+      apolloId: r.person.provenance.external_id ?? null,
+      linkedinUrl: r.person.linkedin_url,
+      email: r.person.email,
+      name: r.person.name,
+      company: r.person.company_name,
+    })
+    const contactId =
+      match.person?.contactId ??
+      persistedContacts.idByKey.get(r.person.linkedin_url ?? r.person.email ?? r.person.name) ??
+      null
+    const source: ProspectSource = match.person ? 'existing_rediscovered' : 'new'
+
+    const prospect: ScoutedProspect = {
       ...run.output,
       person: r.person as PersonCandidate,
       company: r.person.company_name ?? r.person.company_ref,
@@ -707,7 +893,11 @@ export async function runScouting(params: ScoutRunParams): Promise<ScoutRunResul
       // make Precision@20 measure self-consistency instead of quality.
       researchSummary: personContext,
       researchVerdict: r.research?.verdict ?? null,
+      source,
+      contactId,
+      companyContext: r.companyContext,
     }
+    return prospect
   })
 
   // Order by score, then de-clump by company.
@@ -718,9 +908,31 @@ export async function runScouting(params: ScoutRunParams): Promise<ScoutRunResul
   // person at each company is placed first, and only then are the remaining
   // slots filled with runners-up — which costs a little total score and buys a
   // lot of the "a human spent hours on this" quality the north star asks for.
-  const scored = rankedResults
-    .filter((r): r is NonNullable<typeof r> => r !== null)
-    .sort((a, b) => b.total - a.total)
+  const external = rankedResults.filter((r): r is ScoutedProspect => r !== null)
+
+  // MERGE, not concatenate. External discovery can surface someone the internal
+  // phase already shortlisted; keeping both would put one human in the list
+  // twice under two different labels. The internal entry wins, because it
+  // carries the relationship history and the retrieval reasoning.
+  const internalByContact = new Map(
+    internalScored.prospects.filter((p) => p.contactId).map((p) => [p.contactId as string, p])
+  )
+  const deduped: ScoutedProspect[] = [...internalScored.prospects]
+  let rediscovered = 0
+  for (const p of external) {
+    if (p.contactId && internalByContact.has(p.contactId)) {
+      const kept = internalByContact.get(p.contactId)!
+      kept.source = 'existing_rediscovered'
+      rediscovered++
+      continue
+    }
+    deduped.push(p)
+  }
+  if (rediscovered > 0) {
+    log('merge', `${rediscovered} externally-discovered people were already surfaced from the network`)
+  }
+
+  const scored = deduped.sort((a, b) => b.total - a.total)
 
   const seenCompany = new Set<string>()
   const firstPerCompany: typeof scored = []
@@ -736,9 +948,13 @@ export async function runScouting(params: ScoutRunParams): Promise<ScoutRunResul
   const ranked = [...firstPerCompany, ...runnersUp]
 
   funnel.prospectsRanked = ranked.length
-  log('ranking', `${ranked.length} prospects scored`)
+  log(
+    'ranking',
+    `${ranked.length} prospects scored — ${ranked.filter((r) => r.source === 'new').length} new, ` +
+      `${ranked.filter((r) => r.source !== 'new').length} from the existing network`
+  )
 
-  const usage = usageSnapshot(ranked.length, costByAgent, Date.now() - runStartedAt)
+  const usage = usageSnapshot(ranked.length, costByAgent, Date.now() - runStartedAt, apolloCallsAvoided)
 
   if (runId) {
     await updateScoutingRun(runId, {
@@ -752,6 +968,7 @@ export async function runScouting(params: ScoutRunParams): Promise<ScoutRunResul
     runId,
     strategy,
     ranked,
+    internal: internalSummary,
     funnel,
     usage,
     persistence: {
@@ -778,7 +995,8 @@ export async function runScouting(params: ScoutRunParams): Promise<ScoutRunResul
 function usageSnapshot(
   rankedCount: number,
   byAgent: Record<string, { calls: number; costUsd: number; webSearches: number }> = {},
-  latencyMs = 0
+  latencyMs = 0,
+  apolloCallsAvoided = 0
 ): ScoutRunResult['usage'] {
   const anthropic = anthropicUsage()
   const apollo = apolloStats()
@@ -790,5 +1008,6 @@ function usageSnapshot(
     costPerRankedProspect: rankedCount > 0 ? costUsd / rankedCount : 0,
     byAgent,
     latencyMs,
+    apolloCallsAvoided,
   }
 }

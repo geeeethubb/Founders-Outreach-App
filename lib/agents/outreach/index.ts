@@ -12,9 +12,9 @@
 
 import { runAgent } from '../runtime/loop'
 import type { AgentResult, ToolContext } from '../runtime/types'
-import { outreachPrompt, type OutreachInput } from './prompt'
+import { outreachPrompt, type OutreachInput, type OutreachReference } from './prompt'
 
-export type { OutreachInput }
+export type { OutreachInput, OutreachReference }
 
 export interface OutreachDraft {
   subject: string
@@ -48,7 +48,12 @@ export async function runOutreach(
   input: OutreachInput,
   ctx: ToolContext
 ): Promise<AgentResult<OutreachDraft>> {
+  // Counts submit attempts, so the length rule can be strict once and then
+  // yield. See the under-length branch below.
+  let attempts = 0
+
   const validate = (raw: unknown): OutreachDraft | null => {
+    attempts++
     if (!raw || typeof raw !== 'object') return null
     const r = raw as Record<string, unknown>
 
@@ -57,13 +62,24 @@ export async function runOutreach(
     if (!subject || !body) return null
 
     const words = countWords(body)
-    const { min, max } = input.wordTarget
+    // In reference mode the band comes from the user's own email, not from a
+    // house rule — matching the reference IS the job.
+    const { min, max } = input.reference?.style.target_words ?? input.wordTarget
 
     // Over the limit is rejected so the loop retries and actually cuts. Asking
     // for 60-120 and accepting 133 teaches the agent the limit is decorative,
     // and the drafts drifted longer every time the brief got richer.
-    // The lower bound stays advisory: a genuinely tight email is a success.
     if (words > max) return null
+
+    // In BRIEF mode the lower bound stays advisory: a genuinely tight email is
+    // a success. In REFERENCE mode it is not — under-shooting the reference by
+    // 40% is precisely the over-compression this mode exists to stop.
+    //
+    // But only for two attempts. ADR-010: a draft that still fails reaches the
+    // human FLAGGED, it is never discarded. Rejecting forever would turn the
+    // most common style miss into no draft at all, which is worse than a short
+    // draft the user can extend — and `lengthWarning` says exactly what happened.
+    if (input.reference && words < min && attempts < 3) return null
 
     return {
       subject,
@@ -101,6 +117,10 @@ export async function runOutreach(
       company: input.person.company,
       positioning: input.positioning,
       target: `${input.wordTarget.min}-${input.wordTarget.max}`,
+      // Changing the campaign's reference email must produce a different draft,
+      // not a replay of the one written before it existed.
+      reference: input.reference ? `${input.reference.campaignName}:${input.reference.body}` : null,
+      relationship: input.relationshipNote ?? null,
     },
   })
 }

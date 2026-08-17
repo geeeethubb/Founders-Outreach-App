@@ -431,6 +431,98 @@ are distinguishable at a glance.
 
 ---
 
+## 12. Phase 10 — internal retrieval and reference writing
+
+Two new evals, and they answer two questions that had never been asked.
+
+### 12.1 Internal network retrieval — `npm run eval:network`
+
+> **Can Outreach OS mine an existing network of ~900 contacts for a new mission,
+> without the founder sorting them by hand?**
+
+Five missions over the same 897 contacts: industrial/engineering consulting,
+industrial AI, chemicals and energy, startup founders, professional mentors.
+Chosen so that the **same database must produce five different shortlists** — a
+retrieval layer that returns the same twenty senior industrial names whatever it
+is asked has learned to rank prestige, not relevance, and that failure is
+invisible when only one mission is ever evaluated. Two of the five point away
+from the database's centre of mass on purpose, so "the network is thin here" has
+to be sayable.
+
+| Metric | What it catches |
+|---|---|
+| Pool considered | The denominator. How many contacts retrieval could reach at all. |
+| Survived cheap retrieval | Distinct contacts any search surfaced — the free filter's yield. |
+| **Precision@20** | Judged GOOD among the top 20. Same judge, same rubric as Phase 7's external number, so internal and external lists are directly comparable. |
+| **BAD rate@20** | Tracked separately, for the reason in §9: a list can be 50% good and still unusable if the rest are embarrassing. |
+| **Missed** | People a search surfaced, the judge called GOOD, and the agent did not shortlist. This is the recall side, and it is the number that moved most. |
+| External runs avoided | How often the sufficiency decision skipped discovery entirely. |
+| Apollo credits avoided | The direct saving. |
+| Index cost | One-off, amortised across every future mission. |
+
+**The judge is reused deliberately.** `evals/agentic/judge.ts` produced Phase 7's
+Precision@20 for externally discovered prospects. Using the same instrument makes
+"is mining the network as good as buying strangers?" a question the numbers can
+answer, rather than two incomparable scales.
+
+**The judge never sees the retrieval agent's reasoning or its scores** — only the
+stored research. Showing it either would make precision measure self-consistency.
+
+**One disclosed substitution.** Migrations are applied by hand, so until 013 is
+applied the eval injects an in-memory full-text backend through a seam on the
+search tool (`evals/network/local-index.ts`). Everything carrying judgment is
+real: the classifier over the real database, the retrieval agent and its
+reformulation, the ranking agent, the sufficiency decision. What is not measured
+is Postgres FTS itself, which is an index lookup rather than a decision. Every
+report states which backend produced its numbers.
+
+### 12.2 Campaign reference writing — `npm run eval:reference`
+
+> **Does pasting one real email actually change how the system writes, in the
+> direction the user asked for?**
+
+Deliberately **not** "is this a good cold email?". That question has a house
+answer, and the house answer is exactly what this milestone removes.
+
+**It is a controlled comparison.** Every prospect is written twice — once in
+reference mode, once in the house style — and both are judged blind, in the same
+batch, against the same reference. Without the control a similarity score is
+unreadable: 3.8 could mean the feature works, or that the house style already
+happened to sound like this user. **The delta is the measurement.**
+
+Four campaigns with genuinely conflicting voices, three recipients, all twelve
+pairings. Two campaigns deliberately violate the old house rules — one is 190
+words where the rule said 60–120, one stacks two asks where the rule said exactly
+one. If the system still produces a punchy 90-word single-ask email, the
+reference is decorative.
+
+Six judged criteria, from the requirement:
+
+| Criterion | Question |
+|---|---|
+| Reference similarity | Does it read as the same writer, same campaign, different recipient? |
+| Recipient relevance | Genuinely adapted, or would it work for a hundred others? |
+| Fact grounding | Is every claim about the recipient supported? |
+| Naturalness | Does it avoid machine cadence? |
+| CTA fit | Does the ask suit this recipient *and* match the reference's shape? |
+| Template avoidance | Did it avoid transplanting the reference recipient's own details? |
+
+Plus deterministic detectors that run first and have teeth — placeholders,
+over-compression against the reference's length, verbatim spans, reference-
+recipient facts reused, arrogance, fake familiarity, AI tells. Anything
+mechanically checkable is checked in code so the judge is only asked what
+genuinely needs judgment.
+
+**Two calibrations worth recording**, both found by unit tests:
+
+- A verbatim span is only copying when it carries *content*. "would you have
+  twenty minutes" is the CTA pattern, which a new email in the same campaign
+  **should** reproduce — flagging it would mark the feature working as the
+  feature failing.
+- An AI tell the reference itself uses is not a tell. The reference wins.
+
+---
+
 ## 10. Phase 7 — agentic scouting evals
 
 The scouting pipeline became a set of decision-making agents, so the eval had to

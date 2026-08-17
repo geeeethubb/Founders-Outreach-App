@@ -6,6 +6,112 @@ architecturally and why.
 
 ---
 
+## 2026-08-16 — Phase 10: The existing network, and a voice you supply
+
+**Type:** implementation + eval · **Behavior change:** additive; V1 and Phases 3–9 intact
+
+Two problems, both found by using the product rather than reading it. Full write-up in
+[PHASE_NETWORK_AND_REFERENCE.md](PHASE_NETWORK_AND_REFERENCE.md).
+
+**~900 researched contacts were invisible.** Every run started by paying to discover
+strangers while 897 people — 635 bought from Apollo, 262 with research summaries, 4,244
+grounded facts, 250 already emailed — sat unreachable because nothing indexed them.
+
+**The emails did not sound like the founder.** The house voice was a stack of adjectives
+(*founder-to-founder · concise · confident · high-signal*) plus a 60–120 word cap, and it
+reliably produced drafts that were arrogant and over-compressed.
+
+### Added
+
+```
+supabase/migrations/013_network_and_reference.sql   contact_index + search_contact_index(),
+                                                    network_matches, outreach_edits,
+                                                    campaign reference columns
+lib/network/*                normalize · document · relationship · indexer · search ·
+                             facets · rank · sufficiency · matches · context · reuse
+lib/agents/contact-classifier/*   mission-independent labelling, cached by content hash
+lib/agents/network-retrieval/*    a bounded agent with one tool: search the network
+lib/agents/style-analyst/*        what makes this email sound like this person
+lib/scouting/internal-first.ts    the phase, extracted rather than added to orchestrator.ts
+lib/scouting/prospect.ts          the one shape a prospect has, whatever it came from
+lib/campaigns/reference.ts        store, analyse, cache the campaign reference
+lib/outreach/placeholders.ts      deterministic, blocking
+app/api/{campaigns/[id]/reference,campaigns/references}/route.ts
+components/campaigns/ReferenceEmailPanel.tsx
+evals/network/* · evals/reference/*
+scripts/{index-network,network-eval,reference-eval}.ts
+```
+
+### ADRs
+
+[ADR-025](ARCHITECTURE.md#adr-025) search the existing network before discovering anything ·
+[ADR-026](ARCHITECTURE.md#adr-026) classification is mission-independent and hash-cached ·
+[ADR-027](ARCHITECTURE.md#adr-027) reuse before purchase ·
+[ADR-028](ARCHITECTURE.md#adr-028) a campaign's reference email outranks the house style ·
+[ADR-029](ARCHITECTURE.md#adr-029) placeholders are a blocking deterministic gate.
+
+### Measured
+
+| | |
+|---|---|
+| Internal Precision@20, five missions | **82%** average · **2%** BAD |
+| Consulting — the profile external discovery was worst at | 15% (P3) → 20% (P6) → **84%** |
+| External discovery skipped | **5 of 5 missions** · ~125 Apollo credits avoided |
+| Indexing 897 contacts | **$1.59**, once |
+| Per mission | **$0.51–$0.74**, no Apollo credits |
+| Reference similarity vs house-style control | **3.83** vs **2.00** / 5 |
+| "Would a reader believe one person wrote both?" | **83%** vs **17%** |
+| Drafts over-compressed against the reference | **0%** vs **58%** |
+| Placeholders reaching a draft | **0** |
+| Deterministic tests | **345 pass** (was 226) |
+
+### Six things running it found
+
+1. **Every search matched two-thirds of the database.** OR-ed terms plus a body-text match
+   meant 500–599 of 897 rows matched anything, so the count carried no signal and the agent
+   could not tell "too broad" from "the network is full of these". Fixed with a relevance
+   floor set *relative to the best match in the same query* — absolute floors are not
+   comparable across queries of different lengths.
+2. **A dropped `\w*` had mislabelled most of the network.** `\bmanufactur\b` cannot match
+   "Manufacturing" — the `i` is a word character. "Director of Manufacturing", "VP
+   Operations", "Chief Technology Officer" and "Head of Sustainability" all indexed as
+   `unknown`, the facet counts looked plausible, and the function filters were inert. Caught
+   by a unit test asserting a recruiter is not an engineer.
+3. **An agent that appeared to hang was truncating and escalating.** `stop_reason: max_tokens`
+   on `submit_result` cut the tool call mid-JSON; validation failed; the loop escalated a tier;
+   the stronger model wrote *more*, truncated again, and charged 5× for it. One mission cost
+   $1.16 and several minutes. Truncation is now its own case in `runtime/loop.ts` and asks for
+   a shorter answer instead of a re-read — **a fix that applies to every agent in the system.**
+4. **The agent treated its target as a quota.** Asked for 10 it returned exactly 10, and the
+   recall probe found ten more it had surfaced, judged GOOD, and discarded. "How many the
+   mission needs" and "how many to shortlist" are now separate numbers.
+5. **The claim gate blocked the user's own true facts.** A sponsorship reference said "roughly
+   300 students"; every draft repeated it; the gate blocked all of them. The reference is an
+   email the user *wrote and sent*, so facts in it about themselves are verified by
+   construction — the same logic that already admitted an inbound reply. Facts about its own
+   recipient are excluded, so this cannot licence a transplant.
+6. **The gate blocked a hedged question.** "I am curious how that shift changes what you pay
+   attention to … once you are responsible for a whole region", to a VP of Operations: true,
+   asked rather than asserted, and blocked because it shared no five-letter word with the
+   evidence. Hedged and interrogative frames now warn instead — which is what the writer's own
+   instructions already permitted.
+
+### A trade recorded because it goes the "wrong" way
+
+An earlier prompt scored **4.25 similarity and 100% same-writer** — by reproducing whole
+sentences from the reference, including a 22-word opening, verbatim, to every recipient.
+Prompt 2.1.0 forbids copying sentences even when every fact in them is true and about the
+sender. Similarity fell to 3.83, same-writer to 83%, and the deterministic pass rate rose from
+50% to 75%. The lower number is the better system.
+
+### Blocked on founder action
+
+`013_network_and_reference.sql` must be applied by hand, then `npm run index:network` run once
+(~$1.60). Until both happen the scout finds an empty index and says so, in the run log and in
+the UI.
+
+---
+
 ## 2026-08-11 — Phase 9: Approval, send, response tracking
 
 **Type:** implementation + eval · **Behavior change:** additive; the V1 email layer is untouched

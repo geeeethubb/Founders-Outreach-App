@@ -6,9 +6,11 @@ import { runOutreach } from '@/lib/agents/outreach'
 import { outreachPrompt } from '@/lib/agents/outreach/prompt'
 import { RESUME_ITEMS } from '@/evals/phase3/user-profile'
 import { anthropicUsage, resetAnthropicUsage } from '@/lib/providers/anthropic/client'
-import { buildEvidence, buildVerificationPool, safeNamesFor } from '@/lib/outreach/evidence'
+import { buildEvidence, buildVerificationPool, evidenceFromReference, safeNamesFor } from '@/lib/outreach/evidence'
 import { checkGrounding } from '@/lib/outreach/grounding'
 import { resolveContactId, saveDraft, MigrationMissingError } from '@/lib/outreach/store'
+import { ensureReferenceStyle, toOutreachReference } from '@/lib/campaigns/reference'
+import type { OutreachReference } from '@/lib/agents/outreach'
 
 export const maxDuration = 180
 
@@ -36,6 +38,16 @@ interface Body {
   persist?: boolean
   runId?: string | null
   score?: number | null
+  /**
+   * When set, this campaign's reference email defines the voice. Absent, the
+   * writer falls back to the house style — which is still what every draft
+   * written before this feature used.
+   */
+  campaignId?: string | null
+  /** Prior history with this person, so a warm contact is not cold-opened. */
+  relationshipNote?: string | null
+  /** 'existing' | 'new' | 'existing_rediscovered', for the funnel. */
+  prospectSource?: string | null
 }
 
 export async function POST(request: NextRequest) {
@@ -108,6 +120,28 @@ export async function POST(request: NextRequest) {
     let grounding = null
     let persistError: string | null = null
 
+    // ─── The campaign's voice ───
+    // One analysis per campaign, cached on the campaign row. A missing or
+    // failed analysis is not fatal: the writer falls back to the house style
+    // and the response says so, rather than silently producing a draft in a
+    // voice the user did not ask for.
+    let reference: OutreachReference | null = null
+    let referenceWarning: string | null = null
+    if (body.campaignId) {
+      try {
+        const styleResult = await ensureReferenceStyle(user.id, body.campaignId, ctx)
+        if (styleResult.style) {
+          reference = toOutreachReference(styleResult.reference, styleResult.style)
+        } else {
+          referenceWarning =
+            styleResult.error ??
+            'This campaign has no reference email yet — writing in the default voice.'
+        }
+      } catch (e) {
+        referenceWarning = `Could not load the campaign reference: ${e instanceof Error ? e.message : 'unknown error'}`
+      }
+    }
+
     if (body.withEmail !== false) {
       const out = await runOutreach(
         {
@@ -121,15 +155,25 @@ export async function POST(request: NextRequest) {
           },
           positioning: renderPositioning(pos.output, byId),
           groundedFacts: allowed,
-          wordTarget: { min: 60, max: 120 },
+          // The house band applies only without a reference. With one, the
+          // length comes from the user's own email — imposing 60-120 words on
+          // a 210-word reference is exactly the over-compression this replaces.
+          wordTarget: reference?.style.target_words ?? { min: 60, max: 120 },
+          reference,
+          relationshipNote: body.relationshipNote ?? null,
         },
         ctx
       )
 
       if (out.output) {
         // The gate verifies against the user's whole record, not only the three
-        // items the argument uses — see buildVerificationPool for why.
-        const verificationPool = buildVerificationPool(allowed, background, chosen.map((c) => c.id))
+        // items the argument uses — see buildVerificationPool for why. When a
+        // campaign reference exists, what the user asserted about THEMSELVES in
+        // it counts too; what they said about its own recipient does not.
+        const verificationPool = [
+          ...buildVerificationPool(allowed, background, chosen.map((c) => c.id)),
+          ...(reference ? evidenceFromReference(reference.body, reference.style.recipient_specific) : []),
+        ]
         grounding = checkGrounding({
           subject: out.output.subject,
           body: out.output.body,
@@ -174,6 +218,9 @@ export async function POST(request: NextRequest) {
               recipientRole: body.person.title,
               companyType: body.person.company,
               score: body.score ?? null,
+              campaignId: body.campaignId ?? null,
+              draftMode: reference ? 'reference' : 'brief',
+              prospectSource: body.prospectSource ?? null,
             })
             outreachId = row.id
           } catch (e) {
@@ -193,6 +240,20 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       outreachId,
       persistError,
+      referenceWarning,
+      // What the writer was told to sound like. Shown in the UI so "why does it
+      // read like this?" has an answer the founder can inspect and correct.
+      reference: reference
+        ? {
+            campaignName: reference.campaignName,
+            words: reference.style.measured.words,
+            targetWords: reference.style.target_words,
+            summary: reference.style.summary,
+            structure: reference.style.structure,
+            distinctiveMoves: reference.style.distinctive_moves,
+            recipientSpecific: reference.style.recipient_specific,
+          }
+        : null,
       positioning: {
         ...pos.output,
         // Resolve ids to titles so the card can show what was chosen without

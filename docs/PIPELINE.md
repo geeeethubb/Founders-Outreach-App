@@ -274,6 +274,60 @@ prospects; it is not there to rescue bad discovery.
 
 ---
 
+### ⚠ Stage 1b — Existing network first (Phase 10)
+
+The stage sequence below is unchanged, but **stages 2–5 no longer run
+unconditionally**. Between strategy and discovery there is now a phase that
+searches the people already in the database, and a deterministic decision about
+whether discovery needs to run at all ([ADR-025](ARCHITECTURE.md#adr-025)).
+
+```
+MISSION
+  → MISSION STRATEGIST
+  → EXISTING NETWORK RETRIEVAL   a bounded agent over contact_index:
+                                   search → read → reformulate → shortlist
+  → INTERNAL RANKING             the SAME Ranking agent the external path uses
+  → SUFFICIENCY DECISION         deterministic
+      ├── INTERNAL_SUFFICIENT       ──▶ stop. No Apollo, no web research.
+      └── EXTERNAL_DISCOVERY_NEEDED ──▶ stages 2-5, then MERGE
+```
+
+| | |
+|---|---|
+| **Type** | Agent — [Network Retrieval](AGENTS.md) — plus deterministic ranking and a deterministic decision |
+| **Input** | Mission, strategy vocabulary, `contact_index`, relationship history |
+| **Output** | Ranked internal candidates with reasons, evidence, confidence; network gaps |
+| **Persists** | `network_matches` (per run — never on the contact), `scouting_runs.internal_decision` |
+| **Cost** | One standard-tier agent call plus free SQL. No Apollo credits, no web search. |
+
+**Search modes**, selected per run:
+
+| Mode | Behaviour |
+|---|---|
+| `internal_first` | **Default.** Search the network; discover externally only on a shortfall. |
+| `internal_only` | Never discover. Returns fewer people rather than padding the list. |
+| `both` | Search the network and discover externally regardless. |
+| `external_only` | Skip the network entirely. The most expensive option. |
+
+**Three things about this matter more than the boxes.**
+
+**The decision is code, not judgment.** The agent that would decide "have I found
+enough?" is the agent that benefits from searching more. `lib/network/sufficiency.ts`
+counts candidates clearing a score *and* a confidence floor against the mission's
+target, and writes its reasons to the run.
+
+**Internal and external candidates are scored on one instrument.** Internal
+candidates go through the same Ranking agent, over their already-stored research.
+Carrying the retrieval agent's own components forward would put two incompatible
+score scales into one list, and the merged ranking would mean nothing.
+
+**Rediscovery is a merge.** External discovery finding someone already in the
+database updates the existing row and labels the prospect
+`existing_rediscovered`. It never produces a second row, and the person appears
+once in the list ([ADR-027](ARCHITECTURE.md#adr-027)).
+
+---
+
 ### Stage 4 — People Discovery
 
 | | |
@@ -381,6 +435,26 @@ The agent must emit a **citation map**: every factual claim about the recipient 
 `research_facts` row supporting it. Stage 9 verifies against this. An uncitable claim is a
 fabrication by definition, and this makes that mechanically checkable rather than a matter of
 prompt discipline.
+
+#### ⚠ Two writing modes (Phase 10)
+
+The agent has one job and two sources of style.
+
+| Mode | When | What defines the voice |
+|---|---|---|
+| **brief** | No campaign reference | The house style in [PRODUCT.md §9](PRODUCT.md#9-outreach-voice), 60–120 words |
+| **reference** | The campaign carries a real email | That email — its length, warmth, directness, and CTA shape ([ADR-028](ARCHITECTURE.md#adr-028)) |
+
+In reference mode a **Style Analyst** runs once per campaign and its output is
+cached on the campaign row. The writer receives the reference email itself, the
+structured style, and — critically — the list of facts belonging to the
+*reference's own recipient*, which it is told not to reuse. That list is what
+separates imitating a voice from copying a template.
+
+The word band comes from the reference (±25%), not from the house rule. Imposing
+60–120 words on a 190-word reference is the over-compression this mode exists to
+stop, and in reference mode a draft that undershoots is **rejected and retried**,
+not merely flagged.
 
 ---
 

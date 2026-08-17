@@ -33,6 +33,7 @@ Full definition: [docs/PRODUCT.md](docs/PRODUCT.md)
 | [docs/DATA_MODEL.md](docs/DATA_MODEL.md) | Before writing a migration |
 | [docs/EVALS.md](docs/EVALS.md) | Before touching quality gates |
 | [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) | To know what phase we're in and what's next |
+| [docs/PHASE_NETWORK_AND_REFERENCE.md](docs/PHASE_NETWORK_AND_REFERENCE.md) | Before touching internal retrieval or the campaign reference flow |
 | [docs/BUILD_LOG.md](docs/BUILD_LOG.md) | Append after any meaningful change |
 
 **Documentation is a deliverable, not an afterthought.** The founder must be able to
@@ -216,6 +217,8 @@ and that column holds an RFC822 Message-ID this app generates.
 | `tailwind.config.ts` `brand` colors | Defined, never used. Pages hardcode `indigo-600`. |
 | `package.json` says `openai@^4.52.0` | **4.104.0** is installed, and it has the Responses API + `web_search`. |
 | `/api/research/rerun` | **Deletes all research** with no server-side confirmation. |
+| A truncated stem before `\b` in a regex | `\bmanufactur\b` cannot match "Manufacturing" — the `i` is a word character. This silently sent every inflected title to `unknown` in `lib/network/normalize.ts`. Write `manufactur\w*`. |
+| An agent that "hangs" | Usually `stop_reason: max_tokens` on `submit_result`. The output is truncated mid-JSON, validation fails, and the loop used to escalate a tier — which writes *more* and truncates again, at 5× the price. `runtime/loop.ts` now handles truncation separately. Check `onStep` before assuming a hang. |
 | ⚠ `Apollo API.txt` | A credential-shaped string tracked in git. See [CURRENT_STATE.md §9](docs/CURRENT_STATE.md#9-configuration). |
 
 ---
@@ -256,18 +259,27 @@ The seven product agents are TypeScript modules, not Claude Code subagents.
 
 ## Current phase
 
-**Phase 9 complete** — the production loop closes:
-`MISSION → SCOUT → RESEARCH → RANK → POSITION → DRAFT → APPROVE → SEND → TRACK → OUTCOME`.
+**Phase 10 complete** — the loop now starts with the people you already have, and writes in
+a voice you supply:
 
-Phases 0, 3, 6, 7, 8 and 9 have shipped. See [docs/BUILD_LOG.md](docs/BUILD_LOG.md) for what
-each one changed and [docs/PHASE_SENDING.md](docs/PHASE_SENDING.md) for the latest.
+```
+MISSION → STRATEGY → EXISTING NETWORK → [enough?] → discovery → RESEARCH → RANK
+        → POSITION → DRAFT (in the campaign's voice) → APPROVE → SEND → TRACK → OUTCOME
+```
 
-**Requires founder action:** apply `supabase/migrations/012_outreach.sql` in the Supabase SQL
-editor. Nothing persists until it runs — `npm run check:outreach` reports this and exits 2.
+Phases 0, 3, 6, 7, 8, 9 and 10 have shipped. See [docs/BUILD_LOG.md](docs/BUILD_LOG.md) for
+what each one changed and
+[docs/PHASE_NETWORK_AND_REFERENCE.md](docs/PHASE_NETWORK_AND_REFERENCE.md) for the latest.
 
-**Ten agents now, not seven.** Person Triage (Phase 7), Conversation and Follow-Up (Phase 9)
-each earned a place against the test in [docs/AGENTS.md](docs/AGENTS.md): a judgment problem
-no existing agent owned. The test still applies to the eleventh.
+**Requires founder action:** apply `supabase/migrations/013_network_and_reference.sql` in the
+Supabase SQL editor, then run `npm run index:network` once. Until both happen, internal-first
+scouting finds an empty index and says so; `npm run index:network` exits 2.
+
+**Thirteen agents now, not seven.** Person Triage (7), Conversation and Follow-Up (9),
+Contact Classifier, Network Retrieval and Style Analyst (10) each earned a place against the
+test in [docs/AGENTS.md](docs/AGENTS.md): a judgment problem no existing agent owned. Three
+candidates were *rejected* during Phase 10 design for failing it — the test still applies to
+the fourteenth.
 
 **Not built yet:** the `no_response` timer (the most common outcome is currently recorded
 only by hand), send pacing, and a scheduler for `followup_due_at`. The Talent Knowledge Base

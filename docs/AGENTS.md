@@ -32,13 +32,24 @@ dedupe, scoring arithmetic, sending, and reply polling are deliberately absent �
 deterministic and belong in code. Do not add an agent without a judgment problem that none
 of the existing ones owns.
 
-Three have earned their place since, each against that test:
+Six have earned their place since, each against that test:
 
 | Agent | The judgment problem no existing agent owned | Phase |
 |---|---|---|
 | **Person Triage** | "which 2–3 of these Apollo candidates are worth paying to research?" — a *selection* decision made before evidence exists, where Ranking needs evidence to work at all ([ADR-021](ARCHITECTURE.md#adr-021)) | 7 |
 | **Conversation** | "what did this reply actually mean?" — `"sounds interesting, my plate is full"` and `"sounds interesting, let's talk"` differ by intent, not by keyword | 9 |
 | **Follow-Up** | "is there anything left worth saying to someone who did not answer?" — a judgement whose correct answer is usually *no* | 9 |
+| **Contact Classifier** | "what IS this person, in terms a future search can use?" — asked once per contact, mission-independent, and therefore cacheable in a way nothing else here is ([ADR-026](ARCHITECTURE.md#adr-026)) | 10 |
+| **Network Retrieval** | "given a mission, which people ALREADY in the database matter, and what vocabulary finds them?" — the Mission Strategist plans an external market and Market Discovery searches the web; neither can look inward ([ADR-025](ARCHITECTURE.md#adr-025)) | 10 |
+| **Style Analyst** | "what makes this email sound like this person?" — reading a real email the user sent and extracting a reproducible voice from it ([ADR-028](ARCHITECTURE.md#adr-028)) | 10 |
+
+**Thirteen now.** Each addition has been argued individually against the same test, and the
+test still applies to the fourteenth. Three of these were rejected during Phase 10 design and
+are worth recording: a "network gap analyst" (the retrieval agent already reports gaps as part
+of its own output), a "relationship interpreter" (who was emailed and what they replied are
+facts in the database — interpreting them is arithmetic, `lib/network/relationship.ts`), and
+an "edit learner" (one edit is not evidence of a preference; the data is retained in
+`outreach_edits` until there is enough of it to be worth a judgment).
 
 Everything around them stayed deterministic: persistence, the Gmail API, timestamps, status
 transitions, dedupe, retries, sending, and funnel arithmetic are all code. Classification →

@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 import type { Campaign, Contact, GenerateRequest, EmailStyle, Template, CampaignFeedback } from '@/types'
 import { STATUS_COLORS, formatRelativeTime } from '@/lib/utils'
 import { EMAIL_STYLES } from '@/types'
+import ReferenceEmailPanel from '@/components/campaigns/ReferenceEmailPanel'
 
 const GOAL_OPTIONS = [
   { value: 'speaker',         label: '🎤 Speaker / Event',      desc: 'Invite them to speak at an Illinois Entrepreneurs event' },
@@ -395,6 +396,12 @@ export default function CampaignDetailPage() {
           </svg>
           Add Contacts
         </button>
+      </div>
+
+      {/* Reference email — the campaign's voice. Self-contained component;
+          this file is already the largest in the repo (CLAUDE.md). */}
+      <div className="mb-6">
+        <ReferenceEmailPanel campaignId={campaignId} />
       </div>
 
       {/* Per-campaign dashboard */}

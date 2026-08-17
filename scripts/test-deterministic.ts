@@ -770,6 +770,502 @@ check('relevant director kept', filterPerson(person(), 500).keep)
     f.buildFunnel([], 0).stages.every((s) => s.count === 0))
 }
 
+// ─── Internal network: normalization ─────────────────────────────────────────
+{
+  const n = require('../lib/network/normalize') as typeof import('../lib/network/normalize')
+
+  check('a founder title beats the provider band', n.seniorityBandFor('Co-Founder & CEO', 'c_suite') === 'founder')
+  check('VP of Engineering is a VP, not an engineer', n.seniorityBandFor('VP of Engineering', null) === 'vp')
+  check('a bare engineer is an IC', n.seniorityBandFor('Process Engineer', null) === 'ic')
+  check('a senior engineer is a senior IC', n.seniorityBandFor('Senior Process Engineer', null) === 'senior_ic')
+  check('director survives', n.seniorityBandFor('Director, Operational Excellence', null) === 'director')
+  check('a professor is academic', n.seniorityBandFor('Associate Professor', null) === 'academic')
+  check('the provider band fills a missing title', n.seniorityBandFor(null, 'director') === 'director')
+  check('an unknown title with no band is unknown', n.seniorityBandFor(null, null) === 'unknown')
+
+  check('AI in a title routes to data_ai', n.functionAreaFor('Head of AI and Analytics') === 'data_ai')
+  check('a plant manager is manufacturing', n.functionAreaFor('Plant Manager') === 'manufacturing')
+  check('a recruiter is people, not engineering', n.functionAreaFor('Technical Recruiter') === 'people')
+  check('an engagement manager is consulting', n.functionAreaFor('Engagement Manager') === 'consulting')
+  check('an unknown title is unknown', n.functionAreaFor(null) === 'unknown')
+
+  const chi = n.parseLocation('Chicago, Illinois, United States')
+  check('a full US location parses', chi.city === 'Chicago' && chi.state === 'Illinois' && chi.region === 'midwest',
+    JSON.stringify(chi))
+  const bare = n.parseLocation('United States')
+  check('a bare country still resolves a region', bare.country === 'United States' && bare.region === 'us_other')
+  const intl = n.parseLocation('Munich, Bavaria, Germany')
+  check('a non-US location is international', intl.region === 'international', JSON.stringify(intl))
+  check('an empty location is unknown', n.parseLocation(null).region === 'unknown')
+  const tx = n.parseLocation('Houston, Texas, United States')
+  check('Texas is south', tx.region === 'south')
+
+  check('company suffixes are stripped', n.normalizeCompany('Acme Chemicals, Inc.') === 'acme chemicals')
+  check('two spellings collapse',
+    n.normalizeCompany('Acme Chemicals LLC') === n.normalizeCompany('Acme Chemicals'))
+  check('an empty company is null', n.normalizeCompany('') === null)
+}
+
+// ─── Internal network: query sanitization ────────────────────────────────────
+{
+  const s = require('../lib/network/search') as typeof import('../lib/network/search')
+
+  check('terms are OR-ed, not AND-ed', s.toWebSearchQuery('industrial consulting chicago').includes(' or '))
+  check('stopwords are dropped', !s.toWebSearchQuery('people who work in manufacturing').includes('people'))
+  check('a quoted phrase survives as a phrase',
+    s.toWebSearchQuery('"process engineering" leadership').includes('"process engineering"'))
+  // A model writes the query. Unbalanced syntax must never reach to_tsquery.
+  check('punctuation is stripped', !/[(){}&|!:]/.test(s.toWebSearchQuery('foo & (bar | baz)!')))
+  check('an empty query stays empty', s.toWebSearchQuery('   ') === '')
+  check('a null query stays empty', s.toWebSearchQuery(null) === '')
+}
+
+// ─── Internal network: reuse and identity ────────────────────────────────────
+{
+  const r = require('../lib/network/reuse') as typeof import('../lib/network/reuse')
+
+  // The bug this pins: stripping the trailing slash BEFORE the query string
+  // leaves one profile with two keys.
+  check('linkedin normalizes query string and slash together',
+    r.normalizeLinkedIn('https://www.linkedin.com/in/jane-doe/?utm=x') === r.normalizeLinkedIn('http://linkedin.com/in/jane-doe'),
+    `${r.normalizeLinkedIn('https://www.linkedin.com/in/jane-doe/?utm=x')} vs ${r.normalizeLinkedIn('http://linkedin.com/in/jane-doe')}`)
+  check('a null linkedin is null', r.normalizeLinkedIn(null) === null)
+
+  check('name+company keys ignore suffixes',
+    r.nameCompanyKey('Jane Doe', 'Acme Inc.') === r.nameCompanyKey('jane doe', 'Acme'))
+  check('a missing company gives no key', r.nameCompanyKey('Jane Doe', null) === null)
+
+  const owned: Parameters<typeof r.findOwned>[0] = {
+    byApolloId: new Map(), byLinkedIn: new Map(), byEmail: new Map(), byNameCompany: new Map(),
+    size: 0, error: null,
+  }
+  const jane = {
+    contactId: 'c1', apolloId: 'a1', name: 'Jane Doe', title: 'Director', company: 'Acme Inc.',
+    email: 'Jane@Acme.com', linkedinUrl: 'https://linkedin.com/in/jane-doe/', location: null,
+    seniority: null, department: null, emailStatus: 'verified', status: 'sent',
+  }
+  owned.byApolloId.set('a1', jane)
+  owned.byLinkedIn.set(r.normalizeLinkedIn(jane.linkedinUrl)!, jane)
+  owned.byEmail.set('jane@acme.com', jane)
+  owned.byNameCompany.set(r.nameCompanyKey(jane.name, jane.company)!, jane)
+
+  check('apollo id is the strongest match',
+    r.findOwned(owned, { apolloId: 'a1', email: 'other@x.com' }).matchedBy === 'apollo_id')
+  check('linkedin matches when apollo id is absent',
+    r.findOwned(owned, { linkedinUrl: 'http://www.linkedin.com/in/jane-doe' }).matchedBy === 'linkedin')
+  check('email matching is case-insensitive',
+    r.findOwned(owned, { email: 'JANE@acme.com' }).matchedBy === 'email')
+  check('name+company is the last resort',
+    r.findOwned(owned, { name: 'Jane Doe', company: 'Acme' }).matchedBy === 'name_company')
+  check('a stranger matches nothing', r.findOwned(owned, { name: 'John Smith', company: 'Other' }).person === null)
+
+  const stats = r.newReuseStats()
+  r.recordReuse(stats, 'apollo_id')
+  r.recordReuse(stats, null)
+  check('reuse stats separate reuse from purchase', stats.reused === 1 && stats.purchased === 1 && stats.probed === 2)
+}
+
+// ─── Internal network: ranking arithmetic ────────────────────────────────────
+{
+  const rank = require('../lib/network/rank') as typeof import('../lib/network/rank')
+  const rel = require('../lib/network/relationship') as typeof import('../lib/network/relationship')
+
+  const contact = (id: string, company: string) => ({
+    contact_id: id, name: `P${id}`, title: 'Director', company, email: null, linkedin_url: null,
+    location: null, seniority_band: 'director', function_area: 'operations', geo_city: null,
+    geo_state: null, geo_region: 'midwest', industry: null, sub_industry: null, company_type: null,
+    technical_domains: [], business_domains: [], opportunity_types: [], tags: [], relevance: {},
+    relationship_status: 'never_contacted', relationship_note: '', evidence_level: 'moderate',
+    summary: null, rank: 0,
+  })
+
+  const seen = new Map([
+    ['1', contact('1', 'Acme')],
+    ['2', contact('2', 'Acme')],
+    ['3', contact('3', 'Beta')],
+  ])
+  const shortlist = [
+    { contact_id: '1', components: { mission_fit: 1, decision_access: 1, user_differentiation: 1 }, confidence: 0.9, reason: 'a', evidence: [], approach: null },
+    { contact_id: '2', components: { mission_fit: 0.9, decision_access: 0.9, user_differentiation: 0.9 }, confidence: 0.8, reason: 'b', evidence: [], approach: null },
+    { contact_id: '3', components: { mission_fit: 0.5, decision_access: 0.5, user_differentiation: 0.5 }, confidence: 0.7, reason: 'c', evidence: [], approach: null },
+  ]
+
+  const ranked = rank.rankInternalCandidates(shortlist, seen, new Map())
+  check('weights sum to a normalized total', close(ranked[0].total, 1))
+  check('ranking is by total, descending', ranked.map((r) => r.contact.contact_id).join('') === '123')
+  check('rank is stamped from 1', ranked[0].rank === 1 && ranked[2].rank === 3)
+
+  // Mission fit dominates: a person strong only on access must not outrank one
+  // strong on fit.
+  const lopsided = rank.rankInternalCandidates(
+    [
+      { contact_id: '1', components: { mission_fit: 1, decision_access: 0, user_differentiation: 0 }, confidence: 1, reason: '', evidence: [], approach: null },
+      { contact_id: '2', components: { mission_fit: 0, decision_access: 1, user_differentiation: 1 }, confidence: 1, reason: '', evidence: [], approach: null },
+    ],
+    seen,
+    new Map()
+  )
+  check('mission fit outweighs access alone', lopsided[0].contact.contact_id === '1',
+    JSON.stringify(lopsided.map((r) => [r.contact.contact_id, r.total])))
+
+  // Relationship adjusts, it does not decide.
+  const history = new Map([['3', { ...rel.emptyHistory(), status: 'met' as const, scoreModifier: 0.12, note: 'met' }]])
+  const withHistory = rank.rankInternalCandidates(shortlist, seen, history)
+  const three = withHistory.find((r) => r.contact.contact_id === '3')!
+  check('a warm contact is lifted', close(three.total, 0.62), String(three.total))
+  check('the base score is preserved for audit', close(three.base, 0.5))
+  check('a warm contact does not leapfrog a far better fit', withHistory[0].contact.contact_id === '1')
+  check('scores never exceed 1', rank.rankInternalCandidates(
+    [{ contact_id: '1', components: { mission_fit: 1, decision_access: 1, user_differentiation: 1 }, confidence: 1, reason: '', evidence: [], approach: null }],
+    seen,
+    new Map([['1', { ...rel.emptyHistory(), status: 'met' as const, scoreModifier: 0.12, note: '' }]])
+  )[0].total === 1)
+
+  const declumped = rank.declumpByCompany(ranked)
+  check('one person per company comes first',
+    declumped.map((r) => r.contact.company).slice(0, 2).join(',') === 'Acme,Beta',
+    declumped.map((r) => r.contact.company).join(','))
+  check('runners-up are kept, not dropped', declumped.length === 3)
+
+  // A shortlisted id no search returned is a hallucination and must vanish.
+  const ghost = rank.rankInternalCandidates(
+    [{ contact_id: 'nope', components: { mission_fit: 1, decision_access: 1, user_differentiation: 1 }, confidence: 1, reason: '', evidence: [], approach: null }],
+    seen,
+    new Map()
+  )
+  check('an unknown contact id is dropped', ghost.length === 0)
+}
+
+// ─── Internal-first decision ─────────────────────────────────────────────────
+{
+  const s = require('../lib/network/sufficiency') as typeof import('../lib/network/sufficiency')
+
+  const strong = (n: number) => Array.from({ length: n }, () => ({ total: 0.8, confidence: 0.8 }))
+  const base = { targetCount: 5, missingProfile: [], indexed: 900, classified: 900 }
+
+  check('enough strong internal candidates skips external',
+    s.decideSufficiency({ ...base, mode: 'internal_first', candidates: strong(5) }).runExternal === false)
+  check('and says so as a decision',
+    s.decideSufficiency({ ...base, mode: 'internal_first', candidates: strong(5) }).decision === 'INTERNAL_SUFFICIENT')
+  check('too few strong candidates triggers external',
+    s.decideSufficiency({ ...base, mode: 'internal_first', candidates: strong(2) }).runExternal === true)
+  check('the shortfall is reported',
+    s.decideSufficiency({ ...base, mode: 'internal_first', candidates: strong(2) }).shortfall === 3)
+
+  // A high score on thin evidence must not count as strong.
+  check('confidence gates strength',
+    s.decideSufficiency({
+      ...base, mode: 'internal_first',
+      candidates: Array.from({ length: 8 }, () => ({ total: 0.9, confidence: 0.2 })),
+    }).strongCount === 0)
+
+  check('internal_only never runs external',
+    s.decideSufficiency({ ...base, mode: 'internal_only', candidates: [] }).runExternal === false)
+  check('internal_only returns fewer rather than padding',
+    s.decideSufficiency({ ...base, mode: 'internal_only', candidates: strong(1) }).decision === 'INTERNAL_SUFFICIENT')
+  check('external_only skips the network',
+    s.decideSufficiency({ ...base, mode: 'external_only', candidates: strong(9) }).decision === 'INTERNAL_SKIPPED')
+  check('both always runs external',
+    s.decideSufficiency({ ...base, mode: 'both', candidates: strong(9) }).runExternal === true)
+  check('an empty index forces external under internal_first',
+    s.decideSufficiency({ ...base, mode: 'internal_first', candidates: [], indexed: 0, classified: 0 }).runExternal === true)
+  check('every decision carries reasons',
+    s.decideSufficiency({ ...base, mode: 'internal_first', candidates: strong(5) }).reasons.length > 0)
+  check('a partly-classified index is called out',
+    s.decideSufficiency({ ...base, mode: 'internal_first', candidates: strong(5), classified: 100 })
+      .reasons.some((r) => r.includes('classified')))
+}
+
+// ─── Placeholders ────────────────────────────────────────────────────────────
+{
+  const p = require('../lib/outreach/placeholders') as typeof import('../lib/outreach/placeholders')
+  const blocking = (subject: string, body: string) =>
+    p.findPlaceholders(subject, body).filter((f) => f.severity === 'blocking')
+
+  check('a bracket slot blocks', blocking('hi', 'Hi [First Name], I saw your work.').length === 1)
+  check('a mustache slot blocks', blocking('hi', 'Hi {{first_name}}, hello.').length === 1)
+  check('a single-brace slot blocks', blocking('hi', 'Hi {name}, hello.').length === 1)
+  check('an angle slot blocks', blocking('hi', 'I work at <Company>.').length === 1)
+  check('a stub company blocks', blocking('hi', 'I admire what XYZ Corp is doing.').length === 1)
+  check('an all-caps token blocks', blocking('hi', 'Your work at COMPANY is great.').length === 1)
+  check('an instruction bracket blocks', blocking('hi', 'I liked [insert specific project].').length === 1)
+  check('a placeholder in the subject blocks', blocking('Quick note for [Name]', 'Hello there.').length === 1)
+
+  // False positives are what get a gate switched off.
+  check('an email address is not an angle slot', blocking('hi', 'Reach me at <jane@acme.com>.').length === 0)
+  check('a real sentence passes', blocking('winter project', 'Hi Priya, I spent last summer at P&G.').length === 0)
+  check('a bracketed aside only warns',
+    p.findPlaceholders('hi', 'The result [as measured then] held up.').every((f) => f.severity === 'warning'))
+  check('an em-dashed clause passes', blocking('hi', 'Marcus — saw what you are building.').length === 0)
+  check('a normal capitalised word passes', blocking('hi', 'I worked at Procter & Gamble.').length === 0)
+
+  check('the summary names the placeholders',
+    p.summarizePlaceholders(p.findPlaceholders('hi', 'Hi [First Name].')).includes('[First Name]'))
+  check('a clean draft summarises clean', p.summarizePlaceholders([]) === 'No placeholders.')
+}
+
+// ─── Placeholders inside the grounding gate ──────────────────────────────────
+{
+  const g = require('../lib/outreach/grounding') as typeof import('../lib/outreach/grounding')
+  const evidence = ['RECIPIENT: Director of Manufacturing at Eastman', 'SENDER: Intern — Procter & Gamble (2026)']
+  const safeNames = ['Priya Raghavan', 'Eastman', 'Zuyu Liu']
+
+  const clean = g.checkGrounding({ subject: 'manufacturing systems', body: 'Hi Priya, I worked at Procter & Gamble last summer.', evidence, safeNames })
+  check('a clean draft still passes the extended gate', clean.ok, JSON.stringify(clean.blocking))
+
+  const withSlot = g.checkGrounding({ subject: 'note', body: 'Hi [First Name], I worked at Procter & Gamble.', evidence, safeNames })
+  check('a placeholder blocks the gate', !withSlot.ok)
+  check('and is typed as a placeholder', withSlot.blocking.some((f) => f.kind === 'placeholder'))
+  check('the placeholder count is reported', withSlot.stats.placeholdersFound >= 1)
+  check('the summary leads with the placeholder',
+    g.summarizeGrounding(withSlot).startsWith('1 placeholder'), g.summarizeGrounding(withSlot))
+}
+
+// ─── Reference style measurement ─────────────────────────────────────────────
+{
+  const s = require('../lib/agents/style-analyst') as typeof import('../lib/agents/style-analyst')
+
+  const short = s.measureEmail('Hi there. This is short.')
+  check('words are counted', short.words === 5, String(short.words))
+  check('sentences are counted', short.sentences === 2, String(short.sentences))
+
+  const long = s.measureEmail('One line here.\n\nA second paragraph follows.\n\nAnd a third.')
+  check('paragraphs are counted', long.paragraphs === 3, String(long.paragraphs))
+
+  // The whole point: the band follows the reference, it is not a house rule.
+  const band190 = s.targetWordsFor({ words: 190, paragraphs: 5, sentences: 12, avgSentenceWords: 16 })
+  check('a long reference gets a long target', band190.min >= 140 && band190.max >= 230,
+    JSON.stringify(band190))
+  const band80 = s.targetWordsFor({ words: 80, paragraphs: 3, sentences: 6, avgSentenceWords: 13 })
+  check('a short reference gets a short target', band80.max <= 110, JSON.stringify(band80))
+  check('the bands do not overlap', band80.max < band190.min, `${band80.max} / ${band190.min}`)
+  check('a tiny reference is floored', s.targetWordsFor({ words: 5, paragraphs: 1, sentences: 1, avgSentenceWords: 5 }).min >= 35)
+}
+
+// ─── Reference draft checks ──────────────────────────────────────────────────
+{
+  const c = require('../evals/reference/checks') as typeof import('../evals/reference/checks')
+  const s = require('../lib/agents/style-analyst') as typeof import('../lib/agents/style-analyst')
+
+  const referenceBody =
+    'Hi Maya, I read your piece on why plant-floor pilots stall at Northwind Foods and the Cedar Rapids line in particular. ' +
+    'I spent a summer at a packing site learning the same lesson the expensive way. Would you have twenty minutes?'
+  const measured = s.measureEmail(referenceBody)
+  const style: import('../lib/agents/style-analyst').ReferenceStyle = {
+    register: 'warm', directness: 'direct', context_depth: 'one line', credential_style: 'implied',
+    cta_style: 'soft', sentence_style: 'flowing', greeting: 'Hi <first>,', signoff: 'Thanks',
+    structure: ['open specific', 'credential', 'ask'], distinctive_moves: [], avoid: [],
+    recipient_specific: ['Maya works at Northwind Foods', 'the Cedar Rapids line'],
+    summary: 'warm and specific', measured, target_words: s.targetWordsFor(measured),
+  }
+  const reference = { subject: null, body: referenceBody }
+  const safeNames = ['Priya Raghavan', 'Priya', 'Eastman', 'Zuyu Liu']
+
+  const good = c.checkDraft({
+    subject: 'kingsport process control',
+    body:
+      'Hi Priya, I read that Eastman runs an integrated complex at Kingsport and that your remit covers plant data systems. ' +
+      'I spent a summer on a packing line learning how much of that work is social. Would you have twenty minutes?',
+    reference, style, safeNames,
+  })
+  check('a properly adapted draft passes every check', good.passed, JSON.stringify(good))
+  check('length ratio is computed', good.lengthRatio > 0.7 && good.lengthRatio < 1.4, String(good.lengthRatio))
+
+  const copied = c.checkDraft({
+    subject: 'note',
+    body:
+      'Hi Priya, I read your piece on why plant-floor pilots stall at Northwind Foods and the Cedar Rapids line in particular. ' +
+      'I spent a summer at a packing site learning the same lesson. Would you have twenty minutes?',
+    reference, style, safeNames,
+  })
+  check('reference-recipient facts are caught', copied.copiedFromReference.length >= 1, JSON.stringify(copied.copiedFromReference))
+  check('verbatim runs are caught', copied.verbatimSpans.length >= 1, JSON.stringify(copied.verbatimSpans))
+  check('a copied draft fails', !copied.passed)
+
+  const compressed = c.checkDraft({
+    subject: 'note', body: 'Hi Priya — worth twenty minutes?', reference, style, safeNames,
+  })
+  check('over-compression is caught', compressed.overCompressed, String(compressed.lengthRatio))
+  check('over-compression fails the check', !compressed.passed)
+
+  const arrogant = c.checkDraft({
+    subject: 'note',
+    body:
+      'Hi Priya, I am uniquely positioned to solve this because few people can bridge the plant floor and the model. ' +
+      'I spent a summer on a packing line. Would you have twenty minutes to talk about it?',
+    reference, style, safeNames,
+  })
+  check('arrogance is caught', arrogant.arrogance.length >= 1, JSON.stringify(arrogant.arrogance))
+
+  const roboticBody =
+    'Hi Priya, I hope this finds you well. I am reaching out because I am passionate about ' +
+    'work at the intersection of AI and manufacturing, and I would love to connect with you.'
+  const robotic = c.checkDraft({ subject: 'note', body: roboticBody, reference, style, safeNames })
+  check('AI tells are caught', robotic.aiTells.length >= 2, JSON.stringify(robotic.aiTells))
+
+  // Naming THIS recipient's company is never a copy violation.
+  check('the new recipient and company are safe', good.copiedFromReference.length === 0)
+}
+
+// ─── The reference email as sender evidence ──────────────────────────────────
+{
+  const e = require('../lib/outreach/evidence') as typeof import('../lib/outreach/evidence')
+  const g = require('../lib/outreach/grounding') as typeof import('../lib/outreach/grounding')
+
+  const referenceBody =
+    'Hi Maya, I help run Founders: Illinois Entrepreneurs at UIUC and we put roughly 300 students in a room every semester. ' +
+    'I read your piece about the Cedar Rapids line at Northwind Foods. Would you have twenty minutes?'
+  const recipientSpecific = ['Maya works at Northwind Foods', 'her piece about the Cedar Rapids line']
+
+  const pool = e.evidenceFromReference(referenceBody, recipientSpecific)
+  check('the sender\'s own assertion becomes evidence',
+    pool.some((p) => p.includes('300 students')), JSON.stringify(pool))
+  check('the reference recipient\'s facts are excluded',
+    !pool.join(' ').toLowerCase().includes('northwind'), JSON.stringify(pool))
+  check('an empty reference yields nothing', e.evidenceFromReference('', []).length === 0)
+
+  // The measured failure: every draft in a sponsorship campaign repeated the
+  // user's own "300 students" and the gate blocked all of them.
+  const base = ['RECIPIENT: Director of Manufacturing at Eastman']
+  const safeNames = ['Priya Raghavan', 'Eastman', 'Zuyu Liu']
+  const draft = 'Hi Priya, we put roughly 300 students in a room every semester. Worth a short call?'
+  check('without the reference, the sender\'s own figure blocks',
+    !g.checkGrounding({ subject: 'x', body: draft, evidence: base, safeNames }).ok)
+  check('with the reference, it clears',
+    g.checkGrounding({ subject: 'x', body: draft, evidence: [...base, ...pool], safeNames }).ok,
+    JSON.stringify(g.checkGrounding({ subject: 'x', body: draft, evidence: [...base, ...pool], safeNames }).blocking))
+
+  // And admitting the reference must NOT legitimise transplanting its recipient.
+  const transplant = 'Hi Priya, I read your piece about the Cedar Rapids line at Northwind Foods.'
+  check('admitting the reference does not licence a transplant',
+    !g.checkGrounding({ subject: 'x', body: transplant, evidence: [...base, ...pool], safeNames }).ok)
+}
+
+// ─── Asked, not asserted ─────────────────────────────────────────────────────
+{
+  const g = require('../lib/outreach/grounding') as typeof import('../lib/outreach/grounding')
+  const evidence = ['RECIPIENT: Vice President of Operations at Kraft Heinz']
+  const safeNames = ['David Ortega', 'Kraft Heinz', 'Zuyu Liu']
+
+  const asserted = g.checkGrounding({
+    subject: 'x',
+    body: 'You are responsible for the quantum photonics roadmap there.',
+    evidence, safeNames,
+  })
+  check('an asserted responsibility still blocks',
+    asserted.blocking.some((f) => f.kind === 'responsibility'), JSON.stringify(asserted.findings))
+
+  // The real draft this was found on: true, hedged, and previously blocked
+  // because it shared no five-letter word with the evidence.
+  const hedged = g.checkGrounding({
+    subject: 'x',
+    body: 'I am curious how that shift changes what you pay attention to once you are responsible for a whole region.',
+    evidence, safeNames,
+  })
+  check('a hedged responsibility warns rather than blocks', hedged.ok, JSON.stringify(hedged.blocking))
+  check('and is still surfaced', hedged.findings.some((f) => f.kind === 'responsibility'))
+
+  const asked = g.checkGrounding({
+    subject: 'x',
+    body: 'Is that your side of it, or does your team own the rollout instead?',
+    evidence, safeNames,
+  })
+  check('a question does not block', asked.ok, JSON.stringify(asked.blocking))
+}
+
+// ─── Reference checks: sender identity is not plagiarism ─────────────────────
+{
+  const c = require('../evals/reference/checks') as typeof import('../evals/reference/checks')
+  const s = require('../lib/agents/style-analyst') as typeof import('../lib/agents/style-analyst')
+
+  const referenceBody =
+    'Hi Maya, I help run Founders: Illinois Entrepreneurs at UIUC and we put students in a room every semester. ' +
+    'I read your piece about the Cedar Rapids line at Northwind Foods. Would you have twenty minutes?'
+  const measured = s.measureEmail(referenceBody)
+  const style: import('../lib/agents/style-analyst').ReferenceStyle = {
+    register: 'warm', directness: 'direct', context_depth: 'one line', credential_style: 'implied',
+    cta_style: 'soft', sentence_style: 'flowing', greeting: 'Hi <first>,', signoff: 'Thanks',
+    structure: ['open', 'ask'], distinctive_moves: [], avoid: [],
+    recipient_specific: [
+      'Maya works at Northwind Foods',
+      'The unspoken assumption that they work in a process-oriented industry',
+    ],
+    summary: 'warm', measured, target_words: s.targetWordsFor(measured),
+  }
+  const senderVocab = ['Founders Illinois Entrepreneurs UIUC students semester room']
+
+  const own = c.checkDraft({
+    subject: 'spring series',
+    body:
+      'Hi Priya, I help run Founders: Illinois Entrepreneurs at UIUC and we put students in a room every semester. ' +
+      'Eastman would land well with this group. Would you have twenty minutes?',
+    reference: { subject: null, body: referenceBody },
+    style,
+    safeNames: ['Priya Raghavan', 'Priya', 'Eastman', 'Zuyu Liu'],
+    senderVocab,
+  })
+  check('the sender\'s own identity repeated is not a lift',
+    own.verbatimSpans.length === 0, JSON.stringify(own.verbatimSpans))
+  check('an abstract style note cannot be "copied"',
+    own.copiedFromReference.length === 0, JSON.stringify(own.copiedFromReference))
+  check('a same-sender draft passes', own.passed, JSON.stringify(own))
+
+  // A concrete reference-recipient fact is still caught.
+  const lifted = c.checkDraft({
+    subject: 'spring series',
+    body:
+      'Hi Priya, I read your piece about the Cedar Rapids line at Northwind Foods and wanted to write. ' +
+      'Eastman would land well with our students. Would you have twenty minutes to talk about it?',
+    reference: { subject: null, body: referenceBody },
+    style,
+    safeNames: ['Priya Raghavan', 'Priya', 'Eastman', 'Zuyu Liu'],
+    senderVocab,
+  })
+  check('a concrete transplant is still caught',
+    lifted.copiedFromReference.length >= 1 || lifted.verbatimSpans.length >= 1,
+    JSON.stringify({ copied: lifted.copiedFromReference, verbatim: lifted.verbatimSpans }))
+
+  // A short echo is imitation and must pass; a long identical fragment is not.
+  const echo = c.checkDraft({
+    subject: 'spring series',
+    body:
+      'Hi Priya, I help run Founders: Illinois Entrepreneurs at UIUC and we put students in a room every semester. ' +
+      'Eastman would land well here. Would you have twenty minutes?',
+    reference: { subject: null, body: referenceBody },
+    style,
+    safeNames: ['Priya', 'Eastman', 'Zuyu Liu'],
+    senderVocab,
+  })
+  check('a short echo of the sender\'s own line passes', echo.passed, JSON.stringify(echo.verbatimSpans))
+  check('span length is measured, not window count',
+    echo.longestVerbatim < 9 || echo.verbatimSpans.length <= 1, String(echo.longestVerbatim))
+
+  // Fake familiarity is only fake when there was no relationship.
+  const followUp = {
+    subject: 'following up',
+    body:
+      'Hi Priya, following up on our exchange earlier this year. I help run Founders: Illinois Entrepreneurs ' +
+      'at UIUC and the spring series is taking shape. Would you have twenty minutes?',
+    reference: { subject: null, body: referenceBody },
+    style,
+    safeNames: ['Priya', 'Eastman', 'Zuyu Liu'],
+    senderVocab,
+  }
+  check('claiming a conversation that did not happen is flagged',
+    c.checkDraft(followUp).fakeFamiliarity.length >= 1)
+  check('the same words are fine when the history is real',
+    c.checkDraft({ ...followUp, hasPriorRelationship: true }).fakeFamiliarity.length === 0)
+}
+
+// ─── Model text normalization ────────────────────────────────────────────────
+{
+  const t = require('../lib/agents/runtime/text') as typeof import('../lib/agents/runtime/text')
+  check('a literal unicode escape is decoded', t.normalizeModelText('deep \\u2014 wide') === 'deep — wide')
+  check('ordinary text is untouched', t.normalizeModelText('deep — wide') === 'deep — wide')
+  check('a control escape is left alone', t.normalizeModelText('a\\u0007b') === 'a\\u0007b')
+  check('null becomes empty', t.normalizeModelText(null) === '')
+}
+
 // ─── Report ──────────────────────────────────────────────────────────────────
 
 process.stdout.write(`\n${passed} passed, ${failed} failed\n`)

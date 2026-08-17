@@ -109,6 +109,49 @@ export function buildVerificationPool(
 }
 
 /**
+ * The campaign's reference email, as verification evidence.
+ *
+ * The reference is an email the USER WROTE AND SENT. Facts in it about
+ * themselves — their club, their site, the size of their cohort — are verified
+ * by construction, exactly as an inbound reply is verified by the fact that the
+ * recipient wrote it (see `evidenceForReply` below).
+ *
+ * Found by running the eval: a sponsorship reference said "roughly 300 students",
+ * every generated draft in that campaign repeated it, and the gate blocked all
+ * of them for an unsupported quantity. The gate was right that 300 was in no
+ * stored fact, and wrong that it was unsupported — the user had asserted it
+ * themselves, in the example they supplied.
+ *
+ * The exclusion is the whole safety of this. Sentences carrying a distinctive
+ * token from `recipientSpecific` — the reference's OWN recipient's company,
+ * project or numbers — are dropped, so admitting the reference can never
+ * legitimise transplanting them into a stranger's inbox.
+ */
+export function evidenceFromReference(referenceBody: string, recipientSpecific: string[]): string[] {
+  if (!referenceBody.trim()) return []
+
+  const stop = new Set([
+    'the', 'and', 'that', 'this', 'with', 'from', 'have', 'has', 'was', 'were', 'been',
+    'for', 'you', 'your', 'about', 'would', 'could', 'they', 'their', 'what', 'which',
+    'there', 'here', 'when', 'where', 'into', 'over', 'more', 'most', 'some', 'work',
+    'like', 'just', 'than', 'then', 'them', 'will', 'want', 'know', 'think', 'people',
+    'recipient', 'their', 'company', 'email', 'writer', 'fact', 'implied', 'unspoken',
+  ])
+  const tokens = (s: string) =>
+    (s.toLowerCase().match(/[a-z][a-z'-]{4,}|\d[\d,.]*/g) ?? []).filter((t) => !stop.has(t))
+
+  const banned = new Set<string>()
+  for (const item of recipientSpecific) for (const t of tokens(item)) banned.add(t)
+
+  return referenceBody
+    .split(/(?<=[.!?])\s+|\n+/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .filter((sentence) => !tokens(sentence).some((t) => banned.has(t)))
+    .map((sentence) => `SENDER WROTE THIS BEFORE: ${sentence}`)
+}
+
+/**
  * Evidence for a reply, which is the writer's pool plus what they just told you.
  *
  * Anything in an inbound message is verified by definition — they wrote it. The

@@ -219,6 +219,12 @@ export interface DraftInput {
   companyType?: string | null
   recipientRole?: string | null
   score?: number | null
+  /** Migration 013. Which campaign's reference email wrote this. */
+  campaignId?: string | null
+  /** 'reference' when a campaign reference drove the voice, else 'brief'. */
+  draftMode?: 'brief' | 'reference' | null
+  /** 'existing' | 'new' | 'existing_rediscovered'. */
+  prospectSource?: string | null
 }
 
 /**
@@ -264,26 +270,81 @@ export async function saveDraft(userId: string, input: DraftInput): Promise<Outr
     company_type: input.companyType ?? null,
     recipient_role: input.recipientRole ?? null,
     score: input.score ?? null,
+    campaign_id: input.campaignId ?? null,
+    draft_mode: input.draftMode ?? null,
+    prospect_source: input.prospectSource ?? null,
+  }
+
+  // Columns added by migration 013. Dropping them on a schema error keeps
+  // Phase 9's approve → send → track loop working on a database where 013 has
+  // not been applied yet — additive migrations must never break what shipped.
+  const stripV13 = (r: typeof row) => {
+    const { campaign_id: _a, draft_mode: _b, prospect_source: _c, ...rest } = r
+    return rest
   }
 
   if (existing) {
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from('outreach')
       .update(row)
       .eq('id', existing.id)
       .eq('user_id', userId)
       .select('*')
       .maybeSingle()
+    if (error && isMissingSchema(error.message)) {
+      ;({ data, error } = await supabase
+        .from('outreach')
+        .update(stripV13(row))
+        .eq('id', existing.id)
+        .eq('user_id', userId)
+        .select('*')
+        .maybeSingle())
+    }
     if (error) raise(error.message)
     await recordEvent(existing.id, existing.state, row.state, 'system', { reason: 'redrafted' })
     return data as OutreachRow
   }
 
-  const { data, error } = await supabase.from('outreach').insert(row).select('*').maybeSingle()
+  let { data, error } = await supabase.from('outreach').insert(row).select('*').maybeSingle()
+  if (error && isMissingSchema(error.message)) {
+    ;({ data, error } = await supabase.from('outreach').insert(stripV13(row)).select('*').maybeSingle())
+  }
   if (error) raise(error.message)
   const created = data as OutreachRow
   await recordEvent(created.id, null, created.state, 'system', { reason: 'drafted' })
   return created
+}
+
+/**
+ * Append the (generated → final) pair when the user edits a draft.
+ *
+ * Best-effort and non-blocking: losing a learning signal must never fail the
+ * edit that produced it.
+ *
+ * Nothing reads this yet, deliberately. One edit is not evidence of a style
+ * preference, and rewriting global rules from it is exactly the overfitting the
+ * campaign-reference design replaces. What it buys is the ability to answer
+ * "what does this user CONSISTENTLY change?" later, from real data rather than
+ * from a remembered impression.
+ */
+export async function recordEdit(
+  userId: string,
+  row: OutreachRow,
+  finalBody: string,
+  finalSubject: string | null
+): Promise<void> {
+  const supabase = createServiceClient()
+  await supabase.from('outreach_edits').insert({
+    user_id: userId,
+    outreach_id: row.id,
+    campaign_id: (row as unknown as { campaign_id?: string | null }).campaign_id ?? null,
+    generated_subject: row.subject,
+    generated_body: row.body,
+    final_subject: finalSubject ?? row.subject,
+    final_body: finalBody,
+    draft_version: row.draft_version,
+    style_version: (row as unknown as { positioning_version?: string | null }).positioning_version ?? null,
+  })
 }
 
 /** Store the user's edit. Never overwrites the agent's original. */
@@ -321,6 +382,8 @@ export async function saveEdit(
     .maybeSingle()
   if (error) raise(error.message)
   await recordEvent(id, current.state, state, 'user', { reason: 'edited' })
+  // The generated-vs-final pair, kept before `current` goes out of scope.
+  await recordEdit(userId, current, bodyEdited, subject)
   return data as OutreachRow
 }
 

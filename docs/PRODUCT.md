@@ -213,6 +213,19 @@ Series B announcement" when no such fact was verified does not reach the queue.
 
 ## 9. Outreach voice
 
+> **⚠ Superseded per campaign, by design.** Everything in this section is the *default* voice,
+> used when a campaign has no reference email. When a campaign carries one — a real email the
+> user actually wrote — that email defines the voice and overrides everything below, including
+> the length guidance and the one-ask rule ([ADR-028](ARCHITECTURE.md#adr-028)).
+>
+> That is not a compromise of this section; it is what this section was trying and failing to
+> express. The adjectives below compound: "confident" plus "concise" plus "direct" plus
+> "founder-to-founder" produced drafts that were arrogant and over-compressed, in a voice
+> belonging to nobody. A real email is evidence about a real person. Evidence beats adjectives.
+>
+> The rules that never yield to a reference are the ones that are not about style: grounding
+> (§8), no placeholders, and no reuse of facts belonging to the reference's own recipient.
+
 **Aim for:** founder-to-founder energy · concise · intelligent · confident · curious ·
 ambitious · human · direct · specific.
 

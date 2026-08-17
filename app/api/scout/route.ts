@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { runScouting } from '@/lib/scouting/orchestrator'
 import { RESUME_ITEMS } from '@/evals/phase3/user-profile'
+import { isSearchMode, summarizeDecision, type SearchMode } from '@/lib/network/sufficiency'
 
 // A scouting run is many sequential agent calls with web search inside them.
 // Give it room: a truncated response surfaces client-side as a JSON parse error,
@@ -26,6 +27,9 @@ interface ScoutBody {
   segments?: number
   companiesPerSegment?: number
   maxDeepResearch?: number
+  /** internal_first (default) | internal_only | external_only | both */
+  searchMode?: string
+  internalTarget?: number
 }
 
 export async function POST(request: NextRequest) {
@@ -37,6 +41,11 @@ export async function POST(request: NextRequest) {
     const body = (await request.json()) as ScoutBody
     const goal = (body.goal ?? '').trim()
     if (!goal) return NextResponse.json({ error: 'A mission goal is required' }, { status: 400 })
+
+    // Existing-network-first is the default, and it is the default for a cost
+    // reason as much as a quality one: the cheapest run is the one that finds
+    // what it needs among people already paid for.
+    const searchMode: SearchMode = isSearchMode(body.searchMode) ? body.searchMode : 'internal_first'
 
     // Retrieved summaries only — never the full résumé (ADR-005). This is the
     // temporary source until the Talent Knowledge Base exists.
@@ -82,11 +91,33 @@ export async function POST(request: NextRequest) {
       maxDiscoveryRounds: 2,
       maxRescoutRounds: 0,
       concurrency: 5,
+      searchMode,
+      internalTarget: Math.min(15, Math.max(4, body.internalTarget ?? 8)),
+      maxInternalSearches: 6,
     })
 
     return NextResponse.json({
       runId: result.runId,
+      searchMode,
       funnel: result.funnel,
+      // The internal-first decision, made observable. "Why did this run cost
+      // nothing?" and "why did it spend forty credits?" are the same question.
+      internal: {
+        headline: summarizeDecision(result.internal.decision),
+        decision: result.internal.decision.decision,
+        reasons: result.internal.decision.reasons,
+        strongCount: result.internal.decision.strongCount,
+        targetCount: result.internal.decision.targetCount,
+        indexed: result.internal.indexed,
+        classified: result.internal.classified,
+        poolAssessment: result.internal.poolAssessment,
+        missingProfile: result.internal.missingProfile,
+        searches: result.internal.searchLog.map((s) => ({
+          query: s.query,
+          matches: s.totalMatches,
+          shown: s.returned,
+        })),
+      },
       prospects: result.ranked.map((p) => ({
         key: p.candidate_key,
         name: p.person.name,
@@ -98,7 +129,15 @@ export async function POST(request: NextRequest) {
         linkedin: p.person.linkedin_url,
         score: p.total,
         recommendation: p.recommendation,
-        whyCompany: result.enrichedCompanies.find((c) => c.name === p.companyRef)?.description ?? null,
+        source: p.source,
+        contactId: p.contactId,
+        relationshipStatus: p.relationshipStatus ?? null,
+        approach: p.approach ?? null,
+        internalReason: p.internalReason ?? null,
+        whyCompany:
+          result.enrichedCompanies.find((c) => c.name === p.companyRef)?.description ??
+          p.companyContext ??
+          null,
         whyThem: p.why_they_fit,
         whyYou: p.why_i_fit_them,
         backgroundIds: p.resume_item_ids,
@@ -115,6 +154,7 @@ export async function POST(request: NextRequest) {
       usage: {
         costUsd: Number(result.usage.costUsd.toFixed(2)),
         apolloCredits: result.usage.apollo.enrichmentCredits,
+        apolloCallsAvoided: result.usage.apolloCallsAvoided,
         webSearches: result.usage.anthropic.webSearches,
         modelCalls: result.usage.anthropic.calls,
         latencyMs: result.usage.latencyMs,

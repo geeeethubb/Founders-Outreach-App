@@ -317,6 +317,31 @@ a model fit to that noise would be confidently wrong and would erode trust in ev
 
 ---
 
+## Phase 10 as built — internal network + campaign references ✅ complete
+
+The plan's Phase 10 was "outcome tracking". Phase 9 absorbed most of that
+(`outreach.outcome`, `outreach_events`, reply linking), and the slot was spent
+instead on the two problems that had become the binding constraints in practice:
+
+**1. ~900 researched contacts were unusable.** Every run started by paying to
+discover strangers while people already found, already researched, and in 250
+cases already emailed sat unreachable, because nothing indexed them. Fixed by
+`contact_index`, a retrieval agent that searches it, and a deterministic
+decision about whether external discovery needs to run at all
+([ADR-025](ARCHITECTURE.md#adr-025)–[ADR-027](ARCHITECTURE.md#adr-027)).
+
+**2. The emails did not sound like the founder.** The house voice was a stack of
+adjectives, and it reliably produced drafts that were arrogant and
+over-compressed. Fixed by letting a campaign carry one real email whose voice
+overrides the house style ([ADR-028](ARCHITECTURE.md#adr-028)).
+
+Full write-up: [PHASE_NETWORK_AND_REFERENCE.md](PHASE_NETWORK_AND_REFERENCE.md).
+
+**Still outstanding from the original Phase 10 scope:** the `no_response` timer,
+send pacing, `max_active_outreach`, and one-person-per-company at the send gate.
+
+---
+
 ## Checkpoints
 
 Each phase ends with: `tsc --noEmit` clean · V1 functionality verified working ·

@@ -23,7 +23,10 @@
     "eval:conversation": "tsx scripts/conversation-eval.ts",
     "probe:grounding": "tsx scripts/probe-grounding.ts",
     "check:outreach": "tsx scripts/outreach-e2e.ts",
-    "pilot:prepare": "tsx scripts/prepare-pilot.ts"
+    "pilot:prepare": "tsx scripts/prepare-pilot.ts",
+    "index:network": "tsx scripts/index-network.ts",
+    "eval:network": "tsx scripts/network-eval.ts",
+    "eval:reference": "tsx scripts/reference-eval.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.116.0",

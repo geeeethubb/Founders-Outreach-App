@@ -30,6 +30,16 @@ export interface AnthropicUsage {
   webSearches: number
   costUsd: number
   errors: number
+  /**
+   * Transient failures that were retried. Distinct from `errors`, which counts
+   * calls that gave up.
+   *
+   * Retries were invisible before Phase 10, and that hid a real failure mode: a
+   * single call silently spending four attempts at a 120s timeout looks exactly
+   * like a slow model from outside, and two agent runs were killed on the
+   * assumption they had hung when they were in a retry storm.
+   */
+  retries: number
   byRole: Record<string, number>
   /** Calls and spend per tier — makes the router auditable after the fact. */
   byTier: Record<string, { calls: number; costUsd: number }>
@@ -47,6 +57,7 @@ function emptyUsage(): AnthropicUsage {
     webSearches: 0,
     costUsd: 0,
     errors: 0,
+    retries: 0,
     byRole: {},
     byTier: {},
     escalations: [],
@@ -185,6 +196,7 @@ export async function anthropicComplete(params: CompleteParams): Promise<Complet
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     if (attempt > 0) {
+      usage.retries++
       const base = Math.min(16_000, 700 * Math.pow(2, attempt))
       await sleep(Math.round(base * (0.5 + Math.random() * 0.5)))
     }

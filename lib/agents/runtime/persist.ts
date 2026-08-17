@@ -44,7 +44,17 @@ export async function startScoutingRun(p: StartRunParams): Promise<{ runId: stri
 
 export async function updateScoutingRun(
   runId: string,
-  patch: { status?: string; strategy?: unknown; stats?: unknown; error?: string | null; completed?: boolean }
+  patch: {
+    status?: string
+    strategy?: unknown
+    stats?: unknown
+    error?: string | null
+    completed?: boolean
+    /** Migration 013. Which sources this run was allowed to use. */
+    searchMode?: string
+    /** Migration 013. Why external discovery did or did not run. */
+    internalDecision?: unknown
+  }
 ): Promise<{ ok: boolean; error?: string }> {
   const supabase = createServiceClient()
   const { error } = await supabase
@@ -54,9 +64,20 @@ export async function updateScoutingRun(
       ...(patch.strategy !== undefined ? { strategy: patch.strategy as never } : {}),
       ...(patch.stats !== undefined ? { stats: patch.stats as never } : {}),
       ...(patch.error !== undefined ? { error: patch.error } : {}),
+      ...(patch.searchMode !== undefined ? { search_mode: patch.searchMode } : {}),
+      ...(patch.internalDecision !== undefined ? { internal_decision: patch.internalDecision as never } : {}),
       ...(patch.completed ? { completed_at: new Date().toISOString() } : {}),
     })
     .eq('id', runId)
+
+  // A run predating migration 013 must still be updatable. The columns are
+  // additive, so a missing one degrades to "the decision was not recorded"
+  // rather than to a failed run.
+  if (error && /column .* does not exist|schema cache/i.test(error.message) && (patch.searchMode !== undefined || patch.internalDecision !== undefined)) {
+    const { searchMode: _a, internalDecision: _b, ...rest } = patch
+    if (Object.keys(rest).length === 0) return { ok: true }
+    return updateScoutingRun(runId, rest)
+  }
 
   return error ? { ok: false, error: error.message } : { ok: true }
 }

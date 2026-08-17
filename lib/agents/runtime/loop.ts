@@ -60,6 +60,15 @@ export interface RunAgentParams<TInput, TOutput> {
    * keeps "reuse unchanged work" from quietly meaning "reuse stale work".
    */
   cacheKeyParts?: Record<string, unknown>
+  /**
+   * Called after each model turn. Optional, and purely observational.
+   *
+   * Exists because an agent that runs for four minutes and prints nothing is
+   * undebuggable: a slow final turn, a retry storm behind a flaky connection,
+   * and a genuine hang all look identical from outside. Twice during Phase 10 a
+   * run was killed on the assumption it had hung when it had not.
+   */
+  onStep?: (info: { step: number; elapsedMs: number; stopReason: string | null; toolCalls: string[] }) => void
 }
 
 interface CitationLike {
@@ -243,6 +252,7 @@ async function runAgentLive<TInput, TOutput>(
 
   while (steps < maxSteps) {
     steps++
+    const stepStartedAt = Date.now()
 
     const res = await anthropicComplete({
       role: params.modelRole,
@@ -251,6 +261,13 @@ async function runAgentLive<TInput, TOutput>(
       messages,
       maxTokens: params.maxTokens ?? 4000,
       tools,
+    })
+
+    params.onStep?.({
+      step: steps,
+      elapsedMs: Date.now() - stepStartedAt,
+      stopReason: res.stopReason,
+      toolCalls: res.toolUses.map((t) => t.name),
     })
 
     tokensIn += res.usage.inputTokens
@@ -285,6 +302,40 @@ async function runAgentLive<TInput, TOutput>(
         ...(value === null ? { error: 'invalid output' } : {}),
       })
       if (value !== null) return finish(value, 'succeeded', null)
+
+      // ─── Truncation is a different failure from misunderstanding ───
+      //
+      // `stop_reason: max_tokens` means the tool call was cut off mid-JSON. The
+      // model understood the schema perfectly and simply ran out of room, so the
+      // two standard responses are both wrong:
+      //
+      //   * "re-read the schema" is answering a question it did not ask
+      //   * escalating a tier is actively harmful — a stronger model writes MORE,
+      //     truncates again, and costs several times as much doing it
+      //
+      // Measured before this branch existed: a network-retrieval run truncated at
+      // 6000 tokens, escalated to the premium tier, truncated again, and spent
+      // $1.16 and several minutes on one mission that should have cost cents.
+      // The symptom from outside was an agent that appeared to hang.
+      //
+      // The only thing that helps is asking for a SHORTER answer.
+      if (res.stopReason === 'max_tokens' && steps < maxSteps) {
+        messages.push({ role: 'assistant', content: res.content })
+        messages.push({
+          role: 'user',
+          content: res.toolUses.map<Anthropic.ToolResultBlockParam>((t) => ({
+            type: 'tool_result',
+            tool_use_id: t.id,
+            is_error: true,
+            content:
+              `Your answer was CUT OFF because it exceeded the output limit — it was not wrong, ` +
+              `it was too long. Call ${SUBMIT} again with the same findings expressed more briefly: ` +
+              `keep roughly half as many items, one short sentence per explanation, and at most two ` +
+              `evidence entries each. Completeness of the LIST matters less than the call being valid.`,
+          })),
+        })
+        continue
+      }
 
       // Invalid output is RETRYABLE, not a dead run (ADR-007). Discarding it
       // outright threw away a whole discovery round — every company found and

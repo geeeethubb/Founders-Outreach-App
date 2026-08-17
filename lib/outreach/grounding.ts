@@ -25,7 +25,9 @@
 // word that may be prose). They are surfaced and never block, because a gate
 // that blocks good drafts gets switched off, and then it protects nothing.
 
-export type FindingKind = 'quantity' | 'entity' | 'superlative' | 'responsibility'
+import { findPlaceholders } from './placeholders'
+
+export type FindingKind = 'quantity' | 'entity' | 'superlative' | 'responsibility' | 'placeholder'
 
 export interface GroundingFinding {
   severity: 'blocking' | 'warning'
@@ -48,6 +50,7 @@ export interface GroundingResult {
     evidenceItems: number
     quantitiesChecked: number
     entitiesChecked: number
+    placeholdersFound: number
   }
 }
 
@@ -427,6 +430,24 @@ const FILLER = new Set([
   'currently', 'exactly', 'actually', 'entire', 'whole', 'happy', 'worth',
 ])
 
+/**
+ * Frames that ask rather than assert.
+ *
+ * The responsibility check exists to catch a fabricated specific stated as
+ * fact. A question is not that, and the writer's own instructions explicitly
+ * permit an inference to appear "as hedged framing, never as assertion" — so
+ * blocking the hedged form contradicts the rule it is enforcing.
+ *
+ * Found by running the eval: a genuinely-grounded sentence was blocked —
+ * "I am curious how that shift changes what you pay attention to … once you are
+ * responsible for a whole region", written to a VP of Operations. True, hedged,
+ * and rejected, because the sentence happened to share no five-letter word with
+ * the stored evidence. A gate that blocks good drafts gets switched off, and
+ * then it protects nothing.
+ */
+const HEDGED_FRAME =
+  /\?|\b(curious|wonder|wondering|imagine|guess|assume|assuming|presumably|suspect|if you|whether|might be|may be|sounds like|seems like|is that|would that)\b/i
+
 const RESPONSIBILITY_PATTERNS: RegExp[] = [
   /\b(?:you|you're|you are|your team|your group)\s+(?:currently\s+|now\s+)?(?:lead|leads|leading|run|runs|running|head|heads|heading|own|owns|owning|oversee|oversees|overseeing|manage|manages|managing|drive|drives|driving|build|builds|building|built|launch|launched|launching|scaled?|scaling)\b/i,
   /\byou(?:'re| are)\s+responsible for\b/i,
@@ -457,6 +478,24 @@ export function checkGrounding(input: GroundingInput): GroundingResult {
   const poolLower = pool.toLowerCase()
 
   const findings: GroundingFinding[] = []
+
+  // ─── placeholders ───
+  // Checked first and separately from grounding: a placeholder is not an
+  // unsupported claim, it is proof nobody read the email. It runs in the same
+  // gate because the gate is the one thing that runs at approval AND again at
+  // send, and pasting "[their team]" back in while editing is exactly how a
+  // clean draft becomes an embarrassing one.
+  const placeholders = findPlaceholders(input.subject, input.body)
+  for (const p of placeholders) {
+    findings.push({
+      severity: p.severity,
+      kind: 'placeholder',
+      claim: p.match,
+      sentence: p.sentence,
+      reason: p.reason,
+      revision: p.revision,
+    })
+  }
 
   // ─── quantities ───
   const draftQuantities = extractQuantities(draft)
@@ -561,7 +600,8 @@ export function checkGrounding(input: GroundingInput): GroundingResult {
       .slice(0, 2)
       .join(' | ')
     findings.push({
-      severity: 'blocking',
+      // Asked, not asserted: surfaced for the human, never blocking.
+      severity: HEDGED_FRAME.test(sentence) ? 'warning' : 'blocking',
       kind: 'responsibility',
       claim: sentence.slice(0, 120),
       sentence,
@@ -584,6 +624,7 @@ export function checkGrounding(input: GroundingInput): GroundingResult {
       evidenceItems: input.evidence.length,
       quantitiesChecked: draftQuantities.length,
       entitiesChecked: entities.length,
+      placeholdersFound: placeholders.length,
     },
   }
 }
@@ -591,10 +632,24 @@ export function checkGrounding(input: GroundingInput): GroundingResult {
 /** One line for the UI and the API error body. */
 export function summarizeGrounding(r: GroundingResult): string {
   if (r.ok && r.warnings.length === 0) {
-    return `Grounded — ${r.stats.quantitiesChecked} figures and ${r.stats.entitiesChecked} names checked against ${r.stats.evidenceItems} evidence items.`
+    return `Grounded — ${r.stats.quantitiesChecked} figures and ${r.stats.entitiesChecked} names checked against ${r.stats.evidenceItems} evidence items, no placeholders.`
   }
   if (r.ok) return `Grounded, with ${r.warnings.length} warning${r.warnings.length === 1 ? '' : 's'}.`
-  return `${r.blocking.length} unsupported claim${r.blocking.length === 1 ? '' : 's'}: ${r.blocking
-    .map((f) => `"${f.claim}"`)
-    .join(', ')}`
+
+  // Placeholders lead the summary when present. They are the failure a human
+  // fixes in five seconds, and burying them under claim analysis wastes that.
+  const slots = r.blocking.filter((f) => f.kind === 'placeholder')
+  const claims = r.blocking.filter((f) => f.kind !== 'placeholder')
+  const parts: string[] = []
+  if (slots.length) {
+    parts.push(
+      `${slots.length} placeholder${slots.length === 1 ? '' : 's'} left in: ${slots.map((f) => `"${f.claim}"`).join(', ')}`
+    )
+  }
+  if (claims.length) {
+    parts.push(
+      `${claims.length} unsupported claim${claims.length === 1 ? '' : 's'}: ${claims.map((f) => `"${f.claim}"`).join(', ')}`
+    )
+  }
+  return parts.join(' · ')
 }

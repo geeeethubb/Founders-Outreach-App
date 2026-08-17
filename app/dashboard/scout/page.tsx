@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import OutreachPanel, { type Grounding, type OutreachSnapshot } from './OutreachPanel'
 
 interface Component {
@@ -10,6 +10,8 @@ interface Component {
   max: number
   explanation: string
 }
+
+type ProspectSource = 'existing' | 'new' | 'existing_rediscovered'
 
 interface Prospect {
   key: string
@@ -22,6 +24,11 @@ interface Prospect {
   linkedin: string | null
   score: number
   recommendation: 'STRONG' | 'MAYBE' | 'WEAK'
+  source: ProspectSource
+  contactId: string | null
+  relationshipStatus: string | null
+  approach: string | null
+  internalReason: string | null
   whyCompany: string | null
   whyThem: string
   whyYou: string
@@ -29,6 +36,59 @@ interface Prospect {
   risks: string
   researchSummary: string
   components: Component[]
+}
+
+interface InternalSummary {
+  headline: string
+  decision: 'INTERNAL_SUFFICIENT' | 'EXTERNAL_DISCOVERY_NEEDED' | 'INTERNAL_SKIPPED'
+  reasons: string[]
+  strongCount: number
+  targetCount: number
+  indexed: number
+  classified: number
+  poolAssessment: string
+  missingProfile: string[]
+  searches: { query: string; matches: number; shown: number }[]
+}
+
+interface CampaignOption {
+  id: string
+  name: string
+  hasReference: boolean
+  words: number | null
+}
+
+const SEARCH_MODES: { value: string; label: string; hint: string }[] = [
+  {
+    value: 'internal_first',
+    label: 'Existing network first',
+    hint: 'Search the people you already have. Only pay for discovery if they are not enough.',
+  },
+  {
+    value: 'internal_only',
+    label: 'Existing network only',
+    hint: 'Never spend on discovery. Returns fewer people rather than padding.',
+  },
+  {
+    value: 'both',
+    label: 'Existing + new',
+    hint: 'Search your network and discover new people regardless.',
+  },
+  {
+    value: 'external_only',
+    label: 'New contacts only',
+    hint: 'Skip your network entirely. The most expensive option.',
+  },
+]
+
+function sourceBadge(source: ProspectSource): { label: string; className: string } {
+  if (source === 'existing') {
+    return { label: 'existing contact', className: 'bg-sky-50 text-sky-700 border-sky-200' }
+  }
+  if (source === 'existing_rediscovered') {
+    return { label: 'existing + rediscovered', className: 'bg-violet-50 text-violet-700 border-violet-200' }
+  }
+  return { label: 'newly discovered', className: 'bg-slate-50 text-slate-600 border-slate-200' }
 }
 
 interface ProofPoint {
@@ -59,21 +119,36 @@ interface Draft {
   grounding: Grounding | null
 }
 
+interface ReferenceSummary {
+  campaignName: string
+  words: number
+  targetWords: { min: number; max: number }
+  summary: string
+  structure: string[]
+  distinctiveMoves: string[]
+  recipientSpecific: string[]
+}
+
 interface Brief {
   positioning: Positioning
   draft: Draft | null
   outreachId: string | null
   persistError: string | null
+  referenceWarning: string | null
+  reference: ReferenceSummary | null
   usage: { costUsd: number; calls: number }
 }
 
 interface ScoutResult {
   runId: string | null
+  searchMode: string
+  internal: InternalSummary
   funnel: Record<string, number>
   prospects: Prospect[]
   usage: {
     costUsd: number
     apolloCredits: number
+    apolloCallsAvoided: number
     webSearches: number
     modelCalls: number
     latencyMs: number
@@ -91,6 +166,8 @@ const DEFAULT_GOAL =
 // is happening. Honest about being an estimate rather than live progress.
 const STAGES = [
   'Interpreting the mission and cutting it into market segments',
+  'Searching the people you already have',
+  'Deciding whether the existing network is enough',
   'Searching the market for real companies, round by round',
   'Validating each company and deciding who to look for inside it',
   'Resolving people at the companies that survived',
@@ -111,6 +188,12 @@ export default function ScoutPage() {
   // Defaults match app/api/scout/route.ts, which sizes them to the 300s ceiling.
   const [segments, setSegments] = useState(2)
   const [depth, setDepth] = useState(7)
+  const [searchMode, setSearchMode] = useState('internal_first')
+
+  // The campaign whose reference email defines the voice of every draft written
+  // from this page. Empty = the default house voice.
+  const [campaigns, setCampaigns] = useState<CampaignOption[]>([])
+  const [campaignId, setCampaignId] = useState('')
 
   const [running, setRunning] = useState(false)
   const [stage, setStage] = useState(0)
@@ -125,6 +208,13 @@ export default function ScoutPage() {
   const [briefError, setBriefError] = useState<Record<string, string>>({})
   // Server-backed, unlike the briefs above: this is the state a refresh keeps.
   const [snapshots, setSnapshots] = useState<Record<string, OutreachSnapshot>>({})
+
+  useEffect(() => {
+    fetch('/api/campaigns/references')
+      .then((r) => (r.ok ? r.json() : { campaigns: [] }))
+      .then((d) => setCampaigns(d.campaigns ?? []))
+      .catch(() => setCampaigns([]))
+  }, [])
 
   async function buildBrief(p: Prospect) {
     setBriefing(p.key)
@@ -145,6 +235,9 @@ export default function ScoutPage() {
           },
           runId: result?.runId ?? null,
           score: p.score,
+          campaignId: campaignId || null,
+          relationshipNote: p.approach,
+          prospectSource: p.source,
           companyContext: p.whyCompany ?? p.whyThem,
           personContext: p.researchSummary,
           rankingEvidence: {
@@ -199,7 +292,7 @@ export default function ScoutPage() {
       const res = await fetch('/api/scout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ goal, geography, segments, maxDeepResearch: depth }),
+        body: JSON.stringify({ goal, geography, segments, maxDeepResearch: depth, searchMode }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Scouting failed')
@@ -270,6 +363,57 @@ export default function ScoutPage() {
           </div>
         </div>
 
+        {/* ─── Where prospects may come from ─────────────────────────────── */}
+        <div className="mt-5 border-t border-slate-100 pt-4">
+          <label className="block text-sm font-medium text-slate-700">Search mode</label>
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            {SEARCH_MODES.map((m) => (
+              <button
+                key={m.value}
+                type="button"
+                disabled={running}
+                onClick={() => setSearchMode(m.value)}
+                className={`text-left rounded-md border px-3 py-2 transition-colors disabled:opacity-60 ${
+                  searchMode === m.value
+                    ? 'border-indigo-400 bg-indigo-50'
+                    : 'border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                <div className="text-sm font-medium text-slate-900">
+                  {m.label}
+                  {m.value === 'internal_first' && (
+                    <span className="ml-1.5 text-xs font-normal text-indigo-600">default</span>
+                  )}
+                </div>
+                <div className="text-xs text-slate-500 mt-0.5">{m.hint}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* ─── The campaign whose voice drafts should match ───────────────── */}
+        <div className="mt-4">
+          <label className="block text-sm font-medium text-slate-700">Write drafts in the voice of</label>
+          <select
+            value={campaignId}
+            onChange={(e) => setCampaignId(e.target.value)}
+            disabled={running}
+            className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-50"
+          >
+            <option value="">Default voice (no campaign reference)</option>
+            {campaigns.map((c) => (
+              <option key={c.id} value={c.id} disabled={!c.hasReference}>
+                {c.name}
+                {c.hasReference ? ` — reference email, ${c.words} words` : ' — no reference email yet'}
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-slate-500 mt-1">
+            Paste a real email on a campaign and every draft here is written to match it. Set one on
+            the campaign page.
+          </p>
+        </div>
+
         <p className="mt-3 text-xs text-slate-500">
           Runs here are capped at five minutes by the hosting plan, so the ceilings above are
           lower than the system can actually do. For a deeper sweep — more segments, more
@@ -323,16 +467,79 @@ export default function ScoutPage() {
           <div className="mt-6 flex flex-wrap gap-4 text-sm bg-white border border-slate-200 rounded-lg p-4">
             <span><strong>{result.prospects.length}</strong> prospects</span>
             <span className="text-slate-400">·</span>
+            <span>
+              <strong>{result.prospects.filter((p) => p.source !== 'new').length}</strong> from your network
+            </span>
+            <span className="text-slate-400">·</span>
             <span>${result.usage.costUsd.toFixed(2)} Anthropic</span>
             <span className="text-slate-400">·</span>
-            <span>{result.usage.apolloCredits} Apollo credits</span>
+            <span>
+              {result.usage.apolloCredits} Apollo credits
+              {result.usage.apolloCallsAvoided > 0 && (
+                <span className="text-emerald-700"> ({result.usage.apolloCallsAvoided} avoided)</span>
+              )}
+            </span>
             <span className="text-slate-400">·</span>
             <span>{Math.round(result.usage.latencyMs / 1000)}s</span>
-            <span className="text-slate-400">·</span>
-            <span className="text-slate-500">
-              {result.funnel.companiesValidated} companies → {result.funnel.peopleEnriched} people →{' '}
-              {result.funnel.peopleResearched} researched
-            </span>
+          </div>
+
+          {/* ─── The internal-first decision, always shown ─────────────────── */}
+          <div
+            className={`mt-3 rounded-lg border p-4 ${
+              result.internal.decision === 'INTERNAL_SUFFICIENT'
+                ? 'bg-emerald-50 border-emerald-200'
+                : 'bg-slate-50 border-slate-200'
+            }`}
+          >
+            <div className="text-sm font-medium text-slate-900">{result.internal.headline}</div>
+            <ul className="mt-1.5 text-xs text-slate-600 space-y-0.5">
+              {result.internal.reasons.map((r, i) => (
+                <li key={i}>· {r}</li>
+              ))}
+            </ul>
+            {result.internal.indexed === 0 ? (
+              <p className="mt-2 text-xs text-amber-800">
+                Your existing contacts are not indexed yet. Run{' '}
+                <code className="text-slate-700">npm run index:network</code> once and every future run
+                searches them first.
+              </p>
+            ) : (
+              <details className="mt-2">
+                <summary className="text-xs text-slate-500 cursor-pointer">
+                  {result.internal.searches.length} search
+                  {result.internal.searches.length === 1 ? '' : 'es'} over {result.internal.indexed}{' '}
+                  indexed contacts
+                </summary>
+                <ul className="mt-1.5 text-xs text-slate-600 space-y-0.5">
+                  {result.internal.searches.map((s, i) => (
+                    <li key={i}>
+                      · “{s.query}” → {s.matches} matches, {s.shown} read
+                    </li>
+                  ))}
+                </ul>
+                {result.internal.poolAssessment && (
+                  <p className="mt-2 text-xs text-slate-600">{result.internal.poolAssessment}</p>
+                )}
+                {result.internal.missingProfile.length > 0 && (
+                  <div className="mt-2">
+                    <div className="text-xs font-medium text-slate-500">
+                      What your network is missing for this mission
+                    </div>
+                    <ul className="text-xs text-slate-600 space-y-0.5 mt-0.5">
+                      {result.internal.missingProfile.map((g, i) => (
+                        <li key={i}>· {g}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </details>
+            )}
+          </div>
+
+          <div className="mt-3 text-xs text-slate-500">
+            {result.funnel.companiesValidated} companies → {result.funnel.peopleEnriched} people →{' '}
+            {result.funnel.peopleResearched} researched
+            {result.funnel.peopleReused > 0 && ` · ${result.funnel.peopleReused} resolved from your database`}
           </div>
 
           {result.errors.length > 0 && (
@@ -360,6 +567,14 @@ export default function ScoutPage() {
                       <span className={`text-xs px-2 py-0.5 rounded border ${badge(p.recommendation)}`}>
                         {p.recommendation}
                       </span>
+                      <span className={`text-xs px-2 py-0.5 rounded border ${sourceBadge(p.source).className}`}>
+                        {sourceBadge(p.source).label}
+                      </span>
+                      {p.relationshipStatus && p.relationshipStatus !== 'never_contacted' && (
+                        <span className="text-xs px-2 py-0.5 rounded border bg-amber-50 text-amber-800 border-amber-200">
+                          {p.relationshipStatus.replace(/_/g, ' ')}
+                        </span>
+                      )}
                       <span className="text-xs text-slate-500">score {p.score}</span>
                     </div>
                     <div className="text-sm text-slate-600 mt-0.5">
@@ -373,6 +588,19 @@ export default function ScoutPage() {
 
                 {open === p.key && (
                   <div className="border-t border-slate-200 p-4 space-y-4 text-sm">
+                    {p.approach && (
+                      <div className="bg-amber-50 border border-amber-200 rounded p-3">
+                        <div className="text-xs font-medium uppercase tracking-wide text-amber-700">
+                          You have history with this person
+                        </div>
+                        <p className="mt-1 text-amber-900">{p.approach}</p>
+                      </div>
+                    )}
+
+                    {p.internalReason && (
+                      <Section title="Why your network surfaced them">{p.internalReason}</Section>
+                    )}
+
                     <Section title="Why this company fits">
                       {p.whyCompany ?? 'No company description was captured.'}
                     </Section>
@@ -440,6 +668,25 @@ export default function ScoutPage() {
 
                       {briefs[p.key] && (
                         <div className="space-y-4">
+                          {briefs[p.key].reference && (
+                            <div className="bg-white border border-slate-200 rounded p-3">
+                              <div className="text-xs font-medium uppercase tracking-wide text-slate-400">
+                                Written in the voice of “{briefs[p.key].reference!.campaignName}”
+                              </div>
+                              <p className="mt-1 text-slate-700">{briefs[p.key].reference!.summary}</p>
+                              <p className="mt-1 text-xs text-slate-500">
+                                reference is {briefs[p.key].reference!.words} words → this draft targets{' '}
+                                {briefs[p.key].reference!.targetWords.min}–
+                                {briefs[p.key].reference!.targetWords.max}
+                              </p>
+                            </div>
+                          )}
+                          {briefs[p.key].referenceWarning && (
+                            <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded p-2">
+                              {briefs[p.key].referenceWarning}
+                            </p>
+                          )}
+
                           <div className="bg-indigo-50 border border-indigo-100 rounded p-3">
                             <div className="text-xs font-medium uppercase tracking-wide text-indigo-500">
                               Positioning thesis

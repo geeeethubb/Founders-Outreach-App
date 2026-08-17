@@ -24,7 +24,14 @@ export interface Grounding {
   ok: boolean
   blocking: GroundingFinding[]
   warnings: GroundingFinding[]
-  stats: { evidenceItems: number; quantitiesChecked: number; entitiesChecked: number }
+  stats: {
+    evidenceItems: number
+    quantitiesChecked: number
+    entitiesChecked: number
+    // Added by migration-independent code in Phase 10; absent on rows stored
+    // before it, so it stays optional here.
+    placeholdersFound?: number
+  }
 }
 
 export type OutreachState =
@@ -107,21 +114,44 @@ export function GroundingReport({ grounding }: { grounding: Grounding | null }) 
     return (
       <p className="text-xs text-emerald-700">
         ✓ Claim check passed — {grounding.stats.quantitiesChecked} figures and{' '}
-        {grounding.stats.entitiesChecked} names resolve to stored evidence.
+        {grounding.stats.entitiesChecked} names resolve to stored evidence, no placeholders.
       </p>
     )
   }
 
+  // Placeholders are separated from claim failures because they are a different
+  // problem with a different fix. An unsupported claim needs research or a
+  // rewrite; "[First Name]" needs five seconds. Burying one under the other
+  // wastes the easy fix.
+  const slots = grounding.blocking.filter((f) => f.kind === 'placeholder')
+  const claims = grounding.blocking.filter((f) => f.kind !== 'placeholder')
+
   return (
     <div className="space-y-2">
-      {grounding.blocking.length > 0 && (
-        <div className="rounded border border-red-200 bg-red-50 p-3">
-          <div className="text-xs font-semibold text-red-800">
-            {grounding.blocking.length} unsupported claim
-            {grounding.blocking.length === 1 ? '' : 's'} — this cannot be approved or sent
+      {slots.length > 0 && (
+        <div className="rounded border border-red-300 bg-red-100 p-3">
+          <div className="text-xs font-semibold text-red-900">
+            {slots.length} placeholder{slots.length === 1 ? '' : 's'} left in the draft — this
+            cannot be approved or sent
           </div>
           <ul className="mt-2 space-y-2">
-            {grounding.blocking.map((f, i) => (
+            {slots.map((f, i) => (
+              <li key={i} className="text-xs text-red-900">
+                <span className="font-medium">“{f.claim}”</span> — {f.reason}
+                <div className="mt-0.5 italic text-red-700">in: {f.sentence}</div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {claims.length > 0 && (
+        <div className="rounded border border-red-200 bg-red-50 p-3">
+          <div className="text-xs font-semibold text-red-800">
+            {claims.length} unsupported claim
+            {claims.length === 1 ? '' : 's'} — this cannot be approved or sent
+          </div>
+          <ul className="mt-2 space-y-2">
+            {claims.map((f, i) => (
               <li key={i} className="text-xs text-red-900">
                 <span className="font-medium">“{f.claim}”</span> — {f.reason}
                 <div className="mt-0.5 text-red-700">Suggested fix: {f.revision}</div>

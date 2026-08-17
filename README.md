@@ -25,15 +25,22 @@ prospects than you asked for rather than padding the list.
 ## How it works
 
 ```
-MISSION → strategy → company discovery → company ranking
-        → people discovery → people ranking → research → positioning
-        → outreach → quality control → YOUR APPROVAL → send
+MISSION → strategy → YOUR EXISTING NETWORK → is that enough?
+        ├── yes → shortlist                      (no discovery spend at all)
+        └── no  → company discovery → company ranking → people discovery
+                → people ranking → research → merge with your network
+        → positioning → outreach → quality control → YOUR APPROVAL → send
         → response tracking → learning
 ```
 
-Thirteen stages with explicit state between each one. Deterministic code does the
-deterministic work (API calls, dedupe, scoring arithmetic, delivery). LLM agents do the work
-requiring judgment (strategy, interpretation, research synthesis, positioning, writing).
+Explicit state between every stage. Deterministic code does the deterministic work (API
+calls, dedupe, scoring arithmetic, delivery, and the decision about whether to spend). LLM
+agents do the work requiring judgment (strategy, retrieval, interpretation, research
+synthesis, positioning, writing).
+
+**It looks at the people you already have first.** Every run searches your existing contacts
+before it spends anything discovering strangers, and tells you why it did or did not go
+looking further.
 
 **Nothing cold is sent without your approval.** That is the default and it is enforced at the
 database level.
@@ -56,6 +63,16 @@ interesting *to that person*, and records why.
 Weights are configurable per mission, and re-weighting re-ranks instantly — the model judges
 components, the code does the arithmetic.
 
+**Your network, searchable by goal.** Contacts you already have are indexed once — normalized,
+classified, and joined to what happened last time you wrote to them. A new goal searches them
+first, and a person who is wrong for one mission stays available for the next: scores are
+stored per mission, never stamped onto the person.
+
+**Emails that sound like you.** Paste one real email into a campaign and every draft in it is
+written to match — its length, its warmth, its way of asking. Not a template: no brackets, no
+variables, no placeholders. The system tells you what it learned from your example, and you
+can replace the example whenever the voice should change.
+
 **Quality gates.** Eight evaluation criteria before a draft reaches you, including a claim
 accuracy check and a cringe test. Drafts that fail are revised. Drafts that still fail reach
 you anyway, flagged — the system never silently discards its own failures.
@@ -67,9 +84,9 @@ you anyway, flagged — the system never silently discards its own failures.
 | Doc | What it covers |
 |---|---|
 | [PRODUCT.md](docs/PRODUCT.md) | What this is, the North Star, missions, scoring, approval |
-| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Target architecture and 12 decision records |
-| [PIPELINE.md](docs/PIPELINE.md) | The 13-stage state machine, stage by stage |
-| [AGENTS.md](docs/AGENTS.md) | The seven agents: inputs, outputs, boundaries |
+| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Target architecture and 29 decision records |
+| [PIPELINE.md](docs/PIPELINE.md) | The state machine, stage by stage |
+| [AGENTS.md](docs/AGENTS.md) | The thirteen agents: inputs, outputs, boundaries |
 | [DATA_MODEL.md](docs/DATA_MODEL.md) | Schema, new tables, migration sequence |
 | [EVALS.md](docs/EVALS.md) | Quality criteria and thresholds |
 | [CURRENT_STATE.md](docs/CURRENT_STATE.md) | How the app works **today** |
@@ -84,14 +101,29 @@ Start with [PRODUCT.md](docs/PRODUCT.md) for the *what* and
 
 ## Status
 
-**Phase 0 complete** — repository audited, V2 architecture designed and documented, type-only
-scaffolding in place.
+**Phase 10 complete.** Phases 0, 3, 6, 7, 8, 9 and 10 have shipped. The loop runs end to end:
+state a goal, get a ranked shortlist drawn from your own network first, read why each person
+is there, approve a draft, send it from your Gmail, and see the reply come back.
 
-Currently shipping and usable: the V1 workflow — manual contact import, AI research, email
-generation, an approval queue, Gmail sending, and reply tracking. See
-[CURRENT_STATE.md](docs/CURRENT_STATE.md).
+| | |
+|---|---|
+| Latest write-up | [PHASE_NETWORK_AND_REFERENCE.md](docs/PHASE_NETWORK_AND_REFERENCE.md) |
+| What changed and why, per phase | [BUILD_LOG.md](docs/BUILD_LOG.md) |
+| What is still V1 | [CURRENT_STATE.md](docs/CURRENT_STATE.md) |
 
-Next: Phase 1, missions and preferences. See
+**Two founder actions are outstanding**, and the app tells you about both:
+
+```bash
+# 1. Apply supabase/migrations/013_network_and_reference.sql in the Supabase SQL editor.
+# 2. Then index the contacts you already have — once, about $1.60 for ~900 people.
+npm run index:network
+```
+
+Until then the scout searches an empty network index and says so in the run log.
+
+**Not built yet:** missions as a database object (they are run parameters today), the Talent
+Knowledge Base (a fixture at `evals/phase3/user-profile.ts`), the `no_response` timer, send
+pacing, and the learning surface. See
 [IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md).
 
 ---

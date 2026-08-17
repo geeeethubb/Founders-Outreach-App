@@ -718,6 +718,130 @@ reachable only from `approved`. Retrying can never smuggle out unapproved text.
 
 ---
 
+### ADR-025 ★ — The existing network is searched before anything is discovered
+
+**Decision.** Every run begins by asking *who do we already have?*. External
+discovery runs only when a deterministic check says the internal pool is not
+enough. `missions.search_mode` (a run parameter today) selects between
+`internal_first` (default), `internal_only`, `both`, and `external_only`.
+
+**Why.** The database held 897 researched contacts, 635 of them bought from
+Apollo, and no run had ever looked at one of them. Every mission started by
+paying to discover strangers while people who had already been found, researched
+and in 250 cases emailed sat unreachable — because nothing indexed them.
+
+**Why the decision is deterministic and not an agent's.** The agent that would
+decide "have I found enough?" is the same agent that benefits from searching
+more. `lib/network/sufficiency.ts` counts candidates clearing both a score and a
+confidence floor and compares that to the mission's target. Nothing about the
+decision is a judgment call, and every decision carries its reasons into
+`scouting_runs.internal_decision`, because "why did this run cost $14?" and "why
+did this one cost nothing?" are the same question.
+
+**Consequence.** A run can now legitimately end without an external call, and
+the funnel must say so rather than looking broken.
+
+---
+
+### ADR-026 — Contact classification is a mission-independent index, cached by content hash
+
+**Decision.** `contact_index` holds one row per contact: deterministic
+normalization (seniority band, function, geography) plus a cheap model pass that
+labels industry, function, domains, opportunity types and open tags. The row
+carries `source_hash` over exactly the material the classifier reads, so an
+unchanged contact is never re-classified.
+
+**Why a separate table, not columns on `contacts`.** It is derived data with its
+own refresh lifecycle and its own version stamp. Mixing it into `contacts` makes
+"is this stale?" unanswerable, and `contacts` is read by six V1 screens that
+should not grow twenty-five columns to serve retrieval.
+
+**Why classification is mission-independent.** Person Triage answers "is this
+person worth researching for THIS mission at THIS company", which must be
+recomputed every run. This answers "what IS this person", whose answer changes
+only when the underlying material does — which is what makes it cacheable across
+every future mission. Measured: 897 contacts classified once for **$1.59**;
+every subsequent run of the indexer costs nothing for those rows.
+
+**Why mission scores are NOT written here.** A person weak for winter industrial
+AI may be strong for summer consulting. Per-mission scores live in
+`network_matches`, keyed by run. Writing a "quality" number onto the contact
+would let the first mission poison every later one.
+
+---
+
+### ADR-027 — Reuse before purchase
+
+**Decision.** Before enrichment, every Apollo search stub is checked against an
+index of contacts this user already owns. A match is resolved from storage; only
+the remainder is enriched.
+
+**Why here specifically.** Apollo's search step is free and its enrichment step
+costs a lead credit. Search rows are obfuscated, so `apollo_id` is the only
+identifier available at that moment — and it is also the strongest one we have,
+which makes it both the only possible check and the right one.
+
+Matching order — Apollo id, normalized LinkedIn, email, normalized name+company —
+is the same order used by `lib/scouting/persist.ts` and `lib/outreach/store.ts`.
+Three copies of "who is this person" that disagree is how duplicate contacts
+appear.
+
+**Consequence.** External discovery finding someone already in the database is a
+MERGE, labelled `existing_rediscovered`, never a second row.
+
+---
+
+### ADR-028 ★ — A campaign's reference email outranks the house style
+
+**Decision.** A campaign may carry one real email the user wrote. When it does,
+that email defines the voice of every draft in the campaign — its length, its
+warmth, its directness, the shape of its ask — and it overrides the house style
+in [PRODUCT.md §9](PRODUCT.md#9-outreach-voice), including the word band and the
+one-ask rule.
+
+**Why.** The house style is a set of adjectives, and adjectives compound.
+"Confident" plus "concise" plus "high-signal" plus "founder-to-founder"
+reliably produced drafts that were arrogant and over-compressed — a voice
+belonging to nobody, which the user then rewrote by hand every time. A real
+email is *evidence about a real person*. Evidence beats adjectives.
+
+**Why a separate Style Analyst rather than pasting the reference into the
+writer.** Three reasons, in order of weight:
+
+1. **It is answerable.** "What did the system learn from my email?" has a stored,
+   readable, correctable answer. Pasting the reference into the writer makes that
+   unanswerable forever.
+2. **It separates style from content** — in particular `recipient_specific`, the
+   list of facts belonging to the reference's own recipient, which is what lets
+   the writer be told *not to reuse them*. That is the whole difference between
+   imitating a voice and copying a template.
+3. It is paid for once per campaign rather than once per prospect.
+
+**Explicitly not a template.** No variables, no brackets, no fill-in-the-blanks.
+The writer receives the reference, the style analysis, the recipient's research,
+the positioning brief and the mission, and writes a finished email.
+
+---
+
+### ADR-029 — Placeholders are a deterministic, blocking gate
+
+**Decision.** `[First Name]`, `{{company}}`, `<Role>`, `XYZ Corp` and unreplaced
+instruction tokens block approval and block send, inside the same gate that
+checks claim grounding.
+
+**Why not prompt instructions.** The writer's prompt says "no placeholders"
+three times, and that is the weakest possible enforcement — the same reasoning as
+ADR-006 and ADR-011. A placeholder reaching a recipient is unrecoverable in a way
+almost nothing else is: it is not a quality problem, it is proof the sender did
+not read their own email.
+
+**Why in the grounding gate rather than beside it.** The gate is the one thing
+that runs at approval *and again at send*. Pasting `[their team]` back in while
+editing is exactly how a clean draft becomes an embarrassing one, and only a
+re-check at send catches that.
+
+---
+
 ## 4. Providers
 
 ```ts

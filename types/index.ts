@@ -197,6 +197,20 @@ export interface Campaign {
   status: 'active' | 'paused' | 'completed'
   total_contacts: number
   created_at: string
+
+  // ─── Phase 10: the campaign's voice (migration 013) ───
+  // One real email the user wrote, defining how this campaign should sound.
+  // A STYLE, STRUCTURE and INTENT example — never a fill-in-the-blank template,
+  // which is why there is no `variables` field here (ADR-028).
+  // Optional because rows written before migration 013 do not carry them.
+  reference_subject?: string | null
+  reference_body?: string | null
+  reference_notes?: string | null
+  target_audience?: string | null
+  /** The Style Analyst's cached output. See lib/agents/style-analyst. */
+  reference_style?: Record<string, unknown> | null
+  reference_style_version?: string | null
+  reference_updated_at?: string | null
 }
 
 export interface Email {
