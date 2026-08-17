@@ -162,6 +162,20 @@ Re-running a file is the normal operating condition, since nothing tracks what h
 
 Additive only. Never break a V1 screen.
 
+**Run `npm run check:sql` before handing a migration to the founder.** Because migrations are
+applied by hand, the first thing that ever parses one is otherwise their production database,
+and the feedback loop for a missing comma is a person pasting SQL and reading an error code.
+This parses every file with PostgreSQL's own parser (libpg-query, compiled to wasm).
+
+It parses **function bodies separately**, and that is the part that matters. To the outer
+parser a `$$ … $$` body is just a string literal, so the outer parse of a broken function
+passes — while Postgres, which validates bodies at `CREATE` time, rejects it. Migration 013
+shipped a missing comma between two CTEs *inside* a function body for exactly that reason.
+
+It is syntax only. A clean run means "Postgres will parse this", not "Postgres will accept
+this" — it knows nothing about whether a table exists, a type matches, or a function is
+`IMMUTABLE` enough for a generated column.
+
 ### RLS
 
 Every new table gets RLS. Follow the existing pattern exactly:
@@ -218,6 +232,7 @@ and that column holds an RFC822 Message-ID this app generates.
 | `package.json` says `openai@^4.52.0` | **4.104.0** is installed, and it has the Responses API + `web_search`. |
 | `/api/research/rerun` | **Deletes all research** with no server-side confirmation. |
 | A truncated stem before `\b` in a regex | `\bmanufactur\b` cannot match "Manufacturing" — the `i` is a word character. This silently sent every inflected title to `unknown` in `lib/network/normalize.ts`. Write `manufactur\w*`. |
+| SQL inside `$$ … $$` | Invisible to a parser reading the outer file, and validated by Postgres at `CREATE` time. `npm run check:sql` parses bodies separately for this reason. |
 | An agent that "hangs" | Usually `stop_reason: max_tokens` on `submit_result`. The output is truncated mid-JSON, validation fails, and the loop used to escalate a tier — which writes *more* and truncates again, at 5× the price. `runtime/loop.ts` now handles truncation separately. Check `onStep` before assuming a hang. |
 | ⚠ `Apollo API.txt` | A credential-shaped string tracked in git. See [CURRENT_STATE.md §9](docs/CURRENT_STATE.md#9-configuration). |
 

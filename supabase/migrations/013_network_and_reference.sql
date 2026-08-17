@@ -93,6 +93,15 @@ create table if not exists contact_index (
 -- The retrieval primitive. Weighted so a title match outranks a passing
 -- mention buried in a research paragraph — without that, every contact whose
 -- dossier says the word "manufacturing" once ranks alongside a plant manager.
+--
+-- ⚠ CHANGING THIS EXPRESSION LATER TAKES A DELIBERATE DROP.
+-- `add column if not exists` matches on the column NAME only, so editing the
+-- expression below and re-running this file is a silent no-op. That is the
+-- right default — re-adding a stored generated column rewrites the whole table
+-- on every run — but it means a future edit needs an explicit
+-- `alter table contact_index drop column search_vector;` first, and then a
+-- reindex. If search results ever stop reflecting the weights written here,
+-- this is why.
 alter table contact_index
   add column if not exists search_vector tsvector
   generated always as (
@@ -122,6 +131,32 @@ create index if not exists contact_index_opp_idx        on contact_index using g
 -- The query text arrives already sanitized into websearch syntax by
 -- lib/network/search.ts. websearch_to_tsquery never raises on arbitrary input,
 -- which is what makes it safe to hand a model's output to.
+--
+-- ─── Why the drop block, and why it enumerates overloads ───
+--
+-- `create or replace function` CANNOT change a function's return type or its
+-- parameter names — it fails with "cannot change return type of existing
+-- function". This file is re-run by hand as its normal operating condition, so
+-- the day someone adds a column to the RETURNS TABLE, a plain re-run would
+-- fail with an error that says nothing about the edit that caused it.
+--
+-- Dropping by name rather than by a hardcoded signature means an OLD overload
+-- with different argument types is also removed, instead of lingering forever
+-- and being picked by overload resolution ahead of the new one.
+
+do $$
+declare
+  fn record;
+begin
+  for fn in
+    select oid::regprocedure as signature
+    from pg_proc
+    where proname = 'search_contact_index'
+      and pronamespace = 'public'::regnamespace
+  loop
+    execute format('drop function if exists %s', fn.signature);
+  end loop;
+end $$;
 
 create or replace function search_contact_index(
   p_user_id           uuid,
@@ -166,11 +201,33 @@ returns table (
 )
 language sql
 stable
+-- SECURITY INVOKER (the default), so RLS on contact_index and contacts applies to
+-- whoever calls it: an authenticated user passing someone else's p_user_id gets
+-- nothing back. The service-role client bypasses RLS, which is exactly why every
+-- caller passes p_user_id explicitly and the body filters on it.
+-- search_path is pinned because an unpinned one is a Supabase advisor warning and
+-- costs nothing to close.
+set search_path = public, pg_temp
 as $$
   with q as (
     select case
              when p_query is null or btrim(p_query) = '' then null
-             else websearch_to_tsquery('english', p_query)
+             -- ⚠ nullif, not the bare call.
+             --
+             -- websearch_to_tsquery returns an EMPTY tsquery — not NULL — when
+             -- every token is a stopword ('the or and', or '--', which survives
+             -- the TypeScript sanitizer because it keeps '&' and '-'). An empty
+             -- tsquery matches NOTHING rather than everything, so `@@` would
+             -- reject every row and the function would report zero matches with
+             -- no error: indistinguishable from a genuine miss, and worse when
+             -- combined with filters, because it reads as a false negative about
+             -- the filtered population rather than about the query.
+             --
+             -- Collapsing it to NULL here restores this function's own invariant
+             -- — no usable text means filters only — for all three consumers
+             -- below at once: the rank CASE, the `@@` predicate, and the
+             -- relevance-floor bypass.
+             else nullif(websearch_to_tsquery('english', p_query), ''::tsquery)
            end as tsq
   ),
   matched as (
@@ -213,7 +270,7 @@ as $$
       and (p_relationship      is null or ci.relationship_status = any(p_relationship))
       and (p_opportunity_types is null or ci.opportunity_types && p_opportunity_types)
       and (p_exclude           is null or ci.contact_id         <> all(p_exclude))
-  )
+  ),
   -- ─── The relevance floor ───
   --
   -- Terms are OR-ed, so a bare `@@` match is nearly worthless: measured on the
@@ -274,8 +331,26 @@ create table if not exists network_matches (
   created_at    timestamptz default now()
 );
 
+-- ⚠ NOT a partial index, and that is deliberate.
+--
+-- This was `where run_id is not null`, which reads more precise and is fatal in
+-- practice: Postgres will only use a PARTIAL unique index as an ON CONFLICT
+-- arbiter if the statement repeats the index predicate, and PostgREST/supabase-js
+-- can only send a column list — `.upsert(rows, { onConflict: 'run_id,contact_id' })`
+-- has nowhere to put a WHERE. Every internal-first run that reached
+-- persistNetworkMatches would have raised
+--   42P10: there is no unique or exclusion constraint matching the ON CONFLICT specification.
+--
+-- The predicate bought nothing anyway. Postgres treats NULLs as distinct in a
+-- unique index by default, so rows with a null run_id never collide with each
+-- other — which is exactly the behaviour the predicate was written to get.
+--
+-- Dropped explicitly first: `create ... if not exists` is a no-op against an
+-- index of the same name with a DIFFERENT definition, so a database that already
+-- has the partial version would silently keep it.
+drop index if exists network_matches_run_contact_uniq;
 create unique index if not exists network_matches_run_contact_uniq
-  on network_matches (run_id, contact_id) where run_id is not null;
+  on network_matches (run_id, contact_id);
 create index if not exists network_matches_user_idx    on network_matches (user_id, created_at desc);
 create index if not exists network_matches_contact_idx on network_matches (contact_id);
 

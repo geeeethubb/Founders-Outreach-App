@@ -91,7 +91,11 @@ export function toWebSearchQuery(raw: string | null | undefined): string {
     .replace(/[^A-Za-z0-9&\s-]/g, ' ')
     .split(/\s+/)
     .map((w) => w.trim())
-    .filter((w) => w.length >= 2 && !STOPWORDS.has(w.toLowerCase()))
+    // `&` and `-` are kept above (R&D, plant-floor), which means a token of
+    // nothing but punctuation — "--", "&&" — otherwise survives the length
+    // test and reaches Postgres, where it tokenizes to an empty tsquery that
+    // matches nothing. Require at least one alphanumeric character.
+    .filter((w) => w.length >= 2 && /[A-Za-z0-9]/.test(w) && !STOPWORDS.has(w.toLowerCase()))
     .slice(0, 24)
 
   return [...phrases, ...words].join(' or ')

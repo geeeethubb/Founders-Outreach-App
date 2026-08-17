@@ -24,6 +24,7 @@
     "probe:grounding": "tsx scripts/probe-grounding.ts",
     "check:outreach": "tsx scripts/outreach-e2e.ts",
     "pilot:prepare": "tsx scripts/prepare-pilot.ts",
+    "check:sql": "tsx scripts/check-sql.ts",
     "index:network": "tsx scripts/index-network.ts",
     "eval:network": "tsx scripts/network-eval.ts",
     "eval:reference": "tsx scripts/reference-eval.ts"
@@ -54,6 +55,7 @@
     "dotenv": "^17.4.2",
     "eslint": "^9",
     "eslint-config-next": "^16.2.6",
+    "libpg-query": "^17.7.4",
     "postcss": "^8.4.40",
     "tailwindcss": "^3.4.7",
     "tsx": "^4.23.12",

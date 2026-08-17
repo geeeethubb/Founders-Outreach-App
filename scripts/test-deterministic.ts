@@ -818,6 +818,13 @@ check('relevant director kept', filterPerson(person(), 500).keep)
   check('punctuation is stripped', !/[(){}&|!:]/.test(s.toWebSearchQuery('foo & (bar | baz)!')))
   check('an empty query stays empty', s.toWebSearchQuery('   ') === '')
   check('a null query stays empty', s.toWebSearchQuery(null) === '')
+  // '&' and '-' are kept deliberately (R&D, plant-floor), so a punctuation-only
+  // token would otherwise pass the length test and reach Postgres, where it
+  // tokenizes to an empty tsquery that matches NOTHING rather than everything.
+  check('punctuation-only tokens are dropped', s.toWebSearchQuery('-- && --') === '',
+    JSON.stringify(s.toWebSearchQuery('-- && --')))
+  check('but real hyphenated and ampersand terms survive',
+    s.toWebSearchQuery('R&D plant-floor').includes('R&D') && s.toWebSearchQuery('R&D plant-floor').includes('plant-floor'))
 }
 
 // ─── Internal network: reuse and identity ────────────────────────────────────

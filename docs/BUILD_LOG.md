@@ -112,6 +112,52 @@ the UI.
 
 ---
 
+## 2026-08-17 — Migration 013 did not parse, and nothing in the repo could have said so
+
+**Type:** fix + tooling · **Behavior change:** none to the app
+
+The founder applied `013` and got `ERROR: 42601: syntax error at or near "floored"` — a CTE
+closed with `)`, then a comment, then the next CTE, with no comma. One character.
+
+**The bug is trivial; how it reached a production database is not.** Migrations here are
+applied by hand, so the first thing that had ever parsed the file was the founder's Supabase
+editor, and the feedback loop for a missing comma was a person reading an error code back to
+us.
+
+### Fixed twice over
+
+1. The comma.
+2. **`npm run check:sql`** — every migration parsed with PostgreSQL's own parser
+   (`libpg-query`, the real thing compiled to wasm). 11 files, 162 statements, clean.
+
+The second one turns on a detail that decides whether it is worth anything: it parses each
+`$$ … $$` function body **separately**. To the outer parser a body is just a string literal,
+so the outer parse of the broken file *passed* — while Postgres, which validates function
+bodies at `CREATE` time, rejected it. A checker without that pass would have signed off on
+the exact file that failed. Regression-tested against the committed broken version, where it
+reproduces the founder's error verbatim, down to the line number.
+
+Syntax only, and it says so: it cannot tell you a type is wrong or a function is not
+`IMMUTABLE` enough for a generated column.
+
+### Also hardened, found while re-reading the file
+
+`create or replace function` **cannot** change a return type or a parameter name — it fails
+with "cannot change return type of existing function". Since re-running a migration by hand is
+the normal operating condition here, the day someone adds a column to `RETURNS TABLE` a plain
+re-run would fail with an error that says nothing about the edit that caused it. A `DO` block
+now drops every overload by name first, which also stops an old signature lingering and
+winning overload resolution.
+
+### Verified rather than assumed
+
+The `contact_index` column set matches the keys `lib/network/indexer.ts` upserts exactly, and
+correctly excludes the generated `search_vector` (inserting into a generated column is an
+error). The 11 `p_*` RPC arguments in `lib/network/search.ts` match the function signature,
+and the `RETURNS TABLE` order matches the final `SELECT` position for position.
+
+---
+
 ## 2026-08-11 — Phase 9: Approval, send, response tracking
 
 **Type:** implementation + eval · **Behavior change:** additive; the V1 email layer is untouched

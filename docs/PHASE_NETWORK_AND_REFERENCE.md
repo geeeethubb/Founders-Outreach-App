@@ -152,7 +152,8 @@ this mode exists to stop.
 
 ## 3. What running it found
 
-Five things, and the last two were only visible because something was measured.
+Six things. Two were only visible because something was measured, and one was only visible
+because the founder tried to apply the migration.
 
 ### 3.1 Every search matched two-thirds of the database
 
@@ -230,7 +231,41 @@ because `technical` appears in that pattern. Recruiting, legal and finance are n
 hard-matched *before* the ordered table — the same lesson `lib/scouting/filter.ts` records
 learning once already.
 
-### 3.5 A placeholder was reported twice
+### 3.5 The migration did not parse, and nothing in the repo could have told us
+
+The founder applied `013` and got:
+
+```
+ERROR: 42601: syntax error at or near "floored"
+```
+
+A CTE closed with `)`, then a comment block, then the next CTE name — with no comma between
+them. One character.
+
+**The bug is trivial; how it reached a production database is not.** Migrations here are
+applied by hand, so the first thing that had ever parsed this file was the founder's Supabase
+editor, and the feedback loop for a missing comma was a person pasting SQL and reading an
+error code back to us.
+
+Fixed twice over:
+
+1. The comma.
+2. **`npm run check:sql`** — every migration parsed with PostgreSQL's own parser
+   (libpg-query, the real thing compiled to wasm). All 11 files, 162 statements.
+
+The second one has a detail that decides whether it is worth anything. It parses each
+`$$ … $$` function body **separately**, because to the outer parser a body is just a string
+literal — the outer parse of the broken file *passed*, while Postgres, which validates
+function bodies at `CREATE` time, rejected it. A checker without that second pass would have
+signed off on the exact file that failed.
+
+Regression-tested against the committed broken version, where it reproduces the founder's
+error verbatim, down to the line number.
+
+It is syntax only, and says so: it cannot tell you a type is wrong or a function is not
+`IMMUTABLE` enough for a generated column.
+
+### 3.6 A placeholder was reported twice
 
 `Hi [First Name]` produced two findings — the bracket, and the stub name inside it — so the UI
 said "2 placeholders" about one bracket. Overlapping spans are now claimed once.
