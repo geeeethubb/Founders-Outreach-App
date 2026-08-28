@@ -1,0 +1,86 @@
+{
+ "id": "744000146057040",
+ "name": "Logistics/Supply Chain Intern",
+ "uuid": "8ce2f72b-84d4-4a2d-a886-bd3439df4adc",
+ "jobId": "d07de15f-7a7f-4cf2-8f47-39593d2cddf6",
+ "jobAdId": "28a35160-a442-49ed-9312-f8a65e8c9add",
+ "defaultJobAd": true,
+ "refNumber": "REF293153S",
+ "company": {
+  "name": "Bosch Group",
+  "identifier": "BoschGroup"
+ },
+ "location": {
+  "city": "Grand Rapids",
+  "region": "MI",
+  "country": "us",
+  "address": "4700 Broadmoor Avenue Southeast",
+  "postalCode": "49512",
+  "remote": false,
+  "hybrid": false,
+  "latitude": "42.8789719",
+  "longitude": "-85.5582402",
+  "fullLocation": "Grand Rapids, MI, United States"
+ },
+ "customField": [
+  {
+   "fieldId": "5abe2a4ab60a5e486a2d9b1d",
+   "fieldLabel": "Contract type",
+   "valueId": "98487475-2a49-44f5-a615-408b525b3821",
+   "valueLabel": "Limited"
+  },
+  {
+   "fieldId": "5abe28e96d8bc56863dd9746",
+   "fieldLabel": "Tariff Area",
+   "valueId": "82f1dd4b-de9d-4134-9f1a-8d315be380ae",
+   "valueLabel": "United States Local Grades"
+  }
+ ],
+ "releasedDate": "2026-08-27T19:37:28.745Z",
+ "postingUrl": "https://jobs.smartrecruiters.com/BoschGroup/744000146057040-logistics-supply-chain-intern",
+ "applyUrl": "https://jobs.smartrecruiters.com/BoschGroup/744000146057040-logistics-supply-chain-intern?oga=true",
+ "referralUrl": "https://jobs.smartrecruiters.com/external-referrals/company/BoschGroup/publication/8ce2f72b-84d4-4a2d-a886-bd3439df4adc?dcr_ci=BoschGroup",
+ "jobAd": {
+  "sections": {
+   "companyDescription": {
+    "title": "Company Description",
+    "text": "<p><strong>We Are Bosch.</strong></p><p>At Bosch, we shape the future by inventing high-quality technologies and services that spark enthusiasm and enrich people’s lives. Our areas of activity are every bit as diverse as our outstanding Bosch teams around the world. Their creativity is the key to innovation through connected living, mobility, or industry.</p><p>Let’s grow together, enjoy more, and inspire each other. <a href=\"https://youtu.be/UQrgT5ZeGW8?si=AizbWw-ByCZhCnu-\" rel=\"noopener noreferrer\"><strong>Work #LikeABosch</strong></a></p><ul><li><strong>Reinvent yourself:</strong> At Bosch, you will evolve.&#xa0;&#xa0;</li><li><strong>Discover new directions:</strong> At Bosch, you will find your place.&#xa0;</li><li><strong>Balance your life:</strong> At Bosch, your job matches your li"
+   },
+   "jobDescription": {
+    "title": "Job Description",
+    "text": "<p>Assist Shipping/Receiving/Logistics and Manufacturing managers with activities of fast paced manufacturing operation. Assist with multiple projects related to inventory control, product configuration, scanning systems training, point of use improvements, shipments and general receiving, central warehousing, materials crib and general stores activities. Assist with continuous improvement opportunities.&#xa0;</p>"
+   },
+   "qualifications": {
+    "title": "Qualifications",
+    "text": "<p><strong>Minimum Qualifications:&#xa0;</strong></p><ul><li>Currently pursuing a Bachelor's degree in Logistics, Supply Chain Management, or a related field (Junior or Senior level)</li><li>A minimum cumulative GPA of 3.0</li><li>Must&#xa0;have local housing within 50 miles of our work location.&#xa0;</li><li>Strong interpersonal skills with an outgoing and collaborative approach.</li><li>Strong analytical skills with the ability to interpret data and solve problems.</li><li>Proficient in Microsoft Office Suite (Excel, Word, Outlook); SAP knowledge is a plus.&#xa0;</li></ul>"
+   },
+   "additionalInformation": {
+    "title": "Additional Information",
+    "text": "<p><strong>Indefinite U.S. work authorized individuals only.&#xa0; Future sponsorship for work authorization unavailable.&#xa0;</strong></p><p><strong>Equal Opportunity Employer, including disability / veterans.</strong></p><p><em><strong>Please note that employment is contingent upon the successful completion of a drug screen and background check. Candidates who have been offered the position must pass both screenings before their start date.</strong></em></p>"
+   }
+  }
+ },
+ "active": true,
+ "visibility": "PUBLIC",
+ "industry": {
+  "id": "mechanical_engineering",
+  "label": "Mechanical Or Industrial Engineering"
+ },
+ "function": {
+  "id": "supply_chain",
+  "label": "Supply Chain"
+ },
+ "experienceLevel": {
+  "id": "internship",
+  "label": "Internship"
+ },
+ "typeOfEmployment": {
+  "id": "intern",
+  "label": "Intern"
+ },
+ "language": {
+  "code": "en",
+  "label": "English",
+  "labelNative": "English (US)"
+ }
+}

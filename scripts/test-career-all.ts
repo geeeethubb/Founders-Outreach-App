@@ -1,0 +1,39 @@
+// Runs every offline Career OS check in sequence and fails if any fails.
+//
+//   npm run test:career
+//
+// No network, no keys — the document suite renders PDFs only when Word is
+// installed and reports 'skipped' otherwise. One command a founder can run
+// before applying a migration or after pulling.
+
+import { spawnSync } from 'child_process'
+
+const SUITES = [
+  'scripts/test-career-applications.ts',
+  'scripts/test-career-evidence.ts',
+  'scripts/test-career-jobs.ts',
+  'scripts/test-career-discovery-agents.ts',
+  'scripts/test-career-intelligence.ts',
+  'scripts/test-career-tailor.ts',
+  'scripts/test-career-evals.ts',
+  'scripts/test-career-documents.ts',
+]
+
+let failed = 0
+for (const suite of SUITES) {
+  const started = Date.now()
+  const res = spawnSync(process.platform === 'win32' ? 'npx.cmd' : 'npx', ['tsx', suite], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+    encoding: 'utf8',
+    shell: process.platform === 'win32',
+  })
+  const out = (res.stdout ?? '') + (res.stderr ?? '')
+  const summary = out.trim().split('\n').filter((l) => /passed|failed|FAIL|all .* passed/i.test(l)).slice(-2).join(' · ')
+  const ok = res.status === 0
+  if (!ok) failed++
+  console.log(`${ok ? 'ok  ' : 'FAIL'} ${suite.padEnd(44)} ${((Date.now() - started) / 1000).toFixed(1)}s  ${summary}`)
+  if (!ok) console.log(out.split('\n').filter((l) => /FAIL|Error|error/.test(l)).slice(0, 12).map((l) => `      ${l}`).join('\n'))
+}
+
+console.log(failed === 0 ? `\nall ${SUITES.length} suites passed` : `\n${failed} suite(s) FAILED`)
+process.exitCode = failed === 0 ? 0 : 1

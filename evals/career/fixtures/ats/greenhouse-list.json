@@ -1,0 +1,179 @@
+{
+ "jobs": [
+  {
+   "absolute_url": "https://boards.greenhouse.io/andurilindustries/jobs/5148101007?gh_jid=5148101007",
+   "data_compliance": [
+    {
+     "type": "gdpr",
+     "requires_consent": false,
+     "requires_processing_consent": false,
+     "requires_retention_consent": false,
+     "retention_period": null,
+     "demographic_data_consent_applies": false
+    }
+   ],
+   "education": "education_required",
+   "internal_job_id": 4637489007,
+   "location": {
+    "name": "Atlanta, Georgia, United States; Boston, Massachusetts, United States; Broomfield, Colorado, United States; Colorado Springs, Colorado, United States; Costa Mesa, California, United States; Fort Collins, Colorado, United States; Irvine, California, United States; Reston, Virginia, United States; Seattle, Washington, United States"
+   },
+   "metadata": [
+    {
+     "id": 5980679007,
+     "name": "External Department Name for Job Board",
+     "value": "Internships",
+     "value_type": "single_select"
+    },
+    {
+     "id": 4873319007,
+     "name": "Employment Type",
+     "value": "Intern",
+     "value_type": "single_select"
+    },
+    {
+     "id": 20263582007,
+     "name": "ET Talent Identifier",
+     "value": "Intern",
+     "value_type": "single_select"
+    },
+    {
+     "id": 22626856007,
+     "name": "Arsenal Launch Team",
+     "value": null,
+     "value_type": "single_select"
+    }
+   ],
+   "id": 5148101007,
+   "updated_at": "2026-08-24T14:07:42-04:00",
+   "requisition_id": "10315",
+   "title": "2027 Electrical Engineer Intern",
+   "company_name": "Anduril Industries",
+   "first_published": "2026-06-11T13:00:56-04:00",
+   "language": "en",
+   "application_deadline": null,
+   "content": "&lt;div class=&quot;content-intro&quot;&gt;&lt;p&gt;Anduril Industries is a defense technology company with a mission to transform U.S. and allied military capabilities with advanced technology. By bringing the expertise, technology, and business model of the 21st century’s most innovative companies to the defense industry, Anduril is changing how military systems are designed, built and sold. Anduril’s family of systems is powered by Lattice OS, an AI-powered operating system that turns thousands of data streams into a realtime, 3D command and control center. As the world enters an era of strategic competition, Anduril is committed to bringing cutting-edge autonomy, AI, computer vision, sensor fusion, and networking technology to the military in months, not years.&lt;/p&gt;&lt;/div&gt;&lt;p&gt;While this exact role may not be open today, we are always looking ahead and want to connect with talented people like you for future opportunities. We will begin reviewing applications in &lt;strong&gt;August 2026 for positions starting in 2027&lt;/strong&gt;. We highly encourage you to apply early to get a head start! By submitting your application today, you&#39;ll be on our radar, and an",
+   "departments": [
+    {
+     "id": 4029307007,
+     "name": "Hardware Platform : Hardware Engineering Services",
+     "child_ids": [
+      4066339007,
+      4066344007,
+      4068255007,
+      4066299007,
+      4066345007,
+      4066346007,
+      4066349007,
+      4066350007,
+      4066347007,
+      4068258007,
+      4069555007,
+      4069556007,
+      4067996007,
+      4067995007,
+      4067977007,
+      4067863007,
+      4066336007,
+      4066340007,
+      4066101007,
+      4058436007,
+      4045297007,
+      4030375007,
+      4043544007,
+      4058441007,
+      4045301007,
+      4058444007,
+      4045294007,
+      4045293007,
+      4045296007,
+      4058442007
+     ],
+     "parent_id": 4067309007
+    }
+   ],
+   "offices": [
+    {
+     "id": 4022707007,
+     "name": "Atlanta, GA (ATL-01)",
+     "location": "Atlanta, Georgia, United States"
+    }
+   ],
+   "ai_disclaimer": null,
+   "include_ai_disclaimer": null,
+   "ai_opt_out_request_url": null
+  },
+  {
+   "absolute_url": "https://boards.greenhouse.io/andurilindustries/jobs/5198318007?gh_jid=5198318007",
+   "data_compliance": [
+    {
+     "type": "gdpr",
+     "requires_consent": false,
+     "requires_processing_consent": false,
+     "requires_retention_consent": false,
+     "retention_period": null,
+     "demographic_data_consent_applies": false
+    }
+   ],
+   "internal_job_id": 4661914007,
+   "location": {
+    "name": "Ashville, Ohio, United States"
+   },
+   "metadata": [
+    {
+     "id": 5980679007,
+     "name": "External Department Name for Job Board",
+     "value": "Core Operations",
+     "value_type": "single_select"
+    },
+    {
+     "id": 4873319007,
+     "name": "Employment Type",
+     "value": "Full-time",
+     "value_type": "single_select"
+    },
+    {
+     "id": 20263582007,
+     "name": "ET Talent Identifier",
+     "value": "None",
+     "value_type": "single_select"
+    },
+    {
+     "id": 22626856007,
+     "name": "Arsenal Launch Team",
+     "value": null,
+     "value_type": "single_select"
+    }
+   ],
+   "id": 5198318007,
+   "updated_at": "2026-08-25T10:32:52-04:00",
+   "requisition_id": "12473",
+   "title": "Environmental Health and Safety Senior Engineer",
+   "company_name": "Anduril Industries",
+   "first_published": "2026-07-30T11:51:32-04:00",
+   "language": "en",
+   "application_deadline": null,
+   "content": "&lt;div class=&quot;content-intro&quot;&gt;&lt;p&gt;Anduril Industries is a defense technology company with a mission to transform U.S. and allied military capabilities with advanced technology. By bringing the expertise, technology, and business model of the 21st century’s most innovative companies to the defense industry, Anduril is changing how military systems are designed, built and sold. Anduril’s family of systems is powered by Lattice OS, an AI-powered operating system that turns thousands of data streams into a realtime, 3D command and control center. As the world enters an era of strategic competition, Anduril is committed to bringing cutting-edge autonomy, AI, computer vision, sensor fusion, and networking technology to the military in months, not years.&lt;/p&gt;&lt;/div&gt;&lt;h3&gt;ABOUT THE JOB&amp;nbsp;&lt;/h3&gt;\n&lt;p&gt;We are looking for an Environmental Health and Safety Senior Engineer to join our rapidly growing team in Ashville, OH. An onsite role just south of Columbus, OH, responsible for the development and implementation of Environmental Health and Safety (EHS) programs to comply with federal, state, and local regulations. Individual will work with an EH",
+   "departments": [
+    {
+     "id": 4030355007,
+     "name": "Core Operations : EH&S : EH&S",
+     "child_ids": [],
+     "parent_id": 4029373007
+    }
+   ],
+   "offices": [
+    {
+     "id": 4051238007,
+     "name": "Ashville, OH (Arsenal 1)",
+     "location": "Ashville, Ohio, United States"
+    }
+   ],
+   "ai_disclaimer": null,
+   "include_ai_disclaimer": null,
+   "ai_opt_out_request_url": null
+  }
+ ],
+ "meta": {
+  "total": 2182
+ }
+}

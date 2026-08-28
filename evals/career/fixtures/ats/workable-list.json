@@ -1,0 +1,74 @@
+{
+ "total": 25,
+ "results": [
+  {
+   "id": 6038326,
+   "shortcode": "0FD01ABC66",
+   "title": "Business Development Representative",
+   "remote": true,
+   "location": {
+    "country": "United States",
+    "countryCode": "US",
+    "city": "",
+    "region": null,
+    "display": "United States"
+   },
+   "locations": [
+    {
+     "country": "United States",
+     "countryCode": "US",
+     "city": "",
+     "region": null,
+     "hidden": false
+    }
+   ],
+   "state": "published",
+   "isInternal": false,
+   "code": "",
+   "published": "2026-08-18T00:00:00.000Z",
+   "type": "full",
+   "language": "en",
+   "department": [
+    "Shared Services"
+   ],
+   "accountUid": "91dbb93a-9802-4b3d-89b7-80e7243d0ba2",
+   "approvalStatus": "approved",
+   "workplace": "remote"
+  },
+  {
+   "id": 6036255,
+   "shortcode": "4C8988B307",
+   "title": "Maintenance & Field Team Lead - San Francisco",
+   "remote": false,
+   "location": {
+    "country": "United States",
+    "countryCode": "US",
+    "city": "San Francisco",
+    "region": "California",
+    "display": "San Francisco, California, United States"
+   },
+   "locations": [
+    {
+     "country": "United States",
+     "countryCode": "US",
+     "city": "San Francisco",
+     "region": "California",
+     "hidden": false
+    }
+   ],
+   "state": "published",
+   "isInternal": false,
+   "code": "",
+   "published": "2026-08-17T00:00:00.000Z",
+   "type": "full",
+   "language": "en",
+   "department": [
+    "City Core"
+   ],
+   "accountUid": "91dbb93a-9802-4b3d-89b7-80e7243d0ba2",
+   "approvalStatus": "approved",
+   "workplace": "on_site"
+  }
+ ],
+ "nextPage": "WzE3NzczMzQ0MDAwMDAsNTQ1NjE4N10="
+}

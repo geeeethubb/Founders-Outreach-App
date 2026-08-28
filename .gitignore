@@ -46,3 +46,9 @@ Apollo API.txt
 my_resume.pdf
 *_resume.pdf
 *resume*.pdf
+
+# Career OS — personal documents and generated packages, never committed
+/Zuyu_Resume.docx
+*_Resume.docx
+*_Cover_Letter.docx
+.career-out/

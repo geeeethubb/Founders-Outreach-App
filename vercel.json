@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/career/cron/verify",
+      "schedule": "0 13 * * *"
+    }
+  ]
+}

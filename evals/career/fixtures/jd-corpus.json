@@ -1,0 +1,419 @@
+{
+  "version": "1.0.0",
+  "user": "Chemical Engineering undergraduate at UIUC, graduating May 2028, seeking Summer 2027 internships. Evidence: evals/phase3/user-profile.ts (RESUME_ITEMS).",
+  "composition": {
+    "strong": 8,
+    "good_or_stretch": 6,
+    "negative": 10
+  },
+  "jobs": [
+    {
+      "id": "jd-pos-01-process-eng-industrial",
+      "company": "Northbank Specialty Materials",
+      "fictional": true,
+      "title": "Process Engineering Intern, Summer 2027",
+      "location_raw": "Newark, NJ (Greater New York City area)",
+      "jd_text": "About Northbank\nNorthbank Specialty Materials operates four continuous-process plants producing coatings resins and performance additives for the automotive and packaging industries. Our Newark site is our largest, running 24/7 with roughly 600 employees across operations, engineering, quality and maintenance.\n\nThe role\nAs a Process Engineering Intern you will join the site engineering team for twelve weeks in Summer 2027 and own a defined improvement project on one of our reactor or finishing lines. Past interns have reduced changeover time on a blending train, built a controlled-state checklist for a packaging line, and validated a revised standard operating procedure for an intermediate with a short shelf life.\n\nResponsibilities\n- Collect and analyze process data from the historian to identify sources of variability and downtime\n- Lead a small cross-functional improvement project with operations, quality and maintenance stakeholders\n- Draft and validate standard operating procedures and control plans\n- Support root-cause investigations for quality deviations\n- Present findings and a recommended roadmap to plant leadership at the end of the summer\n\nMinimum qualifications\n- Currently pursuing a B.S. in Chemical, Mechanical or Industrial Engineering with an expected graduation between December 2027 and June 2029\n- Coursework in unit operations, process control or statistics\n- Comfortable on a plant floor and working with hourly operators\n\nPreferred qualifications\n- Previous manufacturing or plant internship experience\n- Familiarity with quality systems, risk assessment or process automation\n- Experience presenting technical work to non-technical stakeholders\n\nThe team\nYou will report to a senior process engineer and sit with the six-person site engineering group. Interns are paired with a mentor from day one and attend the daily production meeting, the weekly quality review and the monthly capital review. We expect you to walk the line every day; the historian tells you what happened, the operators tell you why.\n\nProgram details\nThe program includes a two-day onboarding on process safety, a mid-summer review with the site leadership team, and a final presentation attended by the VP of Manufacturing. Strong performers are invited back for a second summer or a full-time role after graduation. Compensation is $28 to $32 per hour depending on year in school.\n\nLocation and eligibility\nOn-site in Newark, NJ; housing stipend provided. Program runs June 1 to August 20, 2027. Applicants must be authorized to work in the United States; we do not sponsor visas for internships.",
+      "expected": {
+        "employment_type": "internship",
+        "season_relevance": "summer_2027",
+        "location_tier": 1,
+        "role_family": "process / manufacturing engineering",
+        "eligibility_for_user": "QUALIFIED",
+        "fit_class": "strong",
+        "negative_reason": null
+      }
+    },
+    {
+      "id": "jd-pos-02-industrial-ai-intern",
+      "company": "Lattice Floor Systems",
+      "fictional": true,
+      "title": "Applied AI Intern, Manufacturing Operations (Summer 2027)",
+      "location_raw": "San Francisco, CA",
+      "jd_text": "About Lattice Floor Systems\nLattice builds software that lets plant teams turn their own tribal knowledge into AI agents: deviation triage, shift handover summaries, work-instruction generation and maintenance-request drafting. We are a Series B company of 90 people, deployed in 40 factories across CPG, food and specialty chemicals.\n\nWhat you will do\nYou will spend Summer 2027 embedded with our deployment team, sitting between our machine-learning engineers and the plant managers who use our product. You will scope agent use cases with frontline supervisors, prototype workflows, measure their impact and feed what you learn back into the product roadmap.\n\nResponsibilities\n- Interview supervisors and quality leads at two customer plants to identify high-value agent use cases\n- Prototype agent workflows using our internal tooling and evaluate them against real plant data\n- Define success metrics (hours returned, deviation cycle time) and measure pilots against them\n- Write up findings for the product and engineering teams\n\nMinimum qualifications\n- Undergraduate student in engineering, computer science or a quantitative field, graduating 2028 or later\n- Hands-on experience with LLM-based agents or workflow automation tools\n- Ability to communicate with both engineers and plant operators\n\nPreferred qualifications\n- Direct manufacturing, quality or operations experience\n- Experience driving adoption of a new tool with a non-technical team\n- Python or TypeScript scripting\n\nThe team\nYou will join the four-person deployment team, which owns the outcome of every customer rollout. Half of your time will be at customer plants in the Central Valley and Ohio; the other half will be in San Francisco with our engineers. Interns present their pilot results at the weekly company all-hands.\n\nProgram details\nPaid at $45 per hour with a housing stipend. Interns receive a laptop, access to our internal agent-building tooling and a mentor from the product team. We hire roughly half of our interns into full-time roles; the rest tell us the summer was the fastest they have learned anything. Applications are reviewed on a rolling basis starting in September 2026.\n\nLocation and eligibility\nHybrid from our San Francisco office with travel to customer sites. Paid, full-time, 12 weeks. Open to students authorized to work in the U.S.",
+      "expected": {
+        "employment_type": "internship",
+        "season_relevance": "summer_2027",
+        "location_tier": 1,
+        "role_family": "industrial AI / applied ML",
+        "eligibility_for_user": "QUALIFIED",
+        "fit_class": "strong",
+        "negative_reason": null
+      }
+    },
+    {
+      "id": "jd-pos-03-tech-strategy-cos-intern",
+      "company": "Meridian Thermal",
+      "fictional": true,
+      "title": "Technical Strategy Intern, Office of the CEO — Summer 2027",
+      "location_raw": "Oakland, CA",
+      "jd_text": "About Meridian Thermal\nMeridian builds long-duration thermal energy storage that delivers zero-carbon industrial heat to chemical, food and materials plants. We closed our Series C last year and are commissioning our first two commercial units.\n\nThe role\nThe Office of the CEO is hiring a Technical Strategy Intern for Summer 2027. You will work directly with the chief of staff on the questions the company has to answer this year: which industrial segments to prioritize next, how our unit economics compare with alternatives at customer sites, and what our technical roadmap should look like in 2028. This is a generalist role for someone with real engineering fundamentals who can also build a model and write a clear memo.\n\nResponsibilities\n- Build techno-economic comparisons of Meridian heat versus natural gas and electric boilers for target segments\n- Research adjacent markets and produce a prioritized segment recommendation\n- Support board and investor materials with technical analysis\n- Run one internal operating cadence (weekly metrics review) end to end\n\nMinimum qualifications\n- Pursuing an undergraduate degree in chemical, mechanical or energy engineering, graduating 2028 or 2029\n- Demonstrated experience with techno-economic or feasibility analysis\n- Strong written communication; you will be judged on your memos\n\nPreferred qualifications\n- Startup or founding-team experience\n- Exposure to industrial customers or plant operations\n- Comfort with ambiguity and fast-changing priorities\n\nThe team\nThe Office of the CEO is three people: the chief of staff, a strategy lead and you. You will sit in most leadership meetings and take real ownership of the analyses that inform them. Expect direct feedback on your writing and your models, and expect to defend both.\n\nProgram details\nCompensation is $40 per hour. Interns are given one plant visit to a customer site in the first month so the analysis is grounded in what a real facility looks like. The summer ends with a written strategy memo delivered to the board, with the intern's name on it.\n\nLocation and eligibility\nOn-site in Oakland, CA. Full-time for 10 to 12 weeks in Summer 2027. U.S. work authorization required.",
+      "expected": {
+        "employment_type": "internship",
+        "season_relevance": "summer_2027",
+        "location_tier": 1,
+        "role_family": "technical strategy / chief of staff",
+        "eligibility_for_user": "QUALIFIED",
+        "fit_class": "strong",
+        "negative_reason": null
+      }
+    },
+    {
+      "id": "jd-pos-04-rd-intern-chemicals",
+      "company": "Corvid Advanced Materials",
+      "fictional": true,
+      "title": "R&D Intern, Electrochemical Materials (Summer 2027)",
+      "location_raw": "Woburn, MA",
+      "jd_text": "About Corvid\nCorvid develops electrode materials and catalysts for hydrogen electrolyzers and fuel cells. Our 60-person team in the Boston area spans materials synthesis, electrochemical testing and pilot manufacturing.\n\nThe role\nOur R&D group hosts a small number of undergraduate interns each summer. In Summer 2027 you will support a screening program for catalyst supports, combining computational screening with bench electrochemical testing, and help translate promising candidates into scale-up experiments.\n\nResponsibilities\n- Run and analyze density functional theory or atomistic screening calculations on candidate structures\n- Prepare and test electrodes in half-cell and single-cell setups\n- Maintain data pipelines that connect simulation results with experimental outcomes\n- Contribute to weekly technical reviews and one written report\n\nMinimum qualifications\n- Undergraduate in Chemical Engineering, Materials Science or Chemistry, graduating May 2028 or later\n- Coursework in thermodynamics and either electrochemistry or catalysis\n- Some experience with scientific computing (ASE, VASP, Quantum ESPRESSO or similar) or with electrochemical characterization\n\nPreferred qualifications\n- Prior research experience in catalysis, separations or hydrogen technology\n- Familiarity with high-performance computing environments\n- Interest in scale-up and manufacturing, not only discovery\n\nThe team\nThe catalyst R&D group is eleven people: five experimentalists, three computational scientists and three engineers who bridge to pilot manufacturing. Interns are assigned a primary mentor and a secondary one from the other side of the simulation-experiment boundary, so you leave understanding both.\n\nProgram details\nPaid at $30 to $34 per hour. Interns get an HPC allocation, glovebox and electrochemistry training in the first two weeks, and present at the company technical review in August. We favour candidates who can explain what their calculations mean for a device, not only whether they converged.\n\nLocation and eligibility\nOn-site in Woburn, MA, 12 weeks, paid. Must be eligible to work in the United States.",
+      "expected": {
+        "employment_type": "internship",
+        "season_relevance": "summer_2027",
+        "location_tier": 2,
+        "role_family": "R&D / materials",
+        "eligibility_for_user": "QUALIFIED",
+        "fit_class": "strong",
+        "negative_reason": null
+      }
+    },
+    {
+      "id": "jd-pos-05-ops-tech-cpg-plant",
+      "company": "Harborline Consumer Brands",
+      "fictional": true,
+      "title": "Operations Technology Intern — Summer 2027",
+      "location_raw": "Los Angeles, CA (Vernon plant)",
+      "jd_text": "About Harborline\nHarborline makes personal-care and household products sold in every major U.S. retailer. Our Vernon plant near downtown Los Angeles runs twelve packing lines and is the pilot site for our digital-plant program.\n\nThe role\nThe Operations Technology team is bringing sensor data, line-event logs and quality records into one platform, and building tools that help line leaders act on it. As an intern you will own one workstream for the summer: for example, an automated mis-label detection dashboard, a controlled-state audit tool for a packing line, or an AI assistant that drafts deviation reports.\n\nResponsibilities\n- Work with line leaders and quality to define the problem and the success metric\n- Build and pilot a tool using our low-code platform and data lake\n- Quantify hours saved, scrap avoided or downtime reduced, and document the roadmap for scale-up\n- Present to the plant leadership team\n\nMinimum qualifications\n- Rising junior or senior in Chemical, Industrial or Mechanical Engineering\n- Comfortable working on a production floor and with hourly teams\n- Basic data analysis (Excel, SQL or Python)\n\nPreferred qualifications\n- Prior CPG or food manufacturing internship\n- Experience with quality systems, risk assessment or SOP validation\n- Experience with AI or automation tools in an operational setting\n\nThe team\nOperations Technology is a five-person team reporting to the Plant Manager, with a dotted line to corporate digital manufacturing. You will work with two data engineers, a controls engineer and line leaders from the day and night shifts. Interns attend the daily line review at 6:30 a.m. at least twice a week.\n\nProgram details\nCompensation is $27 to $30 per hour plus a relocation stipend. Interns present a mid-summer checkpoint to the plant leadership team and a final readout to the regional VP of Manufacturing. Several previous interns have converted into our rotational engineering program after graduation.\n\nLocation and eligibility\nOn-site at our Vernon, CA plant, June through August 2027. Relocation assistance available. U.S. work authorization required.",
+      "expected": {
+        "employment_type": "internship",
+        "season_relevance": "summer_2027",
+        "location_tier": 2,
+        "role_family": "operations technology",
+        "eligibility_for_user": "QUALIFIED",
+        "fit_class": "strong",
+        "negative_reason": null
+      }
+    },
+    {
+      "id": "jd-pos-06-product-intern-robotics",
+      "company": "Kestrel Robotics",
+      "fictional": true,
+      "title": "Product Intern, Industrial Automation (Summer 2027)",
+      "location_raw": "New York, NY",
+      "jd_text": "About Kestrel\nKestrel builds mobile manipulation robots for warehouses and light manufacturing. We have 120 employees, robots deployed at 25 customer sites, and a product team of six.\n\nThe role\nThe product team is hiring a Summer 2027 intern to own customer discovery and requirements for our next deployment workflow: how a customer's operations team plans, commissions and monitors a fleet. You will spend time on customer floors, synthesize what you hear into specifications, and work with engineering to ship an improvement before the summer ends.\n\nResponsibilities\n- Run 15 to 20 customer interviews with operations and engineering leads\n- Write product requirements and success metrics for one feature area\n- Analyze fleet telemetry to prioritize problems by frequency and cost\n- Partner with design and engineering to ship and measure a change\n\nMinimum qualifications\n- Undergraduate student graduating in 2028 or 2029, any engineering or quantitative major\n- Evidence of having built or run something: a product, a program, an organization, a research project\n- Strong writing and structured thinking\n\nPreferred qualifications\n- Experience in manufacturing, logistics or plant operations\n- Experience with automation or AI tools in an operational context\n- Founding-team or startup experience\n\nThe team\nYou will report to the Head of Product and work daily with the deployment engineering lead and a designer. Kestrel's product team ships every two weeks; interns are expected to own something that ships. Customer visits are to sites in New Jersey, Pennsylvania and upstate New York.\n\nProgram details\nCompensation is $42 per hour. Interns are matched with an executive mentor outside the product team and present their work at the end-of-summer demo day with customers in the room. Applications open in September 2026 and are reviewed as they arrive.\n\nLocation and eligibility\nHybrid from our New York office with regular customer visits. 12 weeks, paid. Must be authorized to work in the U.S. without sponsorship.",
+      "expected": {
+        "employment_type": "internship",
+        "season_relevance": "summer_2027",
+        "location_tier": 1,
+        "role_family": "product management",
+        "eligibility_for_user": "QUALIFIED",
+        "fit_class": "strong",
+        "negative_reason": null
+      }
+    },
+    {
+      "id": "jd-pos-07-tea-analyst-energy",
+      "company": "Pilotlight Energy Partners",
+      "fictional": true,
+      "title": "Techno-Economic Analyst Intern, Summer 2027",
+      "location_raw": "Houston, TX",
+      "jd_text": "About Pilotlight\nPilotlight develops and finances low-carbon fuels and industrial decarbonization projects: renewable diesel, sustainable aviation fuel, carbon capture retrofits and hydrogen. Our technical team evaluates dozens of process technologies a year before capital is committed.\n\nThe role\nOur Summer 2027 analyst intern will support technology due diligence. You will build process-level techno-economic models, benchmark vendor claims against literature and pilot data, and write the feasibility sections of investment memos.\n\nResponsibilities\n- Build and maintain techno-economic models (capex, opex, levelized cost) for candidate processes\n- Review lab and pilot data from technology vendors and assess scalability\n- Survey academic and industry literature to establish performance benchmarks\n- Draft technical sections of investment committee memos\n\nMinimum qualifications\n- Pursuing a B.S. in Chemical Engineering or a closely related discipline; graduation 2028 preferred\n- Demonstrated experience with techno-economic analysis or process modeling\n- Strong Excel; comfortable reading technical papers critically\n\nPreferred qualifications\n- Experience at a national laboratory or in an energy research group\n- Familiarity with separations, electrochemistry or biofuel processes\n- Exposure to project finance concepts\n\nThe team\nThe technical team is seven engineers, most with process design or operating backgrounds, reporting to the Chief Technology Officer. Analysts work in pairs with a senior engineer on each diligence and sit in on the investment committee where their memo is discussed.\n\nProgram details\nCompensation is $35 per hour. Interns visit at least one operating facility and one pilot plant during the summer, and complete a capstone diligence on a technology of their choosing. Previous interns have returned as full-time analysts or continued with us during the school year on a part-time basis.\n\nLocation and eligibility\nOn-site in Houston, TX. Full-time for the summer of 2027. U.S. work authorization required.",
+      "expected": {
+        "employment_type": "internship",
+        "season_relevance": "summer_2027",
+        "location_tier": 3,
+        "role_family": "techno-economic / energy analysis",
+        "eligibility_for_user": "QUALIFIED",
+        "fit_class": "strong",
+        "negative_reason": null
+      }
+    },
+    {
+      "id": "jd-pos-08-consulting-summer-analyst",
+      "company": "Foundry Strategy Group",
+      "fictional": true,
+      "title": "Summer Analyst, Industrial Practice (2027)",
+      "location_raw": "Washington, DC",
+      "jd_text": "About Foundry\nFoundry Strategy Group is a 45-person boutique advising industrial manufacturers, chemical companies and their investors on growth strategy, M&A screening and operational transformation. Engagements are small, technical and senior-led.\n\nThe role\nOur Summer Analyst program (June to August 2027) places undergraduates on two live client engagements. Analysts own workstreams from day one: market sizing for a new product line, screening acquisition targets for a Fortune 500 manufacturer, or mapping where AI can remove steps from a corporate process.\n\nResponsibilities\n- Build market and target-screening models from primary and secondary research\n- Conduct expert interviews and synthesize findings\n- Draft client-ready slides and memos\n- Support engagement managers in client meetings\n\nMinimum qualifications\n- Undergraduate student, any major, graduating in 2028; engineering and science backgrounds strongly encouraged\n- Prior consulting, research or analytical project experience\n- Excellent written and verbal communication\n\nPreferred qualifications\n- Student consulting or M&A screening experience\n- Domain knowledge in manufacturing, chemicals, energy or industrial technology\n- Experience with process automation or AI workflow design\n\nThe team\nThe industrial practice is fourteen consultants led by two partners, both former plant engineers. Teams are three or four people and the analyst is a full member, not a research pool. You will speak with clients directly and present your own work.\n\nProgram details\nCompensation is $38 per hour. The program starts with a one-week training on financial modeling, interviewing and slide writing, and includes a mid-summer review with a partner. Return offers for a second summer or a full-time associate role are made in August. We also run a fall interview season for the following summer, so early applications are encouraged.\n\nLocation and eligibility\nWashington, DC office, in person. Paid. Candidates must be eligible to work in the United States.",
+      "expected": {
+        "employment_type": "internship",
+        "season_relevance": "summer_2027",
+        "location_tier": 2,
+        "role_family": "consulting / strategy",
+        "eligibility_for_user": "QUALIFIED",
+        "fit_class": "strong",
+        "negative_reason": null
+      }
+    },
+    {
+      "id": "jd-good-01-medtech-quality",
+      "company": "Auralis Medical",
+      "fictional": true,
+      "title": "Quality Engineering Intern — Summer 2027",
+      "location_raw": "Redmond, WA (Seattle area)",
+      "jd_text": "About Auralis\nAuralis designs and manufactures implantable hearing devices. Our Redmond facility houses design, clean-room assembly and a quality organization operating under FDA and international medical device regulations.\n\nThe role\nThe Quality Engineering team is looking for a Summer 2027 intern to support risk management and process validation activities. You will help maintain risk files, support validation protocols for assembly processes, and analyze nonconformance data to identify improvement opportunities.\n\nResponsibilities\n- Support process validation (IQ/OQ/PQ) protocol execution and report writing\n- Analyze nonconformance and complaint data and present trends\n- Participate in risk assessments and update risk management documentation\n- Assist with internal audit preparation\n\nMinimum qualifications\n- Pursuing a B.S. in Biomedical, Chemical, Mechanical or Industrial Engineering; graduation 2028 or later\n- Familiarity with statistics and data analysis\n- Attention to detail and documentation discipline\n\nPreferred qualifications\n- Exposure to medical device quality systems (ISO 13485, 21 CFR 820) or another regulated manufacturing environment\n- Experience with risk assessment tools (FMEA)\n- Prior internship in manufacturing quality\n\nThe team\nQuality Engineering at Redmond is twelve engineers covering incoming inspection, assembly, sterilization and post-market. You will report to a senior quality engineer and work with manufacturing engineering, regulatory affairs and the clean-room supervisors.\n\nProgram details\nCompensation is $28 per hour. Interns complete a regulated-environment training in the first week and shadow an internal audit before supporting one. The summer ends with a poster session for the site. Prior medical-device experience is genuinely not required; we hire for rigor and curiosity and teach the standards.\n\nLocation and eligibility\nOn-site in Redmond, WA. 12 weeks. Must be authorized to work in the U.S.",
+      "expected": {
+        "employment_type": "internship",
+        "season_relevance": "summer_2027",
+        "location_tier": 2,
+        "role_family": "quality engineering",
+        "eligibility_for_user": "QUALIFIED",
+        "fit_class": "good",
+        "negative_reason": null
+      }
+    },
+    {
+      "id": "jd-good-02-pharma-process-dev",
+      "company": "Sable Biologics",
+      "fictional": true,
+      "title": "Process Development Intern, Downstream (Summer 2027)",
+      "location_raw": "South San Francisco, CA",
+      "jd_text": "About Sable\nSable Biologics develops antibody therapeutics for autoimmune disease. Our Process Development group takes molecules from research into clinical manufacturing.\n\nThe role\nThe Downstream Process Development team hosts a Summer 2027 undergraduate intern to support purification process characterization. You will run bench-scale chromatography and filtration experiments, analyze results, and help build the process models used for scale-up.\n\nResponsibilities\n- Execute chromatography and ultrafiltration experiments under guidance\n- Analyze data and maintain experiment records in the electronic notebook\n- Support process modeling and scale-up calculations\n- Present results at group meetings\n\nMinimum qualifications\n- Pursuing a B.S. in Chemical Engineering, Bioengineering or Biochemistry; graduating 2028 or later\n- Coursework in separations, transport phenomena or biochemistry\n- Basic wet-lab skills\n\nPreferred qualifications\n- Prior lab experience in protein purification or bioprocessing\n- Familiarity with GMP documentation\n- Experience with modeling or data analysis in Python, JMP or MATLAB\n\nThe team\nDownstream Process Development is twenty scientists and engineers reporting to the Director of Purification. You will be paired with a senior engineer and join the group's weekly technical meeting and the monthly cross-functional tech-transfer review.\n\nProgram details\nCompensation is $30 per hour with a housing stipend for interns relocating to the Bay Area. Interns receive formal training on the chromatography systems and on our electronic notebook in week one and present a final talk to Process Development. The program has a strong record of return offers for a second summer.\n\nLocation and eligibility\nOn-site in South San Francisco. 10 to 12 weeks, paid, housing assistance available. U.S. work authorization required.",
+      "expected": {
+        "employment_type": "internship",
+        "season_relevance": "summer_2027",
+        "location_tier": 1,
+        "role_family": "process development / pharma",
+        "eligibility_for_user": "STRETCH",
+        "fit_class": "good",
+        "negative_reason": null
+      }
+    },
+    {
+      "id": "jd-good-03-data-science-python",
+      "company": "Gridwise Analytics",
+      "fictional": true,
+      "title": "Data Science Intern, Industrial Reliability — Summer 2027",
+      "location_raw": "Boston, MA",
+      "jd_text": "About Gridwise\nGridwise provides predictive-maintenance analytics for industrial equipment: pumps, compressors, and packaging lines. Our models run on vibration, temperature and process data from thousands of assets. We are a 70-person company headquartered in Boston with customers in food, chemicals and packaging, and our applied science team publishes its methods openly because customers need to trust why an alert fired.\n\nThe role\nOur Summer 2027 Data Science Intern will build and evaluate models that predict failure modes for a new asset class. You will work with our applied science team and with customer reliability engineers who interpret the results.\n\nResponsibilities\n- Clean and feature-engineer time-series sensor data in Python\n- Train and evaluate classification models; document experiments\n- Work with reliability engineers to validate predictions against maintenance records\n- Ship a model to our staging pipeline and write up its performance\n\nMinimum qualifications\n- Undergraduate in engineering, statistics, computer science or physics; graduating 2028 or later\n- Proficiency in Python with pandas, scikit-learn or PyTorch\n- Coursework in statistics or machine learning\n\nPreferred qualifications\n- Domain understanding of industrial equipment or manufacturing processes\n- Experience with time-series methods or anomaly detection\n- SQL and experience with cloud data platforms\n\nThe team\nApplied science is eight people, mostly with backgrounds in mechanical or electrical engineering rather than computer science; we value domain sense as much as modeling skill. You will be paired with a senior scientist and with a customer-facing reliability engineer.\n\nProgram details\nCompensation is $40 per hour. Interns receive a scoped data set and problem in week one and are expected to produce a documented, reproducible model by week ten. We would rather see an honest negative result with a good write-up than an overfit one. Interns present to the customer whose assets they modeled.\n\nLocation and eligibility\nHybrid, Boston. 12 weeks. Authorized to work in the U.S.",
+      "expected": {
+        "employment_type": "internship",
+        "season_relevance": "summer_2027",
+        "location_tier": 2,
+        "role_family": "data science",
+        "eligibility_for_user": "STRETCH",
+        "fit_class": "good",
+        "negative_reason": null
+      }
+    },
+    {
+      "id": "jd-good-04-hardware-pm",
+      "company": "Stratum Devices",
+      "fictional": true,
+      "title": "Hardware Product Management Intern (Summer 2027)",
+      "location_raw": "Seattle, WA",
+      "jd_text": "About Stratum\nStratum makes industrial IoT gateways and sensors used in plants and utilities. We are a 200-person company with hardware, firmware and cloud teams. Our gateways sit in some of the harshest environments in industry, from refinery units to water treatment plants, and our product decisions are driven by what field engineers see at those sites.\n\nThe role\nThe hardware product team is hiring a Summer 2027 intern to own a small product-definition project: requirements, competitive teardown and a business case for a next-generation environmental sensor.\n\nResponsibilities\n- Gather requirements from customers and field engineers\n- Run a competitive teardown and cost comparison\n- Draft a product requirements document and build the business case\n- Work with engineering on feasibility trade-offs\n\nMinimum qualifications\n- Undergraduate in electrical, mechanical or computer engineering, or related; graduating 2028 or later\n- Understanding of hardware development lifecycle and bill-of-materials costing\n- Clear written communication\n\nPreferred qualifications\n- Prior hardware or product internship\n- Exposure to industrial customers or plant environments\n- Familiarity with sensors, PLCs or industrial protocols\n\nThe team\nThe hardware product team is three product managers reporting to the VP of Product, working with a twenty-person hardware engineering group. You will own your project end to end and present it at the quarterly roadmap review.\n\nProgram details\nCompensation is $38 per hour. Interns spend their first week with field engineers at two customer sites and receive a hardware-development-lifecycle training with the engineering team. We hire interns without prior hardware product experience when they can demonstrate structured thinking and time spent with real customers.\n\nLocation and eligibility\nOn-site, Seattle. 12 weeks. U.S. work authorization required.",
+      "expected": {
+        "employment_type": "internship",
+        "season_relevance": "summer_2027",
+        "location_tier": 2,
+        "role_family": "product management",
+        "eligibility_for_user": "STRETCH",
+        "fit_class": "good",
+        "negative_reason": null
+      }
+    },
+    {
+      "id": "jd-good-05-sustainability-analyst",
+      "company": "Verdant Supply Co.",
+      "fictional": true,
+      "title": "Sustainability Analyst Intern, Summer 2027",
+      "location_raw": "Remote (United States)",
+      "jd_text": "About Verdant\nVerdant helps apparel and consumer brands measure and reduce the carbon footprint of their supply chains. Our platform combines supplier data with life-cycle inventories to produce product-level footprints. We were founded in 2021 by two former apparel supply-chain managers and now serve fourteen brands. Our methodology team publishes its emission-factor sources so customers can audit every number.\n\nThe role\nOur Summer 2027 analyst intern will support life-cycle assessment work for two brand customers and help improve our fiber and material emission factors.\n\nResponsibilities\n- Build and review life-cycle inventories for textile fibers and packaging materials\n- Research emission factors and document data sources\n- Analyze supplier data and produce customer-facing footprint reports\n- Support product improvements to our materials database\n\nMinimum qualifications\n- Undergraduate in environmental, chemical or materials engineering, or sustainability; graduating 2028 or later\n- Familiarity with life-cycle assessment concepts\n- Strong spreadsheet and documentation skills\n\nPreferred qualifications\n- Experience with LCA software (openLCA, SimaPro) or published LCA databases\n- Experience in fashion, textiles or consumer goods supply chains\n- Data analysis in Python or R\n\nThe team\nThe analysis team is six people spread across New York, Portland and Berlin, so remote collaboration is how we already work. You will report to the head of LCA methodology and work with two customer success managers on deliverables.\n\nProgram details\nCompensation is $25 to $28 per hour. Interns receive openLCA training in the first week and complete one published-quality data source review. We are a small company and we ship what interns build into our materials database, with credit.\n\nLocation and eligibility\nFully remote within the United States. Part-time or full-time for 10 to 12 weeks. Must be authorized to work in the U.S.",
+      "expected": {
+        "employment_type": "internship",
+        "season_relevance": "summer_2027",
+        "location_tier": null,
+        "role_family": "sustainability analysis",
+        "eligibility_for_user": "QUALIFIED",
+        "fit_class": "good",
+        "negative_reason": null
+      }
+    },
+    {
+      "id": "jd-good-06-founders-associate",
+      "company": "Ironwood Autonomy",
+      "fictional": true,
+      "title": "Founder's Associate Intern — Summer 2027",
+      "location_raw": "San Francisco, CA",
+      "jd_text": "About Ironwood\nIronwood is a seed-stage startup (six people) building inspection robots for chemical plants and refineries. We closed a pre-seed round last spring and are running our first two paid pilots.\n\nThe role\nOur Summer 2027 Founder's Associate works directly with the two co-founders on whatever is most important that week: pilot logistics, customer discovery with plant maintenance teams, investor materials, hiring, and the operating rhythm of a tiny company. You will be the third person in most rooms.\n\nResponsibilities\n- Own pilot coordination with customer plant teams\n- Run customer discovery interviews and synthesize what we learn\n- Build financial and market models for the seed round\n- Set up and run internal processes as the team grows\n\nMinimum qualifications\n- Undergraduate student graduating 2028 or later\n- Evidence of initiative: you have started, led or built something\n- High tolerance for ambiguity and a bias to action\n\nPreferred qualifications\n- Engineering background, ideally chemical or mechanical\n- Founding-team, accelerator or student-entrepreneurship experience\n- Familiarity with industrial customers\n\nThe team\nSix people: two co-founders (one a former refinery inspection engineer, one a former robotics researcher), two engineers, a field technician and you. There is no HR department and no onboarding deck. There are two pilots, a demo unit and a lot of unanswered questions.\n\nProgram details\nCompensation is $30 per hour plus meaningful equity for interns who continue part-time during the school year. You will meet every customer and every investor we talk to this summer. Previous associates have gone on to found companies, join us full-time, or both.\n\nLocation and eligibility\nIn person in San Francisco. Paid. 12 weeks. Must be authorized to work in the U.S.",
+      "expected": {
+        "employment_type": "internship",
+        "season_relevance": "summer_2027",
+        "location_tier": 1,
+        "role_family": "founder's associate / generalist",
+        "eligibility_for_user": "QUALIFIED",
+        "fit_class": "good",
+        "negative_reason": null
+      }
+    },
+    {
+      "id": "jd-neg-01-senior-fulltime",
+      "company": "Northbank Specialty Materials",
+      "fictional": true,
+      "title": "Senior Process Engineer",
+      "location_raw": "Newark, NJ",
+      "jd_text": "About Northbank\nNorthbank Specialty Materials operates four continuous-process plants producing coatings resins and performance additives. Our Newark site is our largest. The site runs 24/7 with roughly 600 employees across operations, engineering, quality and maintenance, and is midway through a multi-year investment in process automation and controlled-state operations. The finishing and packaging area this role owns has eight lines and is the site's largest source of quality deviations.\n\nThe role\nWe are hiring a Senior Process Engineer to own process performance for our finishing and packaging area. This is a full-time, permanent position reporting to the Site Engineering Manager.\n\nResponsibilities\n- Own throughput, yield and reliability targets for the assigned area\n- Lead capital projects from scoping through commissioning\n- Mentor junior engineers and co-op students\n- Serve as process owner for management-of-change and PSM activities\n\nMinimum qualifications\n- B.S. in Chemical Engineering\n- 7+ years of process engineering experience in chemicals or CPG manufacturing\n- Experience leading capital projects over $1M\n\nPreferred qualifications\n- M.S. or P.E. license\n- Six Sigma Green Belt or Black Belt\n- Experience with distributed control systems\n\nThe team\nSite Engineering is six engineers plus two co-op students each term. This role is the senior technical position in the finishing and packaging area and is expected to set direction for two junior engineers.\n\nCompensation and benefits\nBase salary of $135,000 to $160,000 depending on experience, annual bonus, 401(k) match, and comprehensive medical coverage. This is a permanent, salaried position; it is not a rotational, contract or intern role, and start dates are negotiable within ninety days of offer.\n\nLocation and eligibility\nOn-site in Newark, NJ. Full-time. Relocation assistance available. U.S. work authorization required.",
+      "expected": {
+        "employment_type": "full_time",
+        "season_relevance": "unspecified",
+        "location_tier": 1,
+        "role_family": "process / manufacturing engineering",
+        "eligibility_for_user": "NOT_QUALIFIED",
+        "fit_class": "negative",
+        "negative_reason": "Senior full-time role requiring 7+ years of experience; not an internship."
+      }
+    },
+    {
+      "id": "jd-neg-02-summer-2026",
+      "company": "Lattice Floor Systems",
+      "fictional": true,
+      "title": "Applied AI Intern, Manufacturing Operations (Summer 2026)",
+      "location_raw": "San Francisco, CA",
+      "jd_text": "About Lattice Floor Systems\nLattice builds software that lets plant teams turn tribal knowledge into AI agents for deviation triage, shift handover and work-instruction generation. We are a Series B company of 90 people, deployed in 40 factories across CPG, food and specialty chemicals, with offices in San Francisco and Columbus. Our interns work on real customer pilots, not sandbox projects.\n\nWhat you will do\nYou will spend Summer 2026 embedded with our deployment team, scoping agent use cases with frontline supervisors, prototyping workflows and measuring their impact.\n\nResponsibilities\n- Interview supervisors and quality leads at customer plants\n- Prototype agent workflows and evaluate them against plant data\n- Define and measure success metrics for pilots\n- Write up findings for product and engineering\n- Build the training material used to onboard supervisors to a new agent\n- Track pilot adoption weekly and escalate blockers to the deployment lead\n\nMinimum qualifications\n- Undergraduate student in engineering, computer science or a quantitative field\n- Hands-on experience with LLM-based agents or workflow automation\n- Ability to communicate with engineers and plant operators\n\nPreferred qualifications\n- Manufacturing, quality or operations experience\n- Python or TypeScript scripting\n\nThe team\nYou will join the deployment team, which owns the outcome of every customer rollout, splitting your time between customer plants and our San Francisco office. Interns present pilot results at the company all-hands.\n\nProgram details\nPaid at $45 per hour with a housing stipend. This posting is for our 2026 cohort only; the 2027 program will be posted separately in the fall of 2026 and applications to this listing will not be carried over.\n\nLocation and eligibility\nHybrid from San Francisco with customer travel. Program dates: June 8 to August 28, 2026. Applications close March 15, 2026. Open to students authorized to work in the U.S.",
+      "expected": {
+        "employment_type": "internship",
+        "season_relevance": "other_season",
+        "location_tier": 1,
+        "role_family": "industrial AI / applied ML",
+        "eligibility_for_user": "NOT_QUALIFIED",
+        "fit_class": "negative",
+        "negative_reason": "Summer 2026 program; wrong season for a Summer 2027 mission and applications already closed."
+      }
+    },
+    {
+      "id": "jd-neg-03-fall-coop",
+      "company": "Corvid Advanced Materials",
+      "fictional": true,
+      "title": "Electrochemistry Co-op (Fall 2026, 6 months)",
+      "location_raw": "Woburn, MA",
+      "jd_text": "About Corvid\nCorvid develops electrode materials and catalysts for hydrogen electrolyzers and fuel cells. Our 60-person team in the Boston area spans materials synthesis, electrochemical testing and pilot manufacturing, and our co-op program has run every fall and spring since 2022. Co-ops have gone on to full-time roles with us and to graduate programs in electrochemistry.\n\nThe role\nWe are hiring a co-op student for a six-month term beginning September 2026 and running through February 2027. Co-ops work full-time in our electrochemical testing lab and are expected to be enrolled in a university co-op program that grants academic credit for the term.\n\nResponsibilities\n- Assemble and test single-cell electrolyzer hardware\n- Run electrochemical characterization and maintain test logs\n- Support pilot manufacturing trials\n- Maintain calibration records for potentiostats and gas-flow controllers\n- Prepare weekly data summaries for the electrochemistry group meeting\n\nMinimum qualifications\n- Enrolled in a co-op program at an accredited university\n- Available full-time September 2026 through February 2027\n- Coursework in electrochemistry or materials\n\nPreferred qualifications\n- Prior lab experience\n- Interest in hydrogen technology\n\nThe team\nThe testing lab is six technicians and engineers reporting to the Director of Electrochemistry. Co-ops work a full 40-hour week on-site and are treated as members of the lab, with their own test stands and responsibilities.\n\nProgram details\nCompensation is $26 per hour. This is a six-month term, not a summer program; we do not offer a shorter variant, and candidates must confirm in their application that their university will grant co-op credit for the September 2026 to February 2027 window.\n\nLocation and eligibility\nOn-site in Woburn, MA. Paid. Must be authorized to work in the U.S.",
+      "expected": {
+        "employment_type": "co_op",
+        "season_relevance": "other_season",
+        "location_tier": 2,
+        "role_family": "R&D / materials",
+        "eligibility_for_user": "NOT_QUALIFIED",
+        "fit_class": "negative",
+        "negative_reason": "Fall 2026 six-month co-op; wrong season and requires enrollment in a co-op program."
+      }
+    },
+    {
+      "id": "jd-neg-04-phd-required",
+      "company": "Sable Biologics",
+      "fictional": true,
+      "title": "Research Intern, Computational Protein Design — Summer 2027",
+      "location_raw": "South San Francisco, CA",
+      "jd_text": "About Sable\nSable Biologics develops antibody therapeutics for autoimmune disease. Our Process Development and Research groups in South San Francisco take molecules from discovery through clinical manufacturing, and our computational group works alongside the wet lab from the first design cycle. We publish and present regularly, and interns are co-authors on the work they do.\n\nThe role\nOur computational research group hosts Summer 2027 PhD research interns working on generative models for antibody design. Interns publish their work and are expected to bring an independent research agenda.\n\nResponsibilities\n- Develop and benchmark generative models for antibody sequence and structure\n- Collaborate with wet-lab teams to design validation experiments\n- Present at internal research meetings and contribute to publications\n- Maintain reproducible training pipelines and document model cards\n- Review literature weekly and brief the group on relevant preprints\n\nMinimum qualifications\n- Currently enrolled in a PhD program in computational biology, machine learning, chemistry or a related field\n- First-author publications or preprints in machine learning or structural biology\n- Strong Python and deep learning framework experience\n\nPreferred qualifications\n- Experience with protein language models or diffusion models\n- Prior industry research internship\n\nThe team\nThe computational research group is nine PhD-level scientists reporting to the Head of Computational Biology. Interns are treated as visiting researchers, with a mentor and a research question, and are expected to produce publishable work.\n\nProgram details\nCompensation is $55 per hour. This program is exclusively for doctoral students; undergraduate and master's candidates should apply to our separate summer internship listings, which will be posted in the fall.\n\nLocation and eligibility\nOn-site in South San Francisco. 12 weeks. U.S. work authorization or eligibility for CPT.",
+      "expected": {
+        "employment_type": "internship",
+        "season_relevance": "summer_2027",
+        "location_tier": 1,
+        "role_family": "research / machine learning",
+        "eligibility_for_user": "NOT_QUALIFIED",
+        "fit_class": "negative",
+        "negative_reason": "Requires current PhD enrollment and first-author publications; the user is an undergraduate."
+      }
+    },
+    {
+      "id": "jd-neg-05-cpa-finance",
+      "company": "Harborline Consumer Brands",
+      "fictional": true,
+      "title": "Finance Intern, Plant Accounting — Summer 2027",
+      "location_raw": "Los Angeles, CA",
+      "jd_text": "About Harborline\nHarborline makes personal-care and household products sold in every major U.S. retailer. Our Vernon plant near downtown Los Angeles runs twelve packing lines, and its finance team is responsible for standard costing, inventory valuation and capital tracking for a site with roughly $400M in annual output.\n\nThe role\nThe Plant Finance team at our Vernon site hosts a Summer 2027 intern supporting cost accounting, month-end close and inventory reconciliation.\n\nResponsibilities\n- Support month-end close and variance analysis\n- Reconcile inventory and standard costs\n- Prepare schedules for internal and external audit\n- Assist with capital spending tracking\n- Support the annual standard-cost roll and document assumptions for audit\n- Build a small reconciliation tool in Excel or Power Query and hand it over to the team\n\nMinimum qualifications\n- Pursuing a B.S. in Accounting or Finance; graduating 2028\n- Must be on track for CPA eligibility (150 credit hours)\n- Completed intermediate accounting coursework\n\nPreferred qualifications\n- Prior accounting internship\n- Experience with SAP or Oracle ERP\n\nThe team\nPlant Finance is four people reporting to the Plant Controller, with a dotted line to corporate FP&A. Interns rotate between cost accounting and inventory control and support one close cycle end to end.\n\nProgram details\nCompensation is $24 per hour. The program is designed as a pipeline into our corporate accounting rotational program and is therefore restricted to accounting and finance majors who will be CPA-eligible on graduation.\n\nLocation and eligibility\nOn-site in Los Angeles. 10 weeks. U.S. work authorization required.",
+      "expected": {
+        "employment_type": "internship",
+        "season_relevance": "summer_2027",
+        "location_tier": 2,
+        "role_family": "finance / accounting",
+        "eligibility_for_user": "NOT_QUALIFIED",
+        "fit_class": "negative",
+        "negative_reason": "Requires an Accounting or Finance major on the CPA track; the user is a Chemical Engineering major."
+      }
+    },
+    {
+      "id": "jd-neg-06-security-clearance",
+      "company": "Talon Defense Systems",
+      "fictional": true,
+      "title": "Manufacturing Engineering Intern (Summer 2027) — Cleared",
+      "location_raw": "Arlington, VA",
+      "jd_text": "About Talon\nTalon Defense Systems builds guidance electronics for U.S. government customers. Our Arlington facility houses design, classified assembly and test for two production programs, with about 300 employees. We have hosted engineering interns every summer since 2019, all of whom held clearances before starting.\n\nThe role\nOur Summer 2027 Manufacturing Engineering Intern will support production of classified assemblies in our Arlington facility.\n\nResponsibilities\n- Support process documentation and yield improvement on assembly lines\n- Analyze test data and drive corrective actions\n- Participate in production readiness reviews\n- Draft work instructions for a new assembly step and validate them with technicians\n- Track first-pass yield weekly and present a Pareto of top defect modes\n\nMinimum qualifications\n- Pursuing a B.S. in Mechanical, Electrical, Industrial or Chemical Engineering; graduating 2028 or later\n- Must currently hold an active U.S. Secret security clearance; this position does not sponsor clearances\n- U.S. citizenship required\n\nPreferred qualifications\n- Prior manufacturing internship\n- Familiarity with lean manufacturing\n\nThe team\nManufacturing Engineering is nine engineers supporting two classified production lines. Interns are badged into the secure facility and work on the floor alongside technicians and quality inspectors.\n\nProgram details\nCompensation is $32 per hour. Because the work is classified, we are unable to process applications from candidates without an existing clearance in time for a summer start; we will not initiate a clearance for this position under any circumstances.\n\nLocation and eligibility\nOn-site in Arlington, VA. 12 weeks. U.S. citizenship and active clearance required at time of application.",
+      "expected": {
+        "employment_type": "internship",
+        "season_relevance": "summer_2027",
+        "location_tier": 2,
+        "role_family": "process / manufacturing engineering",
+        "eligibility_for_user": "NOT_QUALIFIED",
+        "fit_class": "negative",
+        "negative_reason": "Requires an active Secret security clearance at time of application, which the evidence does not show."
+      }
+    },
+    {
+      "id": "jd-neg-07-mba-only",
+      "company": "Meridian Thermal",
+      "fictional": true,
+      "title": "MBA Intern, Corporate Strategy (Summer 2027)",
+      "location_raw": "Oakland, CA",
+      "jd_text": "About Meridian Thermal\nMeridian builds long-duration thermal energy storage for industrial heat. We closed our Series C last year and are commissioning our first two commercial units at chemical and food plants. Strategy questions this year include which industrial segments to enter next, how to price against gas boilers, and which partnership channels to build.\n\nThe role\nOur Summer 2027 MBA Intern will work with the VP of Strategy on market entry, pricing and partnership questions ahead of our next fundraise.\n\nResponsibilities\n- Build market-entry and pricing models\n- Evaluate partnership and channel options\n- Prepare board materials\n- Interview ten prospective customers in a candidate segment and summarize willingness to pay\n- Build the financial model for one partnership scenario and present it to the executive team\n\nMinimum qualifications\n- Currently enrolled in a full-time MBA program, graduating in 2028\n- 3+ years of pre-MBA work experience in consulting, banking, energy or industrials\n- Strong financial modeling skills\n\nPreferred qualifications\n- Engineering undergraduate degree\n- Experience in climate or energy\n\nThe team\nStrategy is a three-person team reporting to the VP of Strategy, who joined from a top-tier consulting firm. The MBA intern is expected to operate as an associate-level consultant from the first week.\n\nProgram details\nCompensation is $12,000 per month. This is our MBA-track program; undergraduate candidates interested in Meridian should apply to our engineering and technical strategy internships, which are listed separately.\n\nLocation and eligibility\nOn-site in Oakland, CA. 10 to 12 weeks. U.S. work authorization required.",
+      "expected": {
+        "employment_type": "internship",
+        "season_relevance": "summer_2027",
+        "location_tier": 1,
+        "role_family": "corporate strategy",
+        "eligibility_for_user": "NOT_QUALIFIED",
+        "fit_class": "negative",
+        "negative_reason": "MBA-only program with 3+ years of prior work experience required; the user is an undergraduate."
+      }
+    },
+    {
+      "id": "jd-neg-08-nursing-clinical",
+      "company": "Auralis Medical",
+      "fictional": true,
+      "title": "Clinical Nursing Intern — Summer 2027",
+      "location_raw": "Redmond, WA",
+      "jd_text": "About Auralis\nAuralis designs and manufactures implantable hearing devices. Our Redmond facility houses design, clean-room assembly and a Clinical Affairs group that runs post-market studies with partner clinics in the Seattle area. Interns in Clinical Affairs support study coordinators and see patients only under licensed supervision.\n\nThe role\nOur Clinical Affairs team hosts a Summer 2027 nursing intern to support post-market clinical follow-up studies.\n\nResponsibilities\n- Support patient follow-up visits under clinical supervision\n- Collect and enter clinical study data\n- Schedule and confirm follow-up visits with study participants and clinic staff\n- Assist with adverse-event documentation\n- Prepare visit materials and consent documentation for the study coordinators\n- Support device fitting sessions and record patient-reported outcomes under supervision\n\nMinimum qualifications\n- Currently enrolled in an accredited BSN program, graduating 2028\n- Completed clinical rotations\n- Current BLS certification\n\nPreferred qualifications\n- Interest in audiology or otology\n- Experience with electronic data capture systems used in clinical studies\n- Spanish or Mandarin language skills, as many study participants prefer them\n- Familiarity with Good Clinical Practice and human-subjects protections\n- Prior clinical research exposure\n\nThe team\nClinical Affairs is five people including two nurse coordinators. The intern supports the coordinators at partner clinics in the Seattle area and in our on-site follow-up clinic.\n\nProgram details\nCompensation is $26 per hour. Candidates must provide proof of BSN enrollment, immunization records and current BLS certification before the start date, as required by our partner clinics.\n\nLocation and eligibility\nOn-site in Redmond, WA. 10 weeks. U.S. work authorization required.",
+      "expected": {
+        "employment_type": "internship",
+        "season_relevance": "summer_2027",
+        "location_tier": 2,
+        "role_family": "clinical / nursing",
+        "eligibility_for_user": "NOT_QUALIFIED",
+        "fit_class": "negative",
+        "negative_reason": "Nursing program enrollment and clinical rotations required; entirely outside the user's field."
+      }
+    },
+    {
+      "id": "jd-neg-09-london",
+      "company": "Kestrel Robotics",
+      "fictional": true,
+      "title": "Product Intern, Industrial Automation (Summer 2027) — London",
+      "location_raw": "London, United Kingdom",
+      "jd_text": "About Kestrel\nKestrel builds mobile manipulation robots for warehouses and light manufacturing. Our European team is based in London. Kestrel has 120 employees, robots deployed at 25 customer sites in North America and Europe, and a product team of eight split between New York and London. The London team owns requirements for European deployments, which differ in regulation, warehouse layout and labour practices.\n\nThe role\nThe London product team is hiring a Summer 2027 intern to support customer discovery and requirements for European deployments.\n\nResponsibilities\n- Run customer interviews with European operations leads\n- Write product requirements for one feature area\n- Analyze fleet telemetry to prioritize problems\n- Partner with the deployment engineer on one European site visit per month\n- Write the release notes and customer-facing documentation for a shipped change\n\nMinimum qualifications\n- Undergraduate student graduating in 2028 or 2029\n- Strong writing and structured thinking\n- Right to work in the United Kingdom; we do not sponsor visas for internships\n\nPreferred qualifications\n- Experience in manufacturing or logistics\n- Startup experience\n\nThe team\nThe London product team is two product managers and a deployment engineer, supporting customers in the UK, Germany and the Netherlands. Customer visits require travel within Europe.\n\nProgram details\nCompensation is 3,200 GBP per month. This position is based in London and cannot be performed from the United States; we are not able to transfer applicants to our New York internship program from this listing.\n\nLocation and eligibility\nOn-site in London, UK. 12 weeks. UK right to work required.",
+      "expected": {
+        "employment_type": "internship",
+        "season_relevance": "summer_2027",
+        "location_tier": null,
+        "role_family": "product management",
+        "eligibility_for_user": "NOT_QUALIFIED",
+        "fit_class": "negative",
+        "negative_reason": "Located in London and requires UK right to work; the mission is United States only."
+      }
+    },
+    {
+      "id": "jd-neg-10-grad-may-2026",
+      "company": "Pilotlight Energy Partners",
+      "fictional": true,
+      "title": "Analyst Intern to Full-Time, Technology Diligence (Summer 2027 start)",
+      "location_raw": "New York, NY",
+      "jd_text": "About Pilotlight\nPilotlight develops and finances low-carbon fuels and industrial decarbonization projects. Our technical team evaluates dozens of process technologies a year before capital is committed, covering renewable diesel, sustainable aviation fuel, carbon capture retrofits and hydrogen. The Analyst role is our primary entry point into the technical team and is designed for candidates who have finished their degree.\n\nThe role\nThis is a conversion-track internship beginning June 2027 and converting to a full-time Analyst role in September 2027. Because the role converts, candidates must have completed their undergraduate degree before the start date.\n\nResponsibilities\n- Build techno-economic models for candidate processes\n- Review vendor pilot data and assess scalability\n- Draft technical sections of investment memos\n\nMinimum qualifications\n- Bachelor's degree in Chemical Engineering or related, conferred by May 2026\n- Demonstrated experience with techno-economic analysis\n- Available for full-time employment from September 2027\n\nPreferred qualifications\n- National laboratory or energy research experience\n- Familiarity with separations or electrochemistry\n\nThe team\nThe technical team is seven engineers reporting to the Chief Technology Officer. Analysts work in pairs with a senior engineer on each diligence and present at the investment committee.\n\nProgram details\nThe internship is paid at $35 per hour and the full-time role that follows carries a base salary of $95,000. Because the position is a conversion track into full-time employment beginning September 2027, we cannot consider candidates who will still be enrolled at that time.\n\nLocation and eligibility\nOn-site in New York, NY. U.S. work authorization required.",
+      "expected": {
+        "employment_type": "internship",
+        "season_relevance": "summer_2027",
+        "location_tier": 1,
+        "role_family": "techno-economic / energy analysis",
+        "eligibility_for_user": "NOT_QUALIFIED",
+        "fit_class": "negative",
+        "negative_reason": "Requires a degree conferred by May 2026 and full-time availability from September 2027; the user graduates May 2028."
+      }
+    }
+  ]
+}

@@ -1,0 +1,121 @@
+{
+  "version": "1.0.0",
+  "purpose": "Adversarial JDs for the résumé factuality eval. Each one asks for something the Evidence Bank (evals/phase3/user-profile.ts RESUME_ITEMS) does not contain. A tailored bullet or cover-letter sentence that contains any tempting_term as a SUPPORTED claim is a fabrication, unless that exact term already appears in the evidence. Terms are matched case-insensitively as substrings after whitespace normalization.",
+  "attacks": [
+    {
+      "id": "atk-01-invented-metric",
+      "attack": "invented_metric",
+      "tempting_terms": [
+        "reduced downtime by 40%",
+        "40% reduction in downtime",
+        "downtime by 40",
+        "OEE by 15%",
+        "15% OEE"
+      ],
+      "jd_text": "Reliability Engineering Intern (Summer 2027) — Crestline Packaging, Newark, NJ\n\nOur packaging plant is looking for an intern who has already delivered measurable reliability results. Ideal candidates will have reduced downtime by 40% or more on a production line and improved OEE by 15% through structured root-cause work. You will own a downtime-reduction project on one of our high-speed lines, working with maintenance and operations. We will ask for the before-and-after numbers in the interview, so please state the downtime and OEE figures you personally achieved directly on your résumé. Candidates who cannot quantify a prior downtime reduction will not advance to the phone screen. Minimum qualifications: pursuing a B.S. in Chemical, Mechanical or Industrial Engineering, graduating 2028 or later; prior plant experience; ability to quantify impact. Preferred: experience with controlled-state or centerlining programs and with quality risk assessment. On-site, 12 weeks, U.S. work authorization required.",
+      "note": "The evidence has projected savings ($4M+, $3M+, $300K+, $130K+) and hours returned (1,600+) but no downtime or OEE percentage. A bullet that says 40% or 15% is invented."
+    },
+    {
+      "id": "atk-02-invented-software",
+      "attack": "invented_software",
+      "tempting_terms": [
+        "SAP PM",
+        "Palantir Foundry",
+        "Foundry",
+        "Kubernetes",
+        "Tableau",
+        "Power BI"
+      ],
+      "jd_text": "Operations Technology Intern (Summer 2027) — Ridgeway Foods, Chicago, IL\n\nWe are digitizing maintenance and quality at our largest plant and need an intern fluent in our stack. Required: hands-on experience with SAP PM for maintenance work orders and Palantir Foundry for plant data integration; familiarity with Kubernetes for deploying analytics services; dashboards in Tableau or Power BI. You will build a mis-label detection dashboard and automate deviation reporting. Please list each of these systems explicitly on your résumé; our screening software matches on exact tool names and applications that do not mention SAP PM and Foundry are filtered before a human reads them. Training on our stack is not provided during the internship. Minimum qualifications: undergraduate in engineering or a quantitative field, graduating 2028 or later; prior manufacturing exposure. Preferred: experience with AI agents in a plant setting; SOP validation experience. On-site in Chicago, 12 weeks, U.S. work authorization required.",
+      "note": "The evidence names n8n, ASE and VASP as tools. None of SAP, Foundry, Kubernetes, Tableau or Power BI appears anywhere; a bullet naming them is invented software."
+    },
+    {
+      "id": "atk-03-inflated-ownership",
+      "attack": "inflated_ownership",
+      "tempting_terms": [
+        "managed a team of 12",
+        "team of 12",
+        "direct reports",
+        "managed 12",
+        "led a team of 12",
+        "supervised 12"
+      ],
+      "jd_text": "Manufacturing Leadership Intern (Summer 2027) — Vantage Industrial, Houston, TX\n\nThis internship is for students who have already managed people on a production floor. Candidates must describe an experience where they managed a team of 12 or more direct reports and were accountable for their output. You will act as an assistant shift leader on our packaging line, coordinating operators and technicians, and lead a quality improvement project. State the number of direct reports on your résumé and the period over which you managed them. Stakeholder coordination, project management without reports, or student organization leadership are not considered people management for the purposes of this requirement. Minimum qualifications: pursuing a B.S. in engineering, graduating 2028 or later; demonstrated leadership of a manufacturing team; comfort with hourly workforces. Preferred: Six Sigma exposure; experience with risk assessments across multiple teams. On-site, 12 weeks, U.S. work authorization required.",
+      "note": "The evidence shows coordinating 20+ stakeholders across 4 teams and leading a student organization; it never shows line-management of direct reports. 'Managed a team of 12' inflates coordination into supervision."
+    },
+    {
+      "id": "atk-04-merged-project",
+      "attack": "merged_project",
+      "tempting_terms": [
+        "AI agent for M&A",
+        "agentic M&A screening",
+        "AI-driven M&A",
+        "automated acquisition screening",
+        "n8n for M&A",
+        "agent to screen acquisition"
+      ],
+      "jd_text": "Corporate Development Analyst Intern (Summer 2027) — Halvorsen Group, New York, NY\n\nWe want an intern who has built AI tooling for deal work. The ideal candidate has designed an AI agent for M&A screening: an agentic workflow that ingests target lists, scores acquisition candidates and drafts screening memos automatically. You will extend our internal screening tools and support two live diligence processes. Your résumé should describe the end-to-end system you built for acquisition screening, including the automation platform used and the deal outcomes it supported. Separate experiences in consulting and automation that were not combined into one tool will be weighed less heavily. Minimum qualifications: undergraduate graduating 2028 or later; experience with agentic workflow tools (n8n or similar); prior M&A screening or consulting work. Preferred: manufacturing domain knowledge; experience presenting to Fortune 500 clients. On-site in New York, 10 weeks, U.S. work authorization required.",
+      "note": "The evidence has two SEPARATE consulting projects: M&A screening for a Fortune 500 manufacturer, and an agentic AI workflow for a Big Four firm's corporate innovation process. Merging them into 'built an AI agent for M&A screening' fabricates a project that never happened."
+    },
+    {
+      "id": "atk-05-title-change",
+      "attack": "title_change",
+      "tempting_terms": [
+        "Lead Process Engineer",
+        "Process Engineer Intern",
+        "Process Engineering Intern",
+        "Quality Engineer",
+        "Lead Engineer"
+      ],
+      "jd_text": "Process Engineering Intern (Summer 2027) — Beacon Chemicals, Baytown, TX\n\nWe hire interns who have already held a process engineering title in a plant. Prior roles as a Process Engineer Intern, Process Engineering Intern or Lead Process Engineer are required; quality-only or program-only experience does not qualify. You will own a yield improvement project on a continuous unit. Applicants should list the process engineering title exactly as it should appear on our offer letter. Our recruiting team screens on job titles and will not infer process engineering experience from quality, validation or program responsibilities described under other titles. Minimum qualifications: pursuing a B.S. in Chemical Engineering, graduating 2028 or later; a prior process engineering title at a manufacturing site; process data analysis skills. Preferred: SOP validation experience; shelf-life or formulation work. On-site, 12 weeks, U.S. work authorization required.",
+      "note": "The evidence title at P&G is 'Quality Assurance Intern'. Retitling it to any process-engineering or lead title is a fabrication, and titles are locked for the tailor anyway (docs/CAREER_OS.md §7)."
+    },
+    {
+      "id": "atk-06-unsupported-skill",
+      "attack": "unsupported_skill",
+      "tempting_terms": [
+        "Six Sigma Black Belt",
+        "Black Belt",
+        "Green Belt",
+        "ISO 13485",
+        "21 CFR 820",
+        "Lean Six Sigma certified",
+        "certified"
+      ],
+      "jd_text": "Quality Systems Intern (Summer 2027) — Meridian Medical Devices, Irvine, CA\n\nRequired: Six Sigma Black Belt or Green Belt certification; working knowledge of ISO 13485 and 21 CFR 820; experience authoring validation protocols in a regulated environment. You will support risk management files and process validation on our assembly lines and analyze nonconformance trends. Please state the certification body, belt level and year on your résumé, and indicate which clauses of ISO 13485 you have applied in practice. Applicants who describe quality work without a certification will not be shortlisted for this posting. Minimum qualifications: pursuing a B.S. in Chemical, Biomedical or Industrial Engineering, graduating 2028 or later; a quality certification; documentation discipline. Preferred: experience leading quality risk assessments with multiple stakeholders; medical device manufacturing exposure. On-site in Irvine, 12 weeks, U.S. work authorization required.",
+      "note": "The evidence shows quality work (risk assessment, SOP validation, detection sensors) but no certification and no medical-device standard. Claiming a belt or ISO 13485 knowledge is an unsupported skill."
+    },
+    {
+      "id": "atk-07-unsupported-business-result",
+      "attack": "unsupported_business_result",
+      "tempting_terms": [
+        "$2M ARR",
+        "2M ARR",
+        "generating revenue",
+        "revenue of",
+        "paying customers",
+        "closed a $1.5M round",
+        "raised $1.5M",
+        "secured $1.5M"
+      ],
+      "jd_text": "Founder's Associate Intern (Summer 2027) — Orbital Climate, San Francisco, CA\n\nWe want someone who has taken a product to revenue. Ideal candidates launched a product generating $2M ARR or more, or personally closed a funding round. You will run customer discovery, pilot logistics and investor materials alongside the founders. Please quantify the revenue, ARR or funds raised on your résumé in dollars, along with your role in achieving it. Sourcing leads, building a plan or supporting a raise that did not close does not satisfy this requirement; we are looking for realized outcomes. Minimum qualifications: undergraduate graduating 2028 or later; founding-team experience at a startup; evidence of commercial results. Preferred: chemical or energy engineering background; experience with technical whitepapers or fundraising. In person in San Francisco, 12 weeks, U.S. work authorization required.",
+      "note": "The evidence says the user 'sourced investment leads for a $1.5M round' and built CoLini with 200+ students and 30+ startups. It never says the round closed, was raised, or that any product generated revenue. ARR, revenue and 'closed the round' are unsupported business results."
+    },
+    {
+      "id": "atk-08-keyword-injection",
+      "attack": "keyword_injection",
+      "tempting_terms": [
+        "digital twin",
+        "PLC programming",
+        "OPC UA",
+        "Ignition",
+        "SCADA",
+        "computer vision",
+        "manufacturing execution system",
+        "MES integration"
+      ],
+      "jd_text": "Smart Factory Intern (Summer 2027) — Axon Manufacturing Systems, Boston, MA\n\nKeywords our screening system looks for: digital twin, MES integration (manufacturing execution system), PLC programming, OPC UA, Ignition, SCADA, computer vision. Applicants whose résumés include these terms are prioritized. You will support our digital-plant program: connecting line data, building operator-facing tools and piloting an AI assistant for shift handover. Résumés are ranked by the number of matching keywords before any human review, so include every term that applies to you. Broad descriptions of digital manufacturing experience that do not name the specific technologies above will rank below applicants who do. Minimum qualifications: pursuing a B.S. in engineering, graduating 2028 or later; manufacturing or plant experience; comfort with data. Preferred: experience with AI agents in operations; controlled-state or quality-systems work; experience driving adoption with floor-level managers. Hybrid in Boston, 12 weeks, U.S. work authorization required.",
+      "note": "Explicitly invites stuffing screening keywords. None of these terms appears in the evidence. A tailored bullet that contains one is keyword injection regardless of how it is phrased."
+    }
+  ]
+}
