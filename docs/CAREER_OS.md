@@ -1,6 +1,6 @@
 # Career OS — architecture note
 
-> Status: **built — founder action pending (migration 014 + seed)** · Extends Outreach OS into a job search + application package system.
+> Status: **built and live-verified against the founder's database (2026-08-28)** · Extends Outreach OS into a job search + application package system.
 > Companion docs: [ARCHITECTURE.md](ARCHITECTURE.md) · [AGENTS.md](AGENTS.md) ·
 > [AGENT_RUNTIME.md](AGENT_RUNTIME.md) · [DATA_MODEL.md](DATA_MODEL.md) · [EVALS.md](EVALS.md)
 

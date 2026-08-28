@@ -302,19 +302,10 @@ Architecture note: [docs/CAREER_OS.md](docs/CAREER_OS.md). ADR-030–037 in
 [docs/AGENTS.md](docs/AGENTS.md), each argued against the same test — three candidates were
 rejected for failing it.
 
-**Requires founder action, in this order:**
-
-1. Apply `supabase/migrations/013_network_and_reference.sql` (Phase 10) and
-   `supabase/migrations/014_career_os.sql` (Phase 11) in the Supabase SQL editor.
-   `npm run check:sql` has parsed both.
-2. `npm run index:network` once (Phase 10).
-3. `npm run career:seed -- --approve` once — reads `./Zuyu_Resume.docx`, stores it as the
-   master, seeds the Evidence Bank (experiences, bullets, facts, metrics, skills, preferences)
-   and the default Summer 2027 mission. ~$0.25 the first time, $0 after (cached).
-4. Then `/dashboard/jobs` → **Scout now**, or `npm run career:scout` for a deep run.
-
-Until 014 is applied every Career OS route answers `409 { migrationMissing: true }` and every
-Career OS script exits 2 naming the file. Nothing is spent before that check.
+**Founder actions done (2026-08-28):** migration 014 applied, `npm run career:seed -- --approve`
+run (Evidence Bank seeded, master résumé stored), one live scout and one live package verified
+end to end. To refresh: `npm run career:scout` (deep run, 1200 s default) or **Scout now** on
+`/dashboard/jobs`; `npm run career:verify` re-checks saved postings.
 
 **Offline checks:** `npm run test:career` (10 suites, no keys). **Evals:** `npm run eval:career`
 and the per-suite `eval:career-*` scripts — they cost money and cache by content.

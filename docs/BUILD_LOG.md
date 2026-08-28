@@ -38,10 +38,23 @@ npm run career:seed -- --approve
 npm run career:scout
 ```
 
-Nothing DB-backed could be exercised live in this session — migration 014 was not applied on
-the founder's project, and there is no direct Postgres connection here. Every route and store
-was column-checked against the migration by a reviewer and degrades with `409 migrationMissing`
-until it exists; every eval ran in no-database mode on the real master résumé.
+During the build, migration 014 was not yet applied, so every eval ran in no-database mode on
+the real master résumé and every store was column-checked by a reviewer. The founder then
+applied it, and the live verification below exercised the whole path against the real
+database.
+
+### Live verification (2026-08-28, after the founder applied migration 014)
+
+| Step | Result |
+|---|---|
+| `scripts/verify-career-schema.ts` | 23 tables, 2 extended tables, the `career-docs` bucket — all present |
+| `npm run career:seed -- --approve` | master stored in the bucket (23 KB), 11 experiences, 14 bullets (all with fact ids), 23 facts (all with `source_location`), 17 metrics, 7 skills, 34 preferences, the default mission; $0 (importer cached); **second run: 0 new, 11 reused** |
+| warm-path retrieval on the 897 real contacts | company matches + index + relationship history work; the alumni signal fired on 27/27 contacts (V1's "Shared:/Hooks:" lines are about the user) — fixed to identity fields and education sentences, now 0/27 |
+| `npm run career:scout` (1 strategy · 1 round · 10 companies) | 8 strategies planned, 36 seeds on the watchlist (5 already `opening_available`), 13 companies checked, 17 postings persisted `VERIFIED_OPEN` with sources and snapshots, run + agent traces with cost ($0.67, 328 s) — but the CLI defaulted to the web's 270 s deadline and stored the rows unextracted and unranked |
+| fixes from that run | CLI deadline 1200 s; extraction backfill inside the intelligence orchestrator; `parseDeadline` ("August 2026" had failed a timestamp column) |
+| intelligence on three jobs | Kairos ChemE/Materials **0.68 GOOD · QUALIFIED** (6 `do_not_claim`); Anduril Manufacturing 0.38 STRETCH; TRI world-models 0.03 NOT_QUALIFIED; research 12–13 claims each |
+| `npm run career:package -- --job <kairos>` | 4 reorder-only changes, all SUPPORTED, approved as safe (distance 0) → `Zuyu_Liu_Kairos_Power_Resume.{docx,pdf}` one page, Calibri only, QA clean (Word) → 312-word letter, 8 claims, grounded after one revision → `ready_for_review`, $0.50 |
+| last mile | approve letter → finalize → `READY_TO_APPLY` → `APPLIED`: `locked = true`, submitted paths copied, package `locked`, five events recorded; reviews of the locked package are refused. The verification application was then withdrawn back to `SAVED` (its v1 package stays locked, as designed). |
 
 ### What running it measured
 
@@ -103,8 +116,8 @@ $1.26. Re-runs of unchanged inputs are $0.
 
 ### Not done
 
-- Nothing DB-backed has been exercised live (migration 014 not applied); the first live
-  visit to `/dashboard/jobs` is the real test of the route shapes.
+- The pages themselves have not been clicked through in a browser; the stores and
+  orchestrators behind every route have now run live (see the verification table).
 - P@20 met in one of three post-fix runs (85% / 70% / 70%, pooled 75%); the pool, not the
   ranking, is the binding constraint on this date — the head of the list is right (P@10
   90–100%), the tail runs out of relevant rows.
