@@ -649,6 +649,48 @@ exactly the overfitting the campaign-reference design replaces.
 
 ---
 
+### Career OS — `014_career_os.sql` (Phase 11 — shipped, needs founder action)
+
+Twenty-three tables, three extended, one storage bucket. Column lists live in the migration;
+the shape and the reasons are in [CAREER_OS.md §4](CAREER_OS.md#4-data-model).
+
+```
+career_missions            objective · season · preferences (jsonb) · hard_constraints · fit_weights
+evidence_experiences       ─┬─ evidence_facts (statement · category · source · source_location · approved)
+                            ├─ evidence_metrics · evidence_deliverables · evidence_stories
+evidence_skills · evidence_preferences
+resume_documents           ─── resume_bullets (paragraph_index · text with **bold** · evidence_fact_ids · is_on_master · approved)
+companies (+ careers_url · ats_type · ats_identifier · watch_status · watch_priority · research_summary …)
+scouting_runs (+ kind · career_mission_id)
+job_opportunities          ─┬─ job_sources · job_snapshots
+                            ├─ job_fit_evaluations (components · weights_used · overall · feedback_adjustment · eligibility)
+                            ├─ job_evidence_maps · warm_paths · job_feedback
+applications               ─┬─ application_events
+                            └─ application_packages ─┬─ resume_patches ── resume_patch_changes
+                                                      └─ cover_letters
+storage.buckets 'career-docs' (private)
+```
+
+**Three decisions worth knowing when reading it.**
+
+- **`approved` on every evidence row.** The tailor loads `approvedOnly`; imported material is
+  invisible to it until a human approves. `resume_bullets` and `evidence_experiences` created
+  from the master résumé land approved because they *are* the résumé; agent-derived facts do not
+  (ADR-031).
+- **`applications.locked` and `application_packages.status = 'locked'`.** Set when the state
+  reaches `APPLIED`; the submitted document paths are copied onto the application; a later
+  "Generate Package" creates a new version and can never overwrite them. `saveDocument` refuses
+  to overwrite an existing object as a second line.
+- **`job_opportunities.is_canonical` + `duplicate_cluster_id`.** One visible row per real
+  posting; the other places it was seen are `job_sources` (ADR-035). Two partial unique
+  indexes — `(user_id, ats_type, ats_job_id)` and `(user_id, canonical_url)` — make re-scouting
+  an update rather than a duplicate.
+
+RLS follows the V1 pattern on every table; child tables (`job_sources`, `job_snapshots`,
+`application_events`, `resume_patch_changes`) are policed through their parent.
+
+---
+
 ## 4. Extended V1 tables
 
 ### `contacts` — becomes the person entity
@@ -797,6 +839,7 @@ numbering diverged from the plan. This is the real sequence on disk:
 | 011 | `011_agent_runs.sql` | 7 | ✅ | `scouting_runs`, `agent_runs`, `research_facts` |
 | 012 | `012_outreach.sql` | 9 | ✅ | `outreach`, `outreach_events` |
 | 013 | `013_network_and_reference.sql` | 10 | ⛔ **needs founder action** | `contact_index`, `search_contact_index()`, `network_matches`, `outreach_edits`, campaign reference columns, `scouting_runs.search_mode` / `internal_decision`, `outreach.campaign_id` / `prospect_source` / `draft_mode` |
+| 014 | `014_career_os.sql` | 11 | ⛔ **needs founder action** | Career OS: evidence bank, résumé documents/bullets, job opportunities + sources/snapshots/fit/evidence maps/warm paths/feedback, applications + packages + patches + cover letters, `companies` watchlist columns, `scouting_runs.kind`, storage bucket `career-docs` |
 
 **Migrations are applied by hand in the Supabase SQL editor**, as V1's 001–007 were. There is
 no migration runner in this project. Each file must therefore be idempotent

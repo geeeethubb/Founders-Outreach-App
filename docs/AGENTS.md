@@ -1,6 +1,6 @@
 # Agents — Outreach OS V2
 
-> Seven agents. Their responsibilities, tools, inputs, structured outputs, and boundaries.
+> Seven original agents, six added through Phase 10, twelve added by Career OS (Phase 11). Their responsibilities, tools, inputs, structured outputs, and boundaries.
 > Companion docs: [PIPELINE.md](PIPELINE.md) · [ARCHITECTURE.md](ARCHITECTURE.md) · [EVALS.md](EVALS.md)
 
 **These are runtime product agents — TypeScript modules under `lib/agents/`.**
@@ -467,6 +467,50 @@ work is a draft with nothing new to say.
 **One suggested follow-up per cold outreach**, enforced against `outreach.followup_count` in
 the route. The counter increments on a *no* as well as a *yes* — the cap is on how many times
 it is asked, or a no can be re-rolled into a yes.
+
+---
+
+## Career OS agents (Phase 11)
+
+Twelve more, each argued against the same test — *a judgment problem no existing agent owns* —
+and three candidates rejected for failing it (a Document QA agent, a separate Cover Letter
+Researcher, a deduplication/freshness agent: all three are measurable and belong in code). Full
+reasoning: [CAREER_OS.md §3](CAREER_OS.md#3-agents-added-each-against-the-agentsmd-test).
+
+| Agent | Module | Judgment it owns | Tier | Searches | Structural guarantee in `validate()` |
+|---|---|---|---|---|---|
+| **Resume Importer** | `resume-importer/` | which atomic facts, metrics and skills does this résumé *assert*, and under which experience? | standard | no | every numeric token in a fact must appear in the cited paragraph; skills must be quotable; misfiled paragraphs dropped and counted |
+| **Job Mission Planner** | `job-mission-planner/` | what roles could this person plausibly do, where are they posted, which companies are worth watching before they post? | standard | ≤3 | ≥3 strategies with ≥2 queries; non-operator seeds stripped; seed URLs verified against the evidence pool |
+| **Job Scout** | `job-scout/` (session) | is this search surface productive, and what next? — diagnosis + action per round, tools `lookup_ats_board` / `fetch_page` injected | standard | ≤4/round | a posting URL must be in the evidence pool or returned by a tool — exact, never origin-level |
+| **Job Extractor** | `job-extractor/` | what does this posting require, and is it a Summer 2027 internship? | cheap | no | exact enums; arrays capped; cached by text hash |
+| **Job Verifier** | `job-verifier/` | does this ambiguous page say the job is open? | cheap | no | `OPEN / CLOSED / UNCLEAR` only; never reached by ATS results or explicit closed banners |
+| **Company Researcher** | `company-researcher/` | what is genuinely interesting about this company for an intern, with evidence? Serves fit *and* the letter | standard | ≤5 | FACT URLs validated against retrieved pages; a point is `grounded` only when it cites a surviving FACT |
+| **Fit Evaluator** | `fit-evaluator/` | ten component scores + an eligibility verdict; never a total | standard | no | all ten dimensions exactly once; `NOT_QUALIFIED` reserved for hard requirements |
+| **Evidence Matcher** | `evidence-matcher/` | which 1–3 experiences, facts and metrics make this person interesting for THIS job — and what must not be claimed | standard | no | ids ⊂ the bank; `do_not_claim` required |
+| **Network Pathfinder** | `network-pathfinder/` | of a code-retrieved slate, who is a real warm path, how strong, what ask | cheap | no | contact ids ⊂ slate; relationship enum exact |
+| **Resume Tailor** | `resume-tailor/` | what, if anything, should change, at which edit level | standard | no | ids from the bullet's own experience; level matches type; one change per bullet; "nothing" is a valid answer |
+| **Resume Fact Verifier** | `resume-fact-verifier/` | is every atomic clause of this bullet supported? Independent of the tailor by construction | standard (premium only on schema failure) | no | overall recomputed from clauses, mismatch rejected; fact ids ⊂ provided |
+| **Cover Letter Writer** | `cover-letter-writer/` | say why this company, this person, and growth — briefly, with claims that resolve | standard (writing) | no | every company claim → a research fact id; word band; banned phrases rejected |
+
+**Measured on the Phase A probes** (standard tier, one live run each, cached after):
+
+| Agent | Cost | Notes |
+|---|---|---|
+| Resume Importer, whole master résumé | $0.26 | 36 facts, 21 metrics, 12 skills; 0 unverifiable, 6 paraphrased skill names dropped |
+| Job Mission Planner | $0.51 | 6 role families, 6 strategies, 28 seed companies (10 source-verified) |
+| Job Scout, one round | $0.24 | 9 postings, all first-party `job-boards.greenhouse.io` URLs, all Summer 2027 |
+| Job Extractor | $0.008 | Haiku |
+| Company Researcher | $2.49 | one truncation recovered by the loop's brevity retry; the expensive one — cached per company per month |
+| Fit Evaluator | $0.10 | eligibility reasoning correct on the graduation window |
+| Evidence Matcher | $0.06 | 7 `do_not_claim` entries on a process-engineering JD |
+| Network Pathfinder | $0.006 | |
+| Resume Tailor | $0.07 | emphasis-only changes on both a matched and an adversarial JD |
+| Resume Fact Verifier | ~$0.02 / change | |
+| Cover Letter Writer | $0.09 | 264 words, 8 claims, grounding clean first attempt |
+
+Everything around them stays deterministic: ATS calls, robots checks, dedupe, verification
+status, hard constraints, fit arithmetic, feedback adjustment, DOCX editing, PDF rendering, QA,
+filenames, storage and the application state machine.
 
 ---
 

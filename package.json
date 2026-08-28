@@ -43,7 +43,12 @@
     "probe:career-discovery": "tsx scripts/probe-career-discovery-agents.ts",
     "probe:career-intelligence": "tsx scripts/probe-career-intelligence.ts",
     "probe:career-tailor": "tsx scripts/probe-career-tailor.ts",
-    "eval:career-documents": "tsx scripts/career-eval-documents.ts"
+    "eval:career-documents": "tsx scripts/career-eval-documents.ts",
+    "career:scout": "tsx scripts/career-scout.ts",
+    "career:verify": "tsx scripts/career-verify.ts",
+    "career:package": "tsx scripts/career-package.ts",
+    "test:career-scout": "tsx scripts/test-career-scout.ts",
+    "test:career-package": "tsx scripts/test-career-package.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.116.0",

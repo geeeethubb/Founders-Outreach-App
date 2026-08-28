@@ -842,6 +842,135 @@ re-check at send catches that.
 
 ---
 
+### ADR-030 ★ — Career OS extends Outreach OS; it does not fork it
+
+**Problem.** A job-search system needs discovery, research, ranking, grounding, document
+generation and a tracker. Most of that machinery already existed for outreach, and building a
+second pipeline beside it would mean two agent runtimes, two trace tables, two caches and two
+grounding gates that drift apart.
+
+**Decision.** Career OS is a set of modules under `lib/career/` and new agents under
+`lib/agents/`, all running on the existing runtime: `runAgent` / `anthropicStructured`, model
+tiers, the disk cache, `agent_runs`, `research_facts`, `companies`, `contact_index`, and the
+claim-safety gate. `scouting_runs` gains a `kind` column so a job-scout or package run is traced
+exactly like an outreach run. Nothing is duplicated; the email layer is untouched.
+
+**Cost.** Some names now describe more than they used to (`scouting_runs` holds package runs).
+Accepted — one observability surface is worth a slightly generic table name.
+
+Full note: [CAREER_OS.md](CAREER_OS.md).
+
+---
+
+### ADR-031 ★ — The Personal Evidence Bank carries provenance and approval as columns
+
+**Problem.** Outreach OS still reads a hand-written fixture for the user's background. A résumé
+tailor that edits bullets needs a structured, auditable source of truth: *which facts exist, where
+each came from, and whether a human has vouched for it.*
+
+**Decision.** `evidence_experiences → evidence_facts` (+ metrics, deliverables, skills, stories),
+`resume_documents → resume_bullets`. Every fact carries `source` and `source_location`
+(`Zuyu_Resume.docx ¶6`); every bullet carries the fact ids it rests on; every row carries
+`approved`. The Resume Importer agent proposes; **a deterministic number check** drops any
+proposed fact whose numeric tokens do not appear in the cited paragraph before it is ever stored;
+the human approves. The tailor reads approved rows only.
+
+**Why columns and not convention.** The tailor's validator rejects a change whose fact ids do not
+belong to that bullet's experience. That is a lookup, not a prompt instruction — the same move as
+`fact_requires_source` (ADR-006).
+
+---
+
+### ADR-032 ★ — Résumé changes pass three independent gates, and uncertainty keeps the original
+
+**Problem.** The absolute requirement is that no generated bullet contains an unsupported claim,
+and that requirement outranks persuasive writing. A single "please be truthful" agent cannot
+guarantee it.
+
+**Decision.** Layered, none trusting the other:
+
+1. **Schema boundary** — `validateTailorOutput` drops any change that cannot cite approved fact
+   ids from its own experience, whose edit level does not match its type, or that names a bullet
+   already changed in the patch.
+2. **Deterministic pre-check** — `precheckChange` re-points `lib/outreach/grounding.ts` at the
+   experience's evidence pool: every number, acronym, tool name and superlative in the proposed
+   text must appear in the pool, and a token that appears in the job requirements but nowhere in
+   the pool is **keyword stuffing** and blocks. Ownership-inflating verb pairs warn.
+3. **Independent verifier** — the Resume Fact Verifier receives the original, the proposal and
+   the evidence, and structurally *cannot* receive the tailor's reasoning or the job description.
+   It judges atomic clauses; its overall verdict is recomputed in code from the clauses and a
+   mismatch is rejected.
+
+`UNCERTAIN`, `UNSUPPORTED` and a verifier error all keep the original text and surface why. A
+human may edit a rejected change, and the edit goes back through gates 2 and 3 before it can be
+approved. Measured on the adversarial probe: zero forbidden terms in any supported change.
+
+---
+
+### ADR-033 — The master DOCX is edited in place; nothing is reconstructed
+
+**Decision.** `lib/career/documents/docx.ts` opens the master résumé with JSZip, tokenizes the
+body into paragraphs with byte-identical gaps, and rewrites only the runs inside a bullet
+paragraph it changes. Paragraph properties, numbering, fonts and sizes are inherited from the
+paragraph itself; bold spans that survive an edit verbatim are re-bolded; inserted bullets clone a
+sibling's properties and get a fresh `paraId`. QA asserts that the set of fonts, font sizes and
+the section properties are unchanged — so "no tiny fonts, no unreasonable margins" is a check,
+not a hope. A two-page result is fixed by *shrinking content* (restore shorter originals, drop the
+lowest-confidence addition), never by touching layout.
+
+**PDF.** Word via COM when installed (this machine), LibreOffice when present, otherwise the
+DOCX ships alone and QA says so. A low-fidelity HTML-to-PDF fallback was rejected: a wrong-looking
+PDF is worse than an honest "PDF unavailable here".
+
+---
+
+### ADR-034 — Job freshness is a status with a timestamp, not a boolean
+
+**Decision.** `UNVERIFIED → VERIFIED_OPEN | LIKELY_OPEN | STALE | CLOSED | ERROR`, with
+`last_verified_at` and the method. A posting listed by an ATS API this run is `VERIFIED_OPEN`; a
+careers page that returns 200 with the title is `LIKELY_OPEN`; a 404 or explicit closed language
+is `CLOSED`; an unconfirmable job older than the staleness window becomes `STALE`. Only a page
+whose text is genuinely ambiguous reaches the cheap Job Verifier agent. Saved and tracked jobs are
+re-checked by `npm run career:verify` and the daily cron route, and a tracked job that closes
+before the user applied moves its application to `CLOSED` automatically — never one that was
+already submitted.
+
+---
+
+### ADR-035 — Deduplication prefers the first-party record; aggregators are leads
+
+**Decision.** Postings cluster on `(ats_type, ats_job_id)`, canonical URL, requisition id, or
+same company + normalized title + overlapping location, or same company + description shingle
+similarity ≥ 0.6. Exactly one row per cluster is canonical, preferring ATS > careers page >
+manual > web search > aggregator; the rest become `job_sources` of the canonical. An aggregator
+URL is followed to the first-party posting before storage; when that fails it is stored as an
+`UNVERIFIED` lead, never as a verified job.
+
+---
+
+### ADR-036 — Explicit feedback adjusts ranking through a bounded, logged modifier
+
+**Decision.** `LOVE / INTERESTED / MAYBE / NOT_INTERESTED` with reasons is stored per job. A pure
+function derives an adjustment in `[−0.25, +0.12]`: direct feedback on the same job dominates;
+otherwise an attribute (role family, industry, company, location tier) contributes only when at
+least two negatives cite a matching reason category. Hard constraints and weights are never
+altered by feedback, and every contribution is returned as a sentence. No model, no learning
+loop, no weight auto-tuning — at tens of samples that would be fitting noise (see the Phase 11
+reasoning in [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)).
+
+---
+
+### ADR-037 — The watchlist lives on `companies`
+
+**Decision.** "Target company", "watching for an opening" and "opening available" are values of
+`companies.watch_status`, with `careers_url`, `ats_type`, `ats_identifier` and
+`last_careers_check_at` beside them. Company-first discovery is then a deterministic loop over
+that table: detect the ATS once (cached for a week, negatives only when the scan really reached a
+page), list internships, raise the status. A user-set status is never downgraded by the planner
+or the scout.
+
+---
+
 ## 4. Providers
 
 ```ts
