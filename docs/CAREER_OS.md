@@ -1,6 +1,6 @@
 # Career OS — architecture note
 
-> Status: **building** · Extends Outreach OS into a job search + application package system.
+> Status: **built — founder action pending (migration 014 + seed)** · Extends Outreach OS into a job search + application package system.
 > Companion docs: [ARCHITECTURE.md](ARCHITECTURE.md) · [AGENTS.md](AGENTS.md) ·
 > [AGENT_RUNTIME.md](AGENT_RUNTIME.md) · [DATA_MODEL.md](DATA_MODEL.md) · [EVALS.md](EVALS.md)
 
@@ -301,6 +301,22 @@ more than it needed to.
 Every suite is a `tsx` script under `scripts/`, like the existing ones, and reports its own
 numbers. Deterministic parts run without credentials on fixtures; judged parts need
 `ANTHROPIC_API_KEY`.
+
+---
+
+### Measured (2026-08-27/28, no-database mode on the real master résumé)
+
+| Suite | Result |
+|---|---|
+| discovery | duplicates 0% · canonical URL 100% · stale-shown-open 0% · tier at HQ 100% · P@20 85% / 70% across two runs (pool-limited) |
+| fit | rank violations 0 · eligibility 95.8% · judge P@10 100% |
+| factuality | unsupported claims in output 0 · planted fabrications caught 16/16 |
+| minimal-edit | distance 0 on matched, mismatched and adversarial JDs |
+| cover-letter | grounded 6/6 · one page 6/6 · banned phrases 0 |
+| documents | 40/40 valid, one page, correctly named |
+
+Full tables and the fixes each failure produced: [EVALS.md §13](EVALS.md#13-phase-11--career-os-evals),
+[BUILD_LOG.md](BUILD_LOG.md).
 
 ---
 

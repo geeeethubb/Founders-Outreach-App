@@ -6,6 +6,116 @@ architecturally and why.
 
 ---
 
+## 2026-08-28 — Phase 11: Career OS
+
+**Type:** product extension · **Behavior change:** new surfaces only; the outreach loop and
+the email layer are untouched
+
+### What happened
+
+Outreach OS became a Career OS: Summer 2027 internship discovery, verification, fit,
+company research, evidence matching, warm paths, conservative résumé tailoring with an
+independent fact verifier, DOCX/PDF generation from the master template, cover letters, an
+application tracker with immutable submitted documents, feedback that adjusts ranking through a
+bounded modifier, and six eval suites. Architecture note: [CAREER_OS.md](CAREER_OS.md);
+ADR-030–037; twelve agents in [AGENTS.md](AGENTS.md).
+
+Built in three waves of parallel workstreams (7 → 2 → 4), each with an independent reviewer
+who re-ran the tests, checked every column name against migration 014, and fixed what they
+found before reporting. Reviewers caught, among others: a non-column in the evidence-map
+insert that would have failed every package on the real database; a document-overwrite on
+package retry; a 1000-uuid `IN` delete; untraced agent calls; a résumé change that could
+silently vanish when two changes named one bullet; a judge that was shown the expected class
+in the fixture ids; an eval that compared a document against itself.
+
+### Founder action
+
+```bash
+# 1. Supabase SQL editor: supabase/migrations/014_career_os.sql  (013 first if not applied)
+# 2. once:
+npm run career:seed -- --approve
+# 3. then /dashboard/jobs → Scout now, or a deeper run:
+npm run career:scout
+```
+
+Nothing DB-backed could be exercised live in this session — migration 014 was not applied on
+the founder's project, and there is no direct Postgres connection here. Every route and store
+was column-checked against the migration by a reviewer and degrades with `409 migrationMissing`
+until it exists; every eval ran in no-database mode on the real master résumé.
+
+### What running it measured
+
+Every number below is from `.career-out/eval/*/results.json` (gitignored — they carry
+résumé text), n-labelled, judged by blinded, independent judges, with targets that were never
+lowered. Full tables in [EVALS.md §13](EVALS.md#13-phase-11--career-os-evals).
+
+| Suite | Headline |
+|---|---|
+| Fit ranking (24 JDs) | 11/11 targets. Negatives above positives: **0** (13 before the gates). Eligibility 95.8%. Judge P@10 **100%**. The senior full-time decoy that shares the positives' vocabulary ranks 23/24. |
+| Discovery (22 boards + a live scout) | Duplicates **0%** (31.9% before the dedupe fix — every cluster was a false merge), canonical URL **100%**, stale-shown-open **0%**, tier at HQ **100%**. P@20 **65% → 85%** after widening the pool, **70%** on a concurrent second run: pooled 31/40 = 77.5% against 80%. The limit is the pool — 9 of 22 boards listed no internships on 2026-08-27 — not the ranking (P@10 100% / 80%; the BAD_FIT rows sit in the WEAK band at ranks 18–20). |
+| Résumé factuality (8 attacks) | Unsupported claims reaching output: **0** (n = 28 supported changes). Planted fabrications caught: **16/16** (pre-check 13, verifier 16; the invented-event and merged-project plants are verifier-only catches). On every attack the tailor chose reorders and emphasis only and explicitly refused Six Sigma / SAP PM / Palantir Foundry / Kubernetes / $10M / "managed a team of 12". |
+| Minimal edit | Matched role: distance **0**, 3 emphasis-only changes. Mismatched role: distance 0, reorder + emphasis; the approved alternate bullet was not used. Adversarial: distance 0. |
+| Cover letter (4 real companies + 2 fictional) | Grounded **6/6** (66.7% → 83.3% → 100% across three prompt/pool fixes), one page **6/6**, 278–298 words, banned phrases 0, foreign proper nouns in the fictional letters **0**. Judge means: truthfulness 0.87, professionalism 0.88, filler-absence 0.85, growth narrative 0.66, company specificity 0.49 (0.75–0.95 with research; 0.05 where research returned no claims). |
+| Documents | **40/40** valid DOCX + PDF, one page, correct filenames; 20 of 30 résumé variants exercised the shrink loop. Word: 1.4 s median per render. |
+
+Live pipeline on the real résumé (no-DB CLI, one strong fixture JD): extract → research →
+fit 0.49 MAYBE / QUALIFIED → evidence map with 5 `do_not_claim` → 2 emphasis-only changes,
+both SUPPORTED → `Zuyu_Liu_<Company>_Resume.{docx,pdf}` one page, QA ok → 377-word letter
+(the run that exposed the one-page overflow; the band is now 200–290 with a retry).
+$1.26, 334 s.
+
+### What the measurements changed — all deterministic, all with the target unchanged
+
+| Failure | Class | Fix |
+|---|---|---|
+| a Summer 2026 posting ranked 4th at 0.70 while `NOT_QUALIFIED` | ranking arithmetic | `fitGates`: NOT_QUALIFIED ×0.5; failed hard constraint ×0.6 capped at 0.30; role_fit < 0.35 scales proportionally — identical at evaluation, re-sum and in the eval |
+| 31.9% "duplicates" | dedupe | same board + different ATS id ⇒ distinct; different title seasons ⇒ distinct; body similarity needs title similarity ≥ 0.5 |
+| Newark / Woburn → tier 3; Budapest passed "United States" | normalization | metro suburb aliases + "Greater X area" hints; ~60 countries |
+| `(Spring 2027)` in the title, `summer_2027` from the template body | normalization | the title overrules the extractor for non-summer seasons |
+| P@20 65% with the ranking correct | source pool | internship-only listings 120 per board (was 40 after the filter), every extracted job ranked |
+| scout round "exceeded 7 steps" in 2 of 5 runs | agent budget | maxSteps 10; tool caps unchanged |
+| 377-word letter on two pages | docgen | band 200–290, one-page retry at 180–250, kept flagged never discarded |
+| letter named competitors from an INFERENCE | grounding pool | company pool = name + domain + grounded points + FACT claims; the posting's own text is a separate pool; the researcher summary is no longer rendered to the writer (prompt 1.0.2) |
+| writer rejected with no reason | schema | validator names the reason; one retry carries it |
+| `$1.5 million` read as a count of 5 | pre-check | decimal lookbehind |
+| a 4120 s job-first run against a 600 s deadline | runtime | Anthropic retries stop at a run deadline the orchestrator sets |
+
+### Bugs the tests caught
+
+- `job_evidence_maps` insert carried `no_gaps_reason`, a field with no column — every package
+  would have run tailoring against an empty evidence map on the real database.
+- `finishPackage` retried into the same storage prefix; `saveDocument` refuses overwrites, so
+  the retry path after a QA failure would have failed forever.
+- Two tailor changes naming one bullet: the later silently overwrote the earlier in
+  `finalBulletsFor`.
+- The fit judge was shown fixture ids that spell out the expected class, and the top-k in rank
+  order. Blinded and shuffled; P@10 held at 100%.
+- The document eval's `content_match` compared the produced DOCX against itself.
+- `persistProposal` re-inserted metrics and deliverables on every re-seed.
+- Concurrent eval runs overwrote one `results.json`; runs are now stamped per file.
+
+### Cost
+
+Phase A probes ≈ $5 · fit suite ≈ $7 (4 paid runs) · discovery ≈ $40 (5 runs; ~$17 of it a
+harness cache-key bug) · factuality + minimal-edit ≈ $9 · cover letter ≈ $9.4 · package CLI
+$1.26. Re-runs of unchanged inputs are $0.
+
+### Not done
+
+- Nothing DB-backed has been exercised live (migration 014 not applied); the first live
+  visit to `/dashboard/jobs` is the real test of the route shapes.
+- P@20 met in one of two post-fix runs; the pool, not the ranking, is the binding constraint on
+  this date. A third run was started detached at hand-off.
+- The faithfulness judge never saw a wording change: on every attack and minimal-edit JD the
+  tailor chose reorders and emphasis. Whether it under-uses Levels 3–4 needs a fixture that
+  *requires* a wording change.
+- `rank.ts` re-sum writes totals only, so gate labels in `red_flags` reflect the first persist.
+- Company Researcher can succeed with zero claims (Formlabs) — its validator should retry on an
+  empty claims array.
+- `lib/career/scout/orchestrator.ts` is 482 lines and `intelligence/orchestrator.ts` 433.
+
+---
+
 ## 2026-08-16 — Phase 10: The existing network, and a voice you supply
 
 **Type:** implementation + eval · **Behavior change:** additive; V1 and Phases 3–9 intact

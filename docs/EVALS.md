@@ -830,13 +830,58 @@ All deterministic, all with the target unchanged:
 | `Budapest, Hungary` passed the `United States` constraint | normalization: Hungary was not in the country list | ~60 countries + non-US city hints |
 | 25 live fit calls on an unchanged corpus | harness: cache key hashed random memory-bank ids | key on a content hash of the rendered evidence |
 
-### 13.4 Résumé factuality · minimal edit · cover letter · documents
+### 13.4 Résumé factuality — `eval:career-factuality` · 8 adversarial JDs on the real résumé
 
-Documents (`eval:career-documents`): 30 résumés (10 company names × short/medium/long) + 10 cover
-letters — valid DOCX **40/40**, valid PDF **40/40**, one page **40/40** (the master is already a
-full page, so 20 of 30 variants exercised the shrink loop), correct filenames **40/40**. Word
-render latency: median 1.4 s, first render in a fresh Word instance 8–110 s (paid once per
-process).
+| Metric | Target | Result | n |
+|---|---|---|---|
+| unsupported claims reaching output (tempting-term phrase match on SUPPORTED changes) | 0 | **0** | 28 |
+| unsupported claims reaching output (independent faithfulness judge) | 0 | **0** — n=0 judged: every supported change was a reorder or an emphasis-only reword | 0 |
+| planted fabrications caught by pre-check ∪ verifier | 100% | **100%** (pre-check 13, verifier 16) | 16 |
 
-The factuality, minimal-edit and cover-letter suites are recorded in
-[BUILD_LOG.md](BUILD_LOG.md) with the run that produced them.
+Plants: appended tools, replaced numbers, "Led a team of 12 to build", swapped titles, merged
+bullets across experiences, an invented funding event. The two verifier-only catches are the
+invented event and the merged project — structure the deterministic gate cannot see.
+
+### 13.5 Minimal edit — `eval:career-minimal-edit`
+
+| Case | Distance | Non-reorder changes | Levels |
+|---|---|---|---|
+| A · matched (process engineering) | **0** (≤ 0.08) | 3 (≤ 3), all emphasis-only | L2 ×3 |
+| B · mismatched (computational chemistry) | 0 (≤ 0.30), changedFraction 0 | 1 | L1, L2 |
+| C · adversarial | **0** (≤ 0.02) | 0 | L1 ×5 |
+
+The approved alternate bullet planted for case B was not used — the tailor is conservative to
+the point of never swapping on this résumé (see the gap in [BUILD_LOG.md](BUILD_LOG.md)).
+
+### 13.6 Cover letter — `eval:career-cover-letter` · 4 real companies with live postings + 2 fictional
+
+| Metric | Target | Result | n |
+|---|---|---|---|
+| deterministic grounding ok (after ≤ 1 retry) | 100% | **100%** (66.7% → 83.3% → 100% across three fixes) | 6 |
+| one page (Word render) | 100% | **100%**, 0 letters needed the one-page retry | 6 |
+| words 278–298 (band 200–290 + slack) · banned phrases | band · 0 | pass · **0** | 6 |
+| fictional companies: proper nouns beyond the company name | 0 | **0** | 2 |
+| judge means — truthfulness · professionalism · filler-absence · non-repetition · growth narrative · company specificity | report | 0.87 · 0.88 · 0.85 · 0.71 · 0.66 · 0.49 | 6 |
+
+Company specificity is 0.75–0.95 where research produced grounded facts, 0.05 where the
+researcher returned no claims (Formlabs), and 0.10–0.35 for the fictional companies by
+construction — the price of not inventing. Of four "suspect claims" the judge raised, one was
+provably wrong against the bank (it did not know CDI *is* the Argonne experience) and three were
+about the tone of the ask; none was a fabrication.
+
+### 13.7 Documents — `eval:career-documents`
+
+30 résumés (10 company names × short/medium/long) + 10 cover letters: valid DOCX **40/40**,
+valid PDF **40/40**, one page **40/40** (20 of 30 résumé variants exercised the shrink loop),
+correct filenames **40/40**. Word render latency median 1.4 s; first render in a fresh Word
+instance 8–110 s, paid once per process.
+
+### 13.8 Discovery P@20 follow-up
+
+Widening the pool (internship-only listings 120 per board instead of 40 after the filter; every
+extracted job ranked) took P@20 from 65% to **85%** (n=20, 8 GOOD_FIT · 9 STRETCH · 3 BAD_FIT,
+102 ranked, P@10 100%). A concurrent second run measured **70%** (6 BAD_FIT, P@10 80%): two PM
+roles the judge called STRETCH in one run and BAD_FIT in the other, plus WEAK-band hardware
+roles at ranks 18–20. Pooled, 31/40 = 77.5% against the 80% target. The pool on 2026-08-27 is
+the binding constraint; the ranking's head is right in both runs.
+

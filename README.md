@@ -99,7 +99,7 @@ Companies  /dashboard/companies     the watchlist: target · watching · opening
 Applications /dashboard/applications the tracker, locked documents after you apply
 ```
 
-Read [docs/CAREER_OS.md](docs/CAREER_OS.md).
+Read [docs/CAREER_OS.md](docs/CAREER_OS.md). Measured: 0 unsupported résumé claims across 8 adversarial job descriptions, 16/16 planted fabrications caught, 0% duplicates, 100% canonical links, 40/40 one-page documents — [docs/EVALS.md §13](docs/EVALS.md#13-phase-11--career-os-evals).
 
 ## Documentation
 
