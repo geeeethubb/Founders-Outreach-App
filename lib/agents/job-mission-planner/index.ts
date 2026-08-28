@@ -292,7 +292,11 @@ export async function runJobMissionPlanner(
     webSearch: true,
     maxWebSearches: 3,
     maxSteps: 6,
-    maxTokens: 8000,
+    // 12000, not 8000. A plan with 6-8 strategies and 15-40 seed companies is
+    // a long tool call; at 8000 the eval saw it truncate, fail validation on
+    // the shortened retry, and take job-first discovery down with it ($4.71 for
+    // no postings). The loop's truncation branch is the backstop, not the plan.
+    maxTokens: 12000,
     onStep: opts.onStep,
     // Hashed rather than inlined: the evidence summary is several KB of
     // personal data, and the key only needs identity, not content.

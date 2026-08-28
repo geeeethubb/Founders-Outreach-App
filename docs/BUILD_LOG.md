@@ -79,6 +79,7 @@ $1.26, 334 s.
 | writer rejected with no reason | schema | validator names the reason; one retry carries it |
 | `$1.5 million` read as a count of 5 | pre-check | decimal lookbehind |
 | a 4120 s job-first run against a 600 s deadline | runtime | Anthropic retries stop at a run deadline the orchestrator sets |
+| the planner's plan truncated, failed validation, and job-first found nothing ($4.71) | schema / degradation | planner output budget 8000 → 12000; a failed planner degrades to two deterministic fallback strategies (labelled in the run's errors) instead of "company-first only" |
 
 ### Bugs the tests caught
 
@@ -104,8 +105,9 @@ $1.26. Re-runs of unchanged inputs are $0.
 
 - Nothing DB-backed has been exercised live (migration 014 not applied); the first live
   visit to `/dashboard/jobs` is the real test of the route shapes.
-- P@20 met in one of two post-fix runs; the pool, not the ranking, is the binding constraint on
-  this date. A third run was started detached at hand-off.
+- P@20 met in one of three post-fix runs (85% / 70% / 70%, pooled 75%); the pool, not the
+  ranking, is the binding constraint on this date — the head of the list is right (P@10
+  90–100%), the tail runs out of relevant rows.
 - The faithfulness judge never saw a wording change: on every attack and minimal-edit JD the
   tailor chose reorders and emphasis. Whether it under-uses Levels 3–4 needs a fixture that
   *requires* a wording change.

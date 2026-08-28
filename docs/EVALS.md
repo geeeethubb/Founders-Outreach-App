@@ -880,8 +880,14 @@ instance 8–110 s, paid once per process.
 
 Widening the pool (internship-only listings 120 per board instead of 40 after the filter; every
 extracted job ranked) took P@20 from 65% to **85%** (n=20, 8 GOOD_FIT · 9 STRETCH · 3 BAD_FIT,
-102 ranked, P@10 100%). A concurrent second run measured **70%** (6 BAD_FIT, P@10 80%): two PM
-roles the judge called STRETCH in one run and BAD_FIT in the other, plus WEAK-band hardware
-roles at ranks 18–20. Pooled, 31/40 = 77.5% against the 80% target. The pool on 2026-08-27 is
-the binding constraint; the ranking's head is right in both runs.
+102 ranked, P@10 100%). Two further runs measured **70%** each (n=20; P@10 80% and 90%). Pooled
+over the three post-fix runs: 45/60 = **75%** against the 80% target — not reliably met.
 
+What the misses are: PM roles the judge calls STRETCH in one run and BAD_FIT in the next; and
+WEAK-band software/hardware roles at ranks 14–20 that reach the top 20 only because 88 of ~95
+jobs are WEAK — the pool on 2026-08-27/28 holds roughly 13–17 openings the judge considers
+relevant, so the ranking's head is right (P@10 90–100%) and its tail runs out of good rows. The
+third run also found nothing on the job-first surface: the Mission Planner's output failed
+schema validation and the orchestrator fell back to boards only. That is now fixed twice — the
+planner's output budget was raised (its plan was truncating), and a failed planner degrades to
+two deterministic fallback strategies instead of no job-first at all.

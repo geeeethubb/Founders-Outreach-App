@@ -196,6 +196,45 @@ export function scoutToolContext(userId: string, runId: string | null, budget: C
   return { user_id: userId, run_id: runId, budget: { maxCompanies: 0, maxPeoplePerCompany: 0, maxApolloCalls: 0, maxWebSearches: budget.maxWebSearches, maxAgentSteps: budget.maxAgentSteps } }
 }
 
+/**
+ * Strategies built from the mission alone, used only when the planner fails.
+ * Two surfaces: the keyless ATS boards (where a first-party posting is one hop
+ * away) and the mission's own company types. No role inference — that is the
+ * planner's judgment, and this is the deterministic floor beneath it.
+ */
+export function fallbackStrategies(mission: Pick<CareerMission, 'preferences' | 'season'>): SearchStrategy[] {
+  const season = mission.season === 'summer_2027' ? 'Summer 2027' : mission.season.replace(/_/g, ' ')
+  const tier1 = mission.preferences.geo_tiers.find((t) => t.tier === 1)?.locations ?? []
+  const geo = tier1.length ? tier1 : ['United States']
+  const types = mission.preferences.company_types.slice(0, 3)
+  const boards: SearchStrategy = {
+    name: 'fallback · public ATS boards',
+    kind: 'job_first',
+    rationale: 'deterministic fallback — the mission planner failed',
+    queries: [
+      `"${season}" internship site:job-boards.greenhouse.io`,
+      `"${season}" intern site:jobs.lever.co`,
+      `"${season}" internship site:jobs.ashbyhq.com`,
+      `"${season}" engineering intern ${geo[0]}`,
+    ],
+    target_titles: ['Process Engineering Intern', 'Manufacturing Engineering Intern', 'Engineering Intern', 'Strategy Intern'],
+    geo_focus: geo,
+    priority: 0.5,
+  }
+  const byType: SearchStrategy = {
+    name: 'fallback · mission company types',
+    kind: 'job_first',
+    rationale: 'deterministic fallback — the mission planner failed',
+    queries: types.length
+      ? types.map((t) => `${t} "${season}" internship ${geo[0]}`)
+      : [`"${season}" internship ${geo[0]}`, `"${season}" intern ${geo[geo.length - 1]}`],
+    target_titles: ['Intern'],
+    geo_focus: geo,
+    priority: 0.4,
+  }
+  return [boards, byType]
+}
+
 function toWatched(row: Record<string, unknown>): WatchedCompany {
   return {
     id: String(row.id), name: String(row.name), domain: (row.domain as string | null) ?? null, careers_url: (row.careers_url as string | null) ?? null,
@@ -304,9 +343,15 @@ export async function runJobScout(params: JobScoutParams, deps: JobScoutDeps = {
   // (e) Job-first: one scout session per strategy, budgets shared.
   const fetchBudget: FetchBudget = { left: budget.maxPageFetches }
   const companiesToCheck: CompanyToCheck[] = []
-  if (plan && !pastDeadline('job-first')) {
+  // A failed planner must not take job-first discovery down with it. The eval
+  // saw exactly that: one schema-invalid plan, and a $4.71 run found nothing.
+  // Without a plan the strategies are built deterministically from the mission —
+  // fewer and blunter than a planned set, and labelled as such in the errors.
+  const strategySource: SearchStrategy[] = plan ? plan.strategies : fallbackStrategies(mission)
+  if (!plan && strategySource.length) errors.push(`job-first ran on ${strategySource.length} deterministic fallback strategies (planner failed)`)
+  if (strategySource.length && !pastDeadline('job-first')) {
     const maxStrategies = params.maxStrategies ?? 3
-    const strategies: SearchStrategy[] = [...plan.strategies].sort((a, b) => b.priority - a.priority).slice(0, maxStrategies)
+    const strategies: SearchStrategy[] = [...strategySource].sort((a, b) => b.priority - a.priority).slice(0, maxStrategies)
     const existing = await store.listJobs(params.userId, { canonicalOnly: false, limit: 500, sort: 'recent' })
     if (existing.migrationMissing) return finish(run, 'failed', 'migration 014_career_os.sql has not been applied', true)
     const alreadyFound = new Set<string>()

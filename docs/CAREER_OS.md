@@ -308,7 +308,7 @@ numbers. Deterministic parts run without credentials on fixtures; judged parts n
 
 | Suite | Result |
 |---|---|
-| discovery | duplicates 0% · canonical URL 100% · stale-shown-open 0% · tier at HQ 100% · P@20 85% / 70% across two runs (pool-limited) |
+| discovery | duplicates 0% · canonical URL 100% · stale-shown-open 0% · tier at HQ 100% · P@20 85% / 70% / 70% across three runs, pooled 75% (pool-limited; P@10 90–100%) |
 | fit | rank violations 0 · eligibility 95.8% · judge P@10 100% |
 | factuality | unsupported claims in output 0 · planted fabrications caught 16/16 |
 | minimal-edit | distance 0 on matched, mismatched and adversarial JDs |

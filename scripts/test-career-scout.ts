@@ -16,11 +16,11 @@ import type { JobExtraction } from '../lib/agents/job-extractor'
 import type { JobVerification } from '../lib/agents/job-verifier'
 import { createSourceRegistry } from '../lib/career/sources/registry'
 import type { FetchedPage, JobSourceAdapter, PageFetcher, RawJobPosting } from '../lib/career/sources/types'
-import { defaultMission } from '../lib/career/missions/store'
+import { DEFAULT_MISSION_PREFERENCES, defaultMission } from '../lib/career/missions/store'
 import { emptyBank } from '../lib/career/evidence/store'
 import type { CareerRun } from '../lib/career/runs'
 import type { NormalizedJob } from '../lib/career/jobs/normalize'
-import { runJobScout, selectJobsToRank, type JobScoutDeps, type ScoutStore } from '../lib/career/scout/orchestrator'
+import { fallbackStrategies, runJobScout, selectJobsToRank, type JobScoutDeps, type ScoutStore } from '../lib/career/scout/orchestrator'
 import { resolveScoutedPosting } from '../lib/career/scout/resolve'
 import { emptyStats, summarizeStats } from '../lib/career/scout/stats'
 import { constraintRejections, extractAndNormalize, orderForExtraction } from '../lib/career/scout/extract'
@@ -278,6 +278,23 @@ async function main() {
     const { store, mem, rank } = memStore({ watchlist: [{ id: 'c-acme', name: 'Acme', domain: 'acme.com', careers_url: null, ats_type: 'greenhouse', ats_identifier: 'acme', watch_status: 'target', watch_priority: 90 }] })
     const r = await runJobScout({ userId: USER, maxStrategies: 1, rank: false }, { store, rank, registry, fetcher, extractor, verifier, planner: async () => agentResult(PLAN, 'job_mission_planner'), session: async () => sessionResult(SCOUTED) })
     check('rank: false never calls the batch', mem.ranked.length === 0 && r.stats.jobs_ranked === 0 && r.costUsd === 0.05)
+  }
+
+  // A failed planner must not remove job-first discovery. The eval saw one
+  // schema-invalid plan turn a $4.71 run into "company-first only".
+  console.log('orchestrator: planner failed')
+  {
+    const { store, rank, registry: reg, fetcher: f } = { ...memStore({ watchlist: [] }), registry, fetcher }
+    const seen: string[] = []
+    const r = await runJobScout({ userId: USER, maxStrategies: 2, rank: false }, {
+      store, rank, registry: reg, fetcher: f, extractor, verifier,
+      planner: async () => agentResult<JobMissionPlan>(null, 'job_mission_planner', 'submitted output failed schema validation'),
+      session: async (p) => { seen.push(p.strategy.name); return sessionResult(SCOUTED) },
+    })
+    check('planner failure is surfaced', r.errors.some((e) => /planner/.test(e)) && r.plan === null)
+    check('job-first still runs on the fallback strategies', seen.length === 2 && seen.every((n) => n.startsWith('fallback')))
+    check('the fallback is labelled in errors', r.errors.some((e) => /deterministic fallback strategies/.test(e)))
+    check('fallback strategies carry the season and a tier-1 city', fallbackStrategies({ season: 'summer_2027', preferences: DEFAULT_MISSION_PREFERENCES }).every((s) => s.queries.some((q) => q.includes('Summer 2027')) && s.geo_focus[0] === 'San Francisco / Bay Area'))
   }
 
   // ─── C. Migration missing ─────────────────────────────────────────────────
