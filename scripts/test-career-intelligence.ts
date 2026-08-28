@@ -16,6 +16,7 @@ import { DEFAULT_FIT_WEIGHTS } from '../lib/career/fit/dimensions'
 import { computeFeedbackAdjustment, renderFeedbackHints, type FeedbackRow } from '../lib/career/fit/feedback'
 import { groundedPoints, renderCompanyResearchForPrompt, researchClaimsToFactRows } from '../lib/career/research/company'
 import { FIT_DIMENSIONS } from '../lib/career/types'
+import { mentionsAlumni } from '../lib/career/network/candidates'
 
 let passed = 0
 let failed = 0
@@ -301,6 +302,23 @@ const close = (a: number, b: number, tol = 0.0011) => Math.abs(a - b) < tol
 }
 
 // ─── Report ──────────────────────────────────────────────────────────────────
+
+// ─── warm paths: the alumni signal is about THEM, not the user ─────────────
+// On the real database the first version flagged 27 of 27 contacts at one
+// company, because V1 research lines describe the user's own UIUC ties.
+{
+  const row = (body: string, extra: { headline?: string; tags?: string[]; tags_text?: string } = {}) => ({
+    headline: extra.headline ?? 'Jane Doe · Plant Manager · Acme', tags_text: extra.tags_text ?? '', tags: extra.tags ?? [], body_text: body,
+  })
+  check('alumni: identity tag counts', mentionsAlumni(row('nothing here', { tags: ['uiuc alum'] })))
+  check('alumni: headline counts', mentionsAlumni(row('nothing here', { headline: 'Jane Doe · Director · University of Illinois' })))
+  check('alumni: "Shared:" line about the user does not count', !mentionsAlumni(row('Shared: both connected to UIUC through Founders')))
+  check('alumni: "Hooks:" line does not count', !mentionsAlumni(row('Hooks: ran a UIUC recruiting event; loves AI')))
+  check('alumni: "Suggested ask:" line does not count', !mentionsAlumni(row('Suggested ask: invite to speak at UIUC')))
+  check('alumni: an education sentence about them counts', mentionsAlumni(row('Jane graduated from the University of Illinois with a BS in chemical engineering before joining Acme.')))
+  check('alumni: "UIUC alum" in a fact counts', mentionsAlumni(row('UIUC alum; leads the Houston plant.')))
+  check('alumni: a partnership mention does not count', !mentionsAlumni(row('Acme partners with UIUC on a research consortium.')))
+}
 
 process.stdout.write(`\n${passed} passed, ${failed} failed\n`)
 if (failures.length) {

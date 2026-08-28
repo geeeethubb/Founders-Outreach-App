@@ -95,10 +95,30 @@ function domainRoot(domain: string | null): string | null {
   return root && root.length >= 3 ? root : null
 }
 
-function mentionsAlumni(row: IndexRow | null): boolean {
+/**
+ * Alumni is a fact about THEM, and the index body is full of sentences about
+ * the USER: V1 research writes "Hooks: … UIUC …", "Shared: both connected to
+ * UIUC", "Suggested ask: … Founders at UIUC …" for nearly every contact. On the
+ * real database the first version of this check flagged 27 of 27 Fervo
+ * contacts as alumni. So: identity fields (headline, tags) count as-is, and a
+ * body line counts only when it reads like an education statement about the
+ * person and is not one of the user-side research lines.
+ */
+const USER_SIDE_LINE = /^(hooks|shared|suggested ask|company):/i
+const EDUCATION_NEAR_SCHOOL = new RegExp(
+  `(alum|alumn|graduat|studied|attended|degree|b\\.?s\\.?|m\\.?s\\.?|mba|ph\\.?d)[^.\\n]{0,80}(${ALUMNI_PATTERNS.join('|')})|(${ALUMNI_PATTERNS.join('|')})[^.\\n]{0,80}(alum|alumn|graduat|studied|attended|degree)`,
+  'i'
+)
+
+export function mentionsAlumni(row: Pick<IndexRow, 'headline' | 'tags_text' | 'tags' | 'body_text'> | null): boolean {
   if (!row) return false
-  const text = `${row.tags_text ?? ''} ${row.body_text ?? ''} ${(row.tags ?? []).join(' ')}`
-  return ALUMNI_PATTERNS.some((p) => text.toLowerCase().includes(p.toLowerCase()))
+  const identity = `${row.headline ?? ''} ${row.tags_text ?? ''} ${(row.tags ?? []).join(' ')}`.toLowerCase()
+  if (ALUMNI_PATTERNS.some((p) => identity.includes(p.toLowerCase()))) return true
+  for (const line of (row.body_text ?? '').split('\n')) {
+    if (USER_SIDE_LINE.test(line.trim())) continue
+    if (EDUCATION_NEAR_SCHOOL.test(line)) return true
+  }
+  return false
 }
 
 export async function findWarmPathCandidates(userId: string, q: WarmPathQuery): Promise<WarmPathCandidates> {
