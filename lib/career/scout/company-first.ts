@@ -15,6 +15,7 @@ import { detectAtsForCompany } from '../sources/detect'
 import { getPageFetcher } from '../sources/fetch'
 import { getSourceRegistry } from '../sources/registry'
 import type { AtsBoardRef, PageFetcher, RawJobPosting, SourceRegistry } from '../sources/types'
+import { INTERNSHIP_LOOKUP_LIMIT, LOOKUP_POSTING_LIMIT } from './tools'
 
 const ADAPTED: AtsType[] = ['greenhouse', 'lever', 'ashby', 'smartrecruiters', 'workable']
 
@@ -110,7 +111,8 @@ export async function checkCompanyForOpenings(
     return { ...base, postings: [], board, method, note, error: null }
   }
 
-  const listing = await adapter.listPostings(board, { internshipsOnly, limit: 40 })
+  // The cap runs after the internship filter; the same depth the scout's lookup tool uses, for the same reason (tools.ts).
+  const listing = await adapter.listPostings(board, { internshipsOnly, limit: internshipsOnly ? INTERNSHIP_LOOKUP_LIMIT : LOOKUP_POSTING_LIMIT })
   if (listing.error) {
     // A failed listing says nothing about openings; do not demote, do not record a count.
     note = `listing failed: ${listing.error}`

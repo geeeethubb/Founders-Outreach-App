@@ -37,7 +37,7 @@ export const BAY_AREA_CITIES = [
   'emeryville', 'hayward', 'milpitas', 'burlingame', 'san carlos', 'alameda', 'walnut creek', 'pleasanton', 'los altos',
 ]
 const BAY_AREA_ALIASES = ['sf bay area', 'bay area', 'san francisco bay area', 'silicon valley', 'sf', 'san francisco']
-const NYC_ALIASES = ['new york city', 'new york', 'nyc', 'manhattan', 'brooklyn', 'jersey city', 'long island city', 'queens', 'ny']
+const NYC_ALIASES = ['new york city', 'new york', 'nyc', 'manhattan', 'brooklyn', 'jersey city', 'long island city', 'queens', 'ny', 'newark', 'hoboken', 'bronx', 'staten island', 'secaucus', 'stamford', 'white plains', 'yonkers']
 
 /** Metro alias table: the metro name the mission writes → cities that count as it. */
 export const METRO_ALIASES: Record<string, string[]> = {
@@ -45,10 +45,13 @@ export const METRO_ALIASES: Record<string, string[]> = {
   'bay area': [...BAY_AREA_ALIASES, ...BAY_AREA_CITIES],
   'new york': NYC_ALIASES,
   'new york city': NYC_ALIASES,
-  boston: ['boston', 'cambridge', 'somerville', 'waltham', 'burlington', 'watertown'],
-  seattle: ['seattle', 'bellevue', 'redmond', 'kirkland'],
-  'los angeles': ['los angeles', 'la', 'santa monica', 'pasadena', 'el segundo', 'culver city', 'irvine', 'playa vista', 'torrance', 'hawthorne', 'long beach'],
-  'washington dc': ['washington', 'washington dc', 'washington, dc', 'dc', 'arlington', 'bethesda', 'reston', 'mclean', 'alexandria', 'tysons'],
+  // Suburbs are where the plants and labs are: an industrial posting says
+  // "Woburn, MA" or "Newark, NJ", never "Boston" or "New York". A metro that
+  // only knows its downtown sends those to tier 3 and mis-ranks the job.
+  boston: ['boston', 'cambridge', 'somerville', 'waltham', 'burlington', 'watertown', 'woburn', 'bedford', 'lexington', 'billerica', 'devens', 'newton', 'framingham', 'marlborough', 'andover', 'wilmington', 'quincy', 'medford', 'natick', 'needham', 'norwood', 'peabody'],
+  seattle: ['seattle', 'bellevue', 'redmond', 'kirkland', 'bothell', 'everett', 'renton', 'kent', 'tukwila', 'issaquah'],
+  'los angeles': ['los angeles', 'la', 'santa monica', 'pasadena', 'el segundo', 'culver city', 'irvine', 'playa vista', 'torrance', 'hawthorne', 'long beach', 'vernon', 'burbank', 'glendale', 'gardena', 'carson', 'compton', 'inglewood', 'san pedro', 'redondo beach', 'manhattan beach', 'commerce', 'city of industry', 'anaheim', 'costa mesa', 'fullerton'],
+  'washington dc': ['washington', 'washington dc', 'washington, dc', 'dc', 'arlington', 'bethesda', 'reston', 'mclean', 'alexandria', 'tysons', 'herndon', 'chantilly', 'springfield', 'silver spring', 'rockville', 'gaithersburg', 'fairfax', 'vienna'],
   chicago: ['chicago', 'evanston'],
   austin: ['austin'],
   denver: ['denver', 'boulder'],
@@ -74,9 +77,19 @@ const COUNTRY_ALIASES: Record<string, string> = {
   canada: 'CA_COUNTRY', 'united kingdom': 'GB', uk: 'GB', england: 'GB', germany: 'DE', france: 'FR', india: 'IN',
   australia: 'AU', singapore: 'SG', japan: 'JP', china: 'CN', ireland: 'IE', netherlands: 'NL', spain: 'ES', italy: 'IT',
   israel: 'IL', mexico: 'MX', brazil: 'BR', switzerland: 'CH', sweden: 'SE', poland: 'PL',
+  // "Budapest, Hungary" reached a Summer 2027 US-only ranking (discovery eval
+  // run 4) because Hungary was not here: an unrecognized country parses as
+  // null, and the "United States" constraint deliberately lets unknown
+  // through. The list has to be wide enough that "unknown" means unstated.
+  hungary: 'HU', austria: 'AT', belgium: 'BE', denmark: 'DK', norway: 'NO', finland: 'FI', portugal: 'PT', 'czech republic': 'CZ', czechia: 'CZ',
+  romania: 'RO', greece: 'GR', turkey: 'TR', türkiye: 'TR', ukraine: 'UA', scotland: 'GB', wales: 'GB', 'northern ireland': 'GB', 'great britain': 'GB',
+  'south korea': 'KR', korea: 'KR', taiwan: 'TW', 'hong kong': 'HK', vietnam: 'VN', thailand: 'TH', malaysia: 'MY', indonesia: 'ID', philippines: 'PH',
+  'new zealand': 'NZ', 'south africa': 'ZA', nigeria: 'NG', kenya: 'KE', egypt: 'EG', 'united arab emirates': 'AE', uae: 'AE', 'saudi arabia': 'SA', qatar: 'QA',
+  argentina: 'AR', chile: 'CL', colombia: 'CO', peru: 'PE', 'costa rica': 'CR', luxembourg: 'LU', estonia: 'EE', latvia: 'LV', lithuania: 'LT',
+  slovakia: 'SK', slovenia: 'SI', croatia: 'HR', serbia: 'RS', bulgaria: 'BG', pakistan: 'PK', bangladesh: 'BD', 'sri lanka': 'LK', rwanda: 'RW', ghana: 'GH',
 }
 
-const NON_US_CITY_HINTS = ['london', 'paris', 'berlin', 'toronto', 'vancouver', 'montreal', 'dublin', 'amsterdam', 'bangalore', 'bengaluru', 'tokyo', 'sydney', 'singapore', 'tel aviv', 'munich', 'zurich', 'stockholm', 'madrid', 'barcelona', 'hyderabad', 'mumbai', 'shanghai', 'beijing', 'warsaw', 'montreuil', 'lisbon']
+const NON_US_CITY_HINTS = ['london', 'paris', 'berlin', 'toronto', 'vancouver', 'montreal', 'dublin', 'amsterdam', 'bangalore', 'bengaluru', 'tokyo', 'sydney', 'singapore', 'tel aviv', 'munich', 'zurich', 'stockholm', 'madrid', 'barcelona', 'hyderabad', 'mumbai', 'shanghai', 'beijing', 'warsaw', 'montreuil', 'lisbon', 'budapest', 'prague', 'vienna', 'copenhagen', 'oslo', 'helsinki', 'melbourne', 'seoul', 'taipei', 'hong kong', 'kigali', 'accra', 'lagos', 'nairobi', 'mexico city', 'são paulo', 'sao paulo', 'buenos aires', 'ottawa', 'calgary', 'waterloo', 'cambridge, uk', 'manchester', 'edinburgh', 'oxford', 'pune', 'chennai', 'delhi', 'new delhi', 'gurgaon', 'gurugram', 'noida']
 
 function clean(s: string): string {
   return s.replace(/\s+/g, ' ').replace(/[()[\]]/g, ' ').replace(/\s+/g, ' ').trim()
@@ -220,6 +233,15 @@ function aliasesFor(missionLocation: string): string[] {
   return [...out]
 }
 
+/** "Newark, NJ (Greater New York City area)" names its metro in the parenthetical; keep that name as a candidate. */
+export function metroHints(raw: string): string[] {
+  const out: string[] = []
+  const re = /\b(?:greater\s+)?([a-z][a-z .]*?)\s+(?:metro(?:politan)?\s+)?(?:area|region)\b/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(raw.toLowerCase()))) out.push(m[1].replace(/^(?:the|in|near)\s+/, '').trim())
+  return out
+}
+
 function placeMatches(parsed: ParsedLocation, aliases: string[]): boolean {
   const candidates = new Set<string>()
   if (parsed.city) candidates.add(parsed.city.toLowerCase())
@@ -227,6 +249,7 @@ function placeMatches(parsed: ParsedLocation, aliases: string[]): boolean {
     const p = parseSingle(site)
     if (p.city) candidates.add(p.city.toLowerCase())
     candidates.add(site.toLowerCase())
+    for (const h of metroHints(site)) candidates.add(h)
   }
   for (const c of candidates) {
     if (aliases.includes(c)) return true

@@ -27,7 +27,7 @@ import type { AgentResult, ToolContext } from '@/lib/agents/runtime/types'
 import { buildExperiencePool } from '../evidence/render'
 import { bulletsForExperience } from '../evidence/store'
 import { patchDistance, type PatchDistance } from './distance'
-import { isEmphasisOnly, precheckChange, summarizeFindings, type Finding } from './precheck'
+import { isEmphasisOnly, isWordingUnchanged, precheckChange, summarizeFindings, type Finding } from './precheck'
 import { buildTailorInput, buildVerifierInput, jobTermsFor, type EvidenceMapForTailor } from './render'
 import type { EvidenceBank, ProposedChange, ReviewStatus, VerificationResult, VerifiedClause } from '../types'
 
@@ -134,11 +134,11 @@ export async function verifyChange(
   // Emphasis only: the words are the original's, and the pre-check has just
   // confirmed the bold sits on a metric. There is nothing for a verifier to
   // audit, and the first live run spent three verifier calls confirming that.
-  if (isEmphasisOnly(change.original_text, change.proposed_text)) {
+  if (isWordingUnchanged(change.original_text, change.proposed_text)) {
     return {
       ...change,
       verification_result: 'SUPPORTED',
-      verification_notes: 'Emphasis only; wording unchanged.',
+      verification_notes: isEmphasisOnly(change.original_text, change.proposed_text) ? 'Emphasis only; wording unchanged.' : 'Wording unchanged; nothing to verify.',
       verification_clauses: null,
       precheck_findings: findings,
       review_status: 'pending',

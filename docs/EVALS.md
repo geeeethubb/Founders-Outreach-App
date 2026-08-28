@@ -760,3 +760,83 @@ poor experimental design.
 inability to reach `sending`), quantity normalisation and its exclusions (calendar years,
 meeting durations, clock times), both evidence pools, and funnel arithmetic — including that
 a reply rate below 5 sends is withheld rather than reported.
+
+---
+
+## 13. Phase 11 — Career OS evals
+
+Six suites under `evals/career/`, run by `scripts/career-eval-*.ts` (`npm run eval:career-*`).
+They run the product's own code paths in **no-database mode**: the Evidence Bank is built in
+memory from the real master résumé (`lib/career/evidence/memory-bank.ts`), jobs come from
+fixtures or live public ATS boards, and documents go to `.career-out/` (gitignored — the results
+carry résumé text and are never tracked). Every judge is independent of the agents it scores:
+different framing, ids blinded (`blindForJudge`), batches shuffled so rank order never leaks.
+
+### 13.1 Fit ranking — `eval:career-fit` · 24 fixture JDs (8 strong · 6 good/stretch · 10 negatives)
+
+| Metric | Target | Result | n |
+|---|---|---|---|
+| employment_type accuracy | ≥ 90% | **100%** | 24 |
+| season_relevance accuracy | ≥ 90% | **95.8%** | 24 |
+| location_tier accuracy | ≥ 90% | **100%** (83.3% before the metro-suburb fix) | 24 |
+| role_family accuracy (lenient) | ≥ 80% | **91.7%** | 24 |
+| eligibility accuracy | ≥ 80% | **95.8%** | 24 |
+| NOT_QUALIFIED given to a strong/good job | 0 | **0** | 14 |
+| negatives ranked above any positive | 0 | **0** (13 before the gates) | 24 |
+| strong jobs in the top 8 | ≥ 6 | **7** | 8 |
+| judge P@10 (blind) | ≥ 80% | **100%** | 10 |
+| senior full-time decoy (shares vocabulary with the positives) | below every strong | rank 23/24 | |
+| Summer 2026 decoy | below every strong | rank 18/24 | |
+
+Cost: ~$1.75 per paid run (24 cheap extractions + 24 standard fit judgments + 1 judge batch);
+$0 on re-run. Four iterations; the fixes were all deterministic (see 13.3).
+
+### 13.2 Discovery — `eval:career-discovery` · 22 keyless benchmark boards + one live scout run
+
+| Metric | Target | Result | n |
+|---|---|---|---|
+| duplicate rate (post-constraint canonicals) | < 3% | **0.0%** (31.9% before the dedupe fix — every cluster was a false merge) | 84 |
+| canonical URL on the board's ATS host | ≥ 95% | **100%** | 84 |
+| stale shown as open (every ATS-listed job re-verified) | < 3% | **0.0%** | 84 |
+| parsed city appears in `location_raw` | ≥ 95% | **100%** | 84 |
+| tier agrees with the benchmark's HQ tier | ≥ 90% | **100%** | 57 |
+| internship classification (extractor vs strict title regex) | report | 97.3% — the one disagreement was the extractor being right | 37 |
+| fit evaluations failed | 0 | **0** | 86 |
+| job-first canonical first-party | ≥ 95% | 100% / 88.9% / 100% across runs (the miss: an aggregator lead stored `UNVERIFIED` with no first-party URL — by design) | 4–63 |
+| **P@20 (blind judge, GOOD_FIT ∪ STRETCH)** | ≥ 80% | **65%** — see below | 20 |
+
+**The P@20 miss, diagnosed rather than hidden.** On 2026-08-27, 9 of the 22 benchmark boards
+listed no internships at all; 80 of the 131 internship postings came from two boards (Zipline,
+Palantir — software/aerospace/PM-heavy, each truncated at the per-board cap of 40); a single
+bounded job-first run added between 4 and 63 jobs depending on the day. The union held roughly
+13 openings the judge called relevant to a chemical-engineering Summer 2027 mission, so a top 20
+cannot reach 16 relevant rows. The ranking itself behaves: the top 3 are GOOD_FIT/STRETCH in
+every run, and of the 7 BAD_FIT rows in the last top 20, 5 already sit in the WEAK band. The
+follow-up (13.4) widens the pool rather than the target.
+
+Constraint rejections on the 131 board postings: `Not a different season` 34–38 (Spring/Winter
+2027 and 2026 cohorts), `United States` 8, `Internships only` 1.
+
+### 13.3 What the two suites changed in the product
+
+All deterministic, all with the target unchanged:
+
+| Failure | Root cause | Fix |
+|---|---|---|
+| `Newark, NJ (Greater New York City area)` → tier 3; `Woburn, MA` → tier 3 | normalization: metro aliases knew only downtowns | suburb aliases per metro + `metroHints()` for "Greater X area" |
+| a Summer 2026 posting ranked 4th at 0.70 while `NOT_QUALIFIED` and `other_season` | ranking arithmetic never read the eligibility verdict or the mission's hard constraints | `fitGates`: NOT_QUALIFIED ×0.5, a failed hard constraint ×0.6 **capped at 0.30**, `role_fit` below 0.35 scales the mean proportionally — applied identically at evaluation, on re-sum and in the eval |
+| 31.9% "duplicates" — Palantir SWE interns across four cities, Spring-vs-Summer twins, template bodies with different titles | dedupe: the body-shingle test stood alone | same board + different ATS id ⇒ distinct; different title seasons ⇒ distinct; body similarity now requires title similarity ≥ 0.5 and overlapping locations |
+| `Computational Physics Intern (Spring 2027)` carried `summer_2027` | normalization: the extractor read a shared template body | a title naming only non-summer seasons of the target year overrules the extractor |
+| `Budapest, Hungary` passed the `United States` constraint | normalization: Hungary was not in the country list | ~60 countries + non-US city hints |
+| 25 live fit calls on an unchanged corpus | harness: cache key hashed random memory-bank ids | key on a content hash of the rendered evidence |
+
+### 13.4 Résumé factuality · minimal edit · cover letter · documents
+
+Documents (`eval:career-documents`): 30 résumés (10 company names × short/medium/long) + 10 cover
+letters — valid DOCX **40/40**, valid PDF **40/40**, one page **40/40** (the master is already a
+full page, so 20 of 30 variants exercised the shrink loop), correct filenames **40/40**. Word
+render latency: median 1.4 s, first render in a fresh Word instance 8–110 s (paid once per
+process).
+
+The factuality, minimal-edit and cover-letter suites are recorded in
+[BUILD_LOG.md](BUILD_LOG.md) with the run that produced them.

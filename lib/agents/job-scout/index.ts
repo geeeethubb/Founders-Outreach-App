@@ -285,7 +285,11 @@ export async function runJobScoutRound(
     ctx,
     webSearch: true,
     maxWebSearches: 4,
-    maxSteps: 7,
+    // 4 searches + a couple of lookups + a fetch + submit is already 8 steps
+    // on a diligent round; at 7 the discovery eval lost one strategy in 2 of
+    // 5 runs to 'exceeded 7 steps without calling submit_result'. The tool
+    // caps still bound the searches, so the extra steps are the submit.
+    maxSteps: 10,
     maxTokens: 8000,
     onStep: opts.onStep,
     // A replayed round carries its ALREADY-VALIDATED output — the URL pool was

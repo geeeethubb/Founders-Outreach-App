@@ -16,6 +16,7 @@ import { coverLetterFilenames } from '../documents/filenames'
 import { NO_RENDERER_ERROR, renderDocxToPdf } from '../documents/pdf'
 import { pdfInfo, type PdfInfo } from '../documents/pdf-text'
 import { qaCoverLetterDocument } from '../documents/qa'
+import { DEFAULT_LENGTH } from '@/lib/agents/cover-letter-writer'
 import { runCoverLetterPipeline, type CompanyResearchForLetter, type CoverLetterResult, type EvidenceMapForLetter, type LetterDeps } from '../letter/pipeline'
 import type { CareerRun } from '../runs'
 import type { CoverLetter, DocumentQaReport, EvidenceBank, ResumeParagraphMapEntry } from '../types'
@@ -123,12 +124,25 @@ export async function buildLetterDocuments(params: LetterDocumentsParams): Promi
 // ─── Generate ────────────────────────────────────────────────────────────────
 
 /**
- * Tighter than the writer's DEFAULT_LENGTH. Its validator accepts up to
- * max+40 words, and a 377-word letter in Times 12 / 1.15 spacing with the
- * header block rendered to two pages on the first live run; QA's one_page
- * check then fails the package. 300 keeps the ceiling at 340.
+ * The writer's own band (200–290, validator ceiling +25). It used to be
+ * tighter than the writer's; the writer now carries the one-page band itself.
  */
-export const LETTER_LENGTH = { min: 220, max: 300 }
+export const LETTER_LENGTH = DEFAULT_LENGTH
+
+/**
+ * When the rendered PDF still says two pages, the writer gets ONE more go at
+ * a shorter band with this note. Length is structural — a validator band and
+ * a render check — not a hope; and a letter that is still two pages after
+ * this stays flagged, never discarded (ADR-010).
+ */
+export const ONE_PAGE_RETRY_LENGTH = { min: 180, max: 250 }
+export const ONE_PAGE_REVISION_NOTE = 'The letter must fit on one page in Times New Roman 12 — cut to at most 250 words'
+
+/** True when QA rendered the PDF and counted more than one page. */
+export function spilledPastOnePage(qa: DocumentQaReport): boolean {
+  const c = qa.checks.find((x) => x.name === 'one_page')
+  return !!c && !c.pass && (qa.page_count ?? 0) > 1
+}
 
 export interface GenerateLetterParams {
   bank: EvidenceBank
@@ -153,21 +167,63 @@ export interface GenerateLetterResult {
   flagged: boolean
   costUsd: number
   errors: string[]
+  /** The one-page retry ran (first render was more than one page). */
+  onePageRetried: boolean
+  /** Word count of the draft the retry replaced, when it ran. */
+  onePageRetryFrom: number | null
 }
 
 export async function generateCoverLetter(params: GenerateLetterParams): Promise<GenerateLetterResult> {
   const errors: string[] = []
-  const letter = await runCoverLetterPipeline({
-    bank: params.bank,
-    job: { title: params.job.title, company: params.job.company_name, location: params.job.location_raw, summary: letterJobSummary(params.job) },
-    companyResearch: params.research,
-    evidenceMap: params.evidenceMap,
-    ctx: params.ctx,
-    user: { name: params.user.name },
-    deps: params.deps,
-    length: params.length ?? LETTER_LENGTH,
-    onStep: params.onStep,
-  })
+  const draft = (length: { min: number; max: number }, revisionNotes?: string[]) =>
+    runCoverLetterPipeline({
+      bank: params.bank,
+      job: { title: params.job.title, company: params.job.company_name, location: params.job.location_raw, summary: letterJobSummary(params.job), postingText: params.job.description_text },
+      companyResearch: params.research,
+      evidenceMap: params.evidenceMap,
+      ctx: params.ctx,
+      user: { name: params.user.name },
+      deps: params.deps,
+      length,
+      revisionNotes,
+      onStep: params.onStep,
+    })
+  const buildDocs = (l: CoverLetterResult) =>
+    l.fullText && l.greeting && l.closing
+      ? buildLetterDocuments({ greeting: l.greeting, paragraphs: l.paragraphs, closing: l.closing, user: params.user, company: params.job.company_name, output: params.output })
+      : Promise.resolve(null)
+
+  let letter = await draft(params.length ?? LETTER_LENGTH)
+  let documents = await buildDocs(letter)
+  let onePageRetried = false
+  let onePageRetryFrom: number | null = null
+
+  // The render is the only honest page count. One more draft, shorter, then
+  // whatever comes back is what the human sees — flagged if still two pages.
+  if (documents && spilledPastOnePage(documents.qa)) {
+    onePageRetried = true
+    onePageRetryFrom = letter.wordCount
+    params.onStep?.({ attempt: letter.attempts + 1, detail: `rendered to ${documents.qa.page_count} pages at ${letter.wordCount} words — redrafting at <= ${ONE_PAGE_RETRY_LENGTH.max}` })
+    const shorter = await draft(ONE_PAGE_RETRY_LENGTH, [ONE_PAGE_REVISION_NOTE])
+    const runs = [...letter.runs, ...shorter.runs]
+    const costUsd = Number(runs.reduce((s, r) => s + (r.trace?.cost_usd ?? 0), 0).toFixed(4))
+    if (shorter.fullText) {
+      const docs2 = await buildDocs(shorter)
+      // Keep the shorter draft unless it made things worse: a grounding
+      // failure is a flag the first draft did not carry.
+      if (docs2 && (!shorter.flagged || letter.flagged)) {
+        letter = { ...shorter, runs, costUsd, attempts: letter.attempts + shorter.attempts }
+        documents = docs2
+      } else {
+        letter = { ...letter, runs, costUsd, attempts: letter.attempts + shorter.attempts }
+        errors.push(`one-page retry produced a letter with blocking grounding findings; the first draft is kept (${documents.qa.page_count} pages)`)
+      }
+    } else {
+      letter = { ...letter, runs, costUsd, attempts: letter.attempts + shorter.attempts }
+      errors.push(`one-page retry: ${shorter.error ?? 'no letter'}; the first draft is kept (${documents.qa.page_count} pages)`)
+    }
+  }
+
   let agentRunId: string | null = null
   if (params.run) for (const r of letter.runs) agentRunId = (await params.run.trace(r, { job_id: params.persist?.jobId ?? null, stage: 'cover_letter' })) ?? agentRunId
   if (letter.error) errors.push(letter.error)
@@ -185,13 +241,8 @@ export async function generateCoverLetter(params: GenerateLetterParams): Promise
     row = ins.letter
   }
 
-  let documents: LetterDocumentsResult | null = null
-  if (letter.fullText && letter.greeting && letter.closing) {
-    documents = await buildLetterDocuments({
-      greeting: letter.greeting, paragraphs: letter.paragraphs, closing: letter.closing, user: params.user, company: params.job.company_name, output: params.output,
-    })
-  }
-  return { letter, row, documents, flagged: letter.flagged, costUsd: letter.costUsd, errors }
+  const flagged = letter.flagged || (documents !== null && spilledPastOnePage(documents.qa))
+  return { letter, row, documents, flagged, costUsd: letter.costUsd, errors, onePageRetried, onePageRetryFrom }
 }
 
 // ─── Regenerate from a stored row ────────────────────────────────────────────

@@ -79,6 +79,28 @@ you anyway, flagged — the system never silently discards its own failures.
 
 ---
 
+## Career OS
+
+The same engine, pointed at Summer 2027 internships. State a mission (cities in tiers, company
+types, what to optimize for); the system plans role families from your evidence, discovers real
+postings through public ATS boards and a bounded web scout, verifies they are open, scores fit
+along ten dimensions with an eligibility verdict, researches the company with sourced facts,
+maps your evidence to the role, finds warm paths in the contacts you already have — and, on
+request, builds an application package: a conservative résumé patch with an independent fact
+verifier on every changed bullet, a one-page DOCX + PDF generated from your master résumé
+template, and a company-specific cover letter whose every company claim resolves to a research
+fact. You review the diff, approve, download, apply through the company's own link, and track
+the outcome. Nothing is submitted for you.
+
+```
+Evidence   /dashboard/evidence      your facts, with provenance and approval
+Jobs       /dashboard/jobs          ranked, verified openings · Scout now · Generate Package
+Companies  /dashboard/companies     the watchlist: target · watching · opening available
+Applications /dashboard/applications the tracker, locked documents after you apply
+```
+
+Read [docs/CAREER_OS.md](docs/CAREER_OS.md).
+
 ## Documentation
 
 | Doc | What it covers |

@@ -129,6 +129,24 @@ export function detectEmploymentType(title: string, hint: string | null | undefi
 
 const TARGET_YEAR = 2027
 
+/**
+ * "Computational Physics Intern (Spring 2027)" is a Spring posting even when
+ * its body — a template shared with the Summer one — says "Summer 2027". A
+ * title that names seasons of the target year and none of them is summer
+ * settles the question; the extractor reads the body and is overruled here.
+ */
+export function titleSaysOtherSeason(title: string): boolean {
+  const re = new RegExp(`(?:^|[^a-z])(summer|fall|autumn|winter|spring)(?:\\s*(?:&|and|/|,)\\s*(summer|fall|autumn|winter|spring))*\\s*(?:of\\s*)?['’]?(?:${TARGET_YEAR}|${String(TARGET_YEAR).slice(2)})(?![0-9])`, 'gi')
+  let named = false
+  let summer = false
+  let m: RegExpExecArray | null
+  while ((m = re.exec(title))) {
+    named = true
+    if (/summer/i.test(m[0])) summer = true
+  }
+  return named && !summer
+}
+
 export function detectSeason(title: string, text: string | null | undefined, employmentType?: EmploymentType): SeasonRelevance {
   const corpus = `${title}\n${(text ?? '').slice(0, 6000)}`
   const lower = corpus.toLowerCase()
@@ -174,7 +192,7 @@ export function buildNormalizedJob(raw: RawJobPosting, extracted?: ExtractedJobF
   const heuristicType = detectEmploymentType(title, raw.employment_type_hint, raw.description_text)
   const employment_type = extracted && extracted.employment_type !== 'unknown' ? extracted.employment_type : heuristicType
   const heuristicSeason = detectSeason(title, raw.description_text, employment_type)
-  const season_relevance = extracted && extracted.season_relevance !== 'unknown' ? extracted.season_relevance : heuristicSeason
+  const season_relevance = titleSaysOtherSeason(title) ? 'other_season' : extracted && extracted.season_relevance !== 'unknown' ? extracted.season_relevance : heuristicSeason
   const heuristicMode = parsed.remote || parsed.hybrid ? workModeFromParsed(parsed) : workModeFromText(raw.description_text) ?? workModeFromParsed(parsed)
   const work_mode = extracted && extracted.work_mode !== 'unknown' ? extracted.work_mode : heuristicMode
   const role_family = extracted?.role_family ?? roleFamilyFromTitle(title, raw.department)

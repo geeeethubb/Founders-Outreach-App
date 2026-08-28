@@ -17,6 +17,7 @@ const SUITES = [
   'scripts/test-career-tailor.ts',
   'scripts/test-career-evals.ts',
   'scripts/test-career-scout.ts',
+  'scripts/test-career-letter.ts',
   'scripts/test-career-package.ts',
   'scripts/test-career-documents.ts',
 ]

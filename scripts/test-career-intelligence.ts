@@ -11,7 +11,7 @@ import { validateFitJudgment } from '../lib/agents/fit-evaluator'
 import { makeEvidenceMatchValidator } from '../lib/agents/evidence-matcher'
 import { validateCompanyResearch } from '../lib/agents/company-researcher'
 import { makePathfinderValidator } from '../lib/agents/network-pathfinder'
-import { evaluateFit, buildFitEvaluationRow } from '../lib/career/fit/evaluate'
+import { evaluateFit, buildFitEvaluationRow, fitGates, redFlagsWithGates, GATE_FLAG_PREFIX, HARD_CONSTRAINT_CAP, ROLE_FIT_FLOOR, NOT_QUALIFIED_FACTOR, HARD_CONSTRAINT_FACTOR } from '../lib/career/fit/evaluate'
 import { DEFAULT_FIT_WEIGHTS } from '../lib/career/fit/dimensions'
 import { computeFeedbackAdjustment, renderFeedbackHints, type FeedbackRow } from '../lib/career/fit/feedback'
 import { groundedPoints, renderCompanyResearchForPrompt, researchClaimsToFactRows } from '../lib/career/research/company'
@@ -84,6 +84,50 @@ const close = (a: number, b: number, tol = 0.0011) => Math.abs(a - b) < tol
   check('row: carries overall + adjustment', row.overall === adj.overall && row.feedback_adjustment === -0.25)
   check('row: eligibility copied', row.eligibility === 'STRETCH' && row.missing_qualifications[0] === 'SolidWorks')
   check('row: confidence rounded to 2dp', row.confidence === 1)
+}
+
+// ─── Fit gates (wave-2 regressions) ──────────────────────────────────────────
+// The eval evidence behind each: a NOT_QUALIFIED Summer 2026 decoy ranked 4th;
+// a QUALIFIED verdict on the same decoy still beat a real STRETCH job until the
+// WEAK cap; eight software interns at role_fit 0.12–0.25 reached the top 20 on
+// location and company alone.
+{
+  const flat = (roleFit: number) => FIT_DIMENSIONS.map((d) => ({ dimension: d, score: d === 'role_fit' ? roleFit : 0.7, explanation: `because ${d}`, evidence: ['q1'] }))
+  const judgment = (eligibility: string, roleFit = 0.7, red_flags: string[] = []) =>
+    validateFitJudgment({ components: flat(roleFit), eligibility, eligibility_reasoning: 'r', explanation: 'e', uncertainties: [], red_flags, missing_qualifications: [], confidence: 0.9 })!
+
+  const plain = evaluateFit({ judgment: judgment('QUALIFIED'), weights: null })
+  check('gates: QUALIFIED with no failures leaves the mean untouched', close(plain.overall, 0.7) && close(plain.base_overall, 0.7) && plain.gates.length === 0, `${plain.overall} ${plain.gates}`)
+
+  const nq = evaluateFit({ judgment: judgment('NOT_QUALIFIED'), weights: null })
+  check('gates: NOT_QUALIFIED halves the ungated mean', close(nq.overall, 0.7 * NOT_QUALIFIED_FACTOR) && close(nq.base_overall, 0.7) && nq.gates.join() === 'NOT_QUALIFIED', `${nq.overall}`)
+
+  const hc = evaluateFit({ judgment: judgment('QUALIFIED'), weights: null, hardConstraintFailures: ['Not a different season'] })
+  check('gates: a hard-constraint failure ×0.6 then capped at 0.30, label recorded', hc.overall === HARD_CONSTRAINT_CAP && hc.band === 'WEAK' && hc.gates.includes('Not a different season'), `${hc.overall} ${hc.gates}`)
+  const g = fitGates('QUALIFIED', ['Not a different season'], flat(0.7))
+  check('fitGates: factor 0.6 and cap 0.30 for one failure', close(g.factor, HARD_CONSTRAINT_FACTOR) && g.cap === HARD_CONSTRAINT_CAP)
+  const low = evaluateFit({ judgment: judgment('QUALIFIED'), weights: null, hardConstraintFailures: ['United States'] })
+  check('gates: below the cap the factor alone applies', close(low.overall, Math.min(HARD_CONSTRAINT_CAP, 0.7 * HARD_CONSTRAINT_FACTOR)))
+
+  const rf = evaluateFit({ judgment: judgment('QUALIFIED', 0.15), weights: null })
+  check('gates: role_fit 0.15 scales the mean by 0.15/0.35', close(rf.overall, rf.base_overall * (0.15 / ROLE_FIT_FLOOR)) && rf.gates.some((x) => x.startsWith('role_fit 0.15')), `${rf.overall} vs ${rf.base_overall * (0.15 / ROLE_FIT_FLOOR)}`)
+  check('gates: role_fit at the floor is not gated', evaluateFit({ judgment: judgment('QUALIFIED', ROLE_FIT_FLOOR), weights: null }).gates.length === 0)
+
+  const fb = evaluateFit({ judgment: judgment('NOT_QUALIFIED'), weights: null, feedbackAdjustment: 0.06 })
+  check('gates: feedback adjustment applies after the gate', close(fb.overall, 0.7 * NOT_QUALIFIED_FACTOR + 0.06), `${fb.overall}`)
+  const fbCap = evaluateFit({ judgment: judgment('QUALIFIED'), weights: null, feedbackAdjustment: 0.06, hardConstraintFailures: ['Internships only'] })
+  check('gates: feedback cannot lift a hard-constraint failure past the cap', fbCap.overall === HARD_CONSTRAINT_CAP)
+
+  // Persisting the reason: job_fit_evaluations has no gates column; the UI renders red_flags.
+  check('redFlagsWithGates: prefixed, appended, never duplicated', redFlagsWithGates(['visa sponsorship unclear', 'capped: NOT_QUALIFIED'], ['NOT_QUALIFIED', 'United States']).join('|') === 'visa sponsorship unclear|capped: NOT_QUALIFIED|capped: United States')
+  check('redFlagsWithGates: stale gate entries are replaced, not stacked', redFlagsWithGates(['capped: old'], ['new']).join('|') === `${GATE_FLAG_PREFIX}new`)
+  check('redFlagsWithGates: no gates leaves the flags alone', redFlagsWithGates(['x'], []).join('|') === 'x')
+  const j = judgment('QUALIFIED', 0.7, ['visa sponsorship unclear'])
+  const row = buildFitEvaluationRow({ userId: 'u', jobId: 'j', missionId: null, judgment: j, evaluation: hc, promptVersion: '1.0.0', agentRunId: null })
+  check('row: gate reasons folded into red_flags after the evaluator\'s own', row.red_flags.join('|') === 'visa sponsorship unclear|capped: Not a different season', row.red_flags.join('|'))
+  check('row: the judgment\'s red_flags are not mutated', j.red_flags.length === 1)
+  const rowPlain = buildFitEvaluationRow({ userId: 'u', jobId: 'j', missionId: null, judgment: j, evaluation: plain, promptVersion: '1.0.0', agentRunId: null })
+  check('row: no gates → no capped entries', rowPlain.red_flags.join('|') === 'visa sponsorship unclear')
 }
 
 // ─── Evidence Matcher validator ──────────────────────────────────────────────

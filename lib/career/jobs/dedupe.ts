@@ -48,13 +48,58 @@ function locationsOverlap(a: NormalizedJob, b: NormalizedJob): boolean {
   return false
 }
 
+const TITLE_SEASON = /\b(spring|summer|fall|autumn|winter)\b/i
+
+/** The season a title states, when it states one. normalizeTitle strips it, so it is read from the raw title. */
+function seasonInTitle(title: string): string | null {
+  const m = TITLE_SEASON.exec(title)
+  if (!m) return null
+  const s = m[1].toLowerCase()
+  return s === 'autumn' ? 'fall' : s
+}
+
+function titleTokens(t: string): Set<string> {
+  return new Set(t.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter((w) => w.length > 2))
+}
+
+/** Token Jaccard of two normalized titles, or 1 when one's tokens are a subset of the other's ("process engineer intern" ⊂ "process engineer intern pilot line"). Tokens are not stemmed — "engineer" and "engineering" differ — so a reworded cross-source duplicate relies on the URL/ATS-id rules instead. */
+export function titleSimilarity(a: string, b: string): number {
+  const ta = titleTokens(a)
+  const tb = titleTokens(b)
+  if (!ta.size || !tb.size) return 0
+  let inter = 0
+  for (const w of ta) if (tb.has(w)) inter++
+  if (inter === Math.min(ta.size, tb.size)) return 1
+  return inter / (ta.size + tb.size - inter)
+}
+
+export const TITLE_SIMILARITY_THRESHOLD = 0.5
+
 function sameJob(a: NormalizedJob, b: NormalizedJob): boolean {
   if (a.ats_type && a.ats_job_id && a.ats_type === b.ats_type && a.ats_job_id === b.ats_job_id) return true
   if (a.canonical_url && b.canonical_url && stripUrl(a.canonical_url) === stripUrl(b.canonical_url)) return true
   if (a.company_key !== b.company_key) return false
+  // Two ids on the same board are two postings, whatever their bodies say.
+  // The discovery eval found Palantir's one SWE-internship body listed under
+  // four cities, Zipline's under Spring and Summer, and Verkada's Backend and
+  // Security intern roles sharing every word below the title: identical
+  // templates, distinct openings. Merging them silently dropped the one the
+  // user might have wanted (a Materials intern collapsed into a Mechanical one).
+  if (a.ats_type && b.ats_type && a.ats_type === b.ats_type && a.ats_job_id && b.ats_job_id && a.ats_job_id !== b.ats_job_id) return false
   if (a.requisition_id && b.requisition_id && a.requisition_id.toLowerCase() === b.requisition_id.toLowerCase()) return true
+  // A title that names a season names a different posting when the other names another.
+  const sa = seasonInTitle(a.title)
+  const sb = seasonInTitle(b.title)
+  if (sa && sb && sa !== sb) return false
   if (a.normalized_title === b.normalized_title && locationsOverlap(a, b)) return true
-  return shingleJaccard(a.description_text, b.description_text) >= SHINGLE_JACCARD_THRESHOLD
+  // Near-identical bodies confirm a match only between titles that already
+  // look alike and locations that agree — a shared job-description template
+  // is not a shared job.
+  return (
+    titleSimilarity(a.normalized_title, b.normalized_title) >= TITLE_SIMILARITY_THRESHOLD &&
+    locationsOverlap(a, b) &&
+    shingleJaccard(a.description_text, b.description_text) >= SHINGLE_JACCARD_THRESHOLD
+  )
 }
 
 function stripUrl(u: string): string {

@@ -51,6 +51,9 @@ export const OUTPUT_SCHEMA = {
   required: ['greeting', 'paragraphs', 'closing', 'claims'],
 }
 
+/** Words above length.max the validator still accepts. */
+export const MAX_SLACK = 25
+
 export function countWords(text: string): number {
   return (text.match(/[A-Za-z0-9$%][A-Za-z0-9$%+'’.,-]*/g) ?? []).length
 }
@@ -64,22 +67,32 @@ export function bannedPhrasesIn(text: string): string[] {
 }
 
 /** Exported so the offline test can exercise it. Rejects, never repairs. */
-export function validateCoverLetterOutput(raw: unknown, input: CoverLetterInput): CoverLetterOutput | null {
-  if (!raw || typeof raw !== 'object') return null
+export function validateCoverLetterOutput(raw: unknown, input: CoverLetterInput, reasons?: string[]): CoverLetterOutput | null {
+  // The loop's validate() contract is T | null, so the reason a draft was
+  // refused would otherwise die here. `reasons` is a sink the runner reads so
+  // the pipeline's retry can say what to fix instead of "re-read the schema".
+  const reject = (why: string): null => {
+    reasons?.push(why)
+    return null
+  }
+  if (!raw || typeof raw !== 'object') return reject('output was not an object')
   const r = raw as Record<string, unknown>
-  if (!Array.isArray(r.paragraphs)) return null
+  if (!Array.isArray(r.paragraphs)) return reject('paragraphs missing')
   const paragraphs = r.paragraphs
     .map((p) => normalizeModelText(p))
     .filter((p) => p.length > 0)
-  if (paragraphs.length < 3 || paragraphs.length > 6) return null
+  if (paragraphs.length < 3 || paragraphs.length > 6) return reject(`${paragraphs.length} paragraphs; 4 or 5 are expected`)
 
   const words = paragraphs.reduce((n, p) => n + countWords(p), 0)
   // Slack on both sides: the model counts loosely, and a retry over ten words
-  // costs more than ten words are worth. The hard bounds are the schema's.
-  if (words < input.length.min - 20 || words > input.length.max + 40) return null
+  // costs more than ten words are worth. The upper slack is 25, not 40: the
+  // ceiling exists so the letter fits one page, and 40 words of slack was
+  // exactly how a 377-word letter got through and rendered to two.
+  if (words < input.length.min - 20 || words > input.length.max + MAX_SLACK) return reject(`${words} words; the band is ${input.length.min}–${input.length.max}`)
 
   const text = paragraphs.join('\n\n')
-  if (bannedPhrasesIn(text).length > 0) return null
+  const banned = bannedPhrasesIn(text)
+  if (banned.length > 0) return reject(`banned phrase${banned.length > 1 ? 's' : ''} ${banned.map((p) => `"${p}"`).join(', ')}`)
 
   const researchIds = new Set(input.companyResearch.points.map((p) => p.id))
   const factIds = new Set(input.evidence.facts.map((f) => f.id))
@@ -112,7 +125,7 @@ export function validateCoverLetterOutput(raw: unknown, input: CoverLetterInput)
   }
   // A letter with research available that cites none of it is generic by
   // construction, which is the failure the writer exists to avoid.
-  if (researchIds.size > 0 && !claims.some((c) => c.kind === 'company')) return null
+  if (researchIds.size > 0 && !claims.some((c) => c.kind === 'company')) return reject('no claim of kind "company" cites a research point although points were provided')
 
   const greeting = normalizeModelText(r.greeting) || `Dear ${input.job.company} Hiring Team,`
   const closing = normalizeModelText(r.closing) || 'Sincerely,'
@@ -125,14 +138,15 @@ export async function runCoverLetterWriter(
   ctx: ToolContext,
   opts: { onStep?: (info: { step: number; elapsedMs: number; stopReason: string | null; toolCalls: string[] }) => void } = {}
 ): Promise<AgentResult<CoverLetterOutput>> {
-  return runAgent<CoverLetterInput, CoverLetterOutput>({
+  const reasons: string[] = []
+  const res = await runAgent<CoverLetterInput, CoverLetterOutput>({
     agentId: 'cover_letter_writer',
     tier: 'standard',
     modelRole: 'writing',
     prompt: coverLetterWriterPrompt,
     input,
     outputSchema: OUTPUT_SCHEMA,
-    validate: (raw) => validateCoverLetterOutput(raw, input),
+    validate: (raw) => validateCoverLetterOutput(raw, input, reasons),
     ctx,
     webSearch: false,
     maxSteps: 3,
@@ -149,4 +163,8 @@ export async function runCoverLetterWriter(
     },
     onStep: opts.onStep,
   })
+  // The last rejection is the one that ended the loop; parenthesised so the
+  // pipeline can lift it into a revision note.
+  const last = reasons[reasons.length - 1]
+  return res.status === 'invalid_output' && last ? { ...res, error: `${res.error ?? 'invalid output'} (${last})` } : res
 }

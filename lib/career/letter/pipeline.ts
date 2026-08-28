@@ -21,12 +21,23 @@ export interface CoverLetterJob {
   location: string | null
   /** A few sentences on the role — responsibilities or the description's opening. */
   summary: string
+  /** The full posting text, when known — the gate lets the letter echo what the posting itself says. */
+  postingText?: string | null
 }
 
 export interface CompanyResearchForLetter {
   /** Each id is a research_facts row id; the text is the claim. */
   points: { id: string; text: string }[]
   summary: string
+  /**
+   * FACT-typed claim texts (each backed by a retrieved URL). Citable by the
+   * gate alongside the points. INFERENCE claims are deliberately NOT accepted
+   * here: the first live letter named two competitors that existed only in
+   * an inference and the summary, and the gate let them through.
+   */
+  factClaims?: string[]
+  /** The company's domain, so "kairospower.com" in a letter is not an unknown entity. */
+  domain?: string | null
 }
 
 export type EvidenceMapForLetter = Pick<JobEvidenceMap, 'why_i_fit' | 'fact_ids' | 'story_ids' | 'top_experience_ids'>
@@ -61,7 +72,19 @@ export interface CoverLetterParams {
   user: { name: string }
   deps?: Partial<LetterDeps>
   length?: { min: number; max: number }
+  /** Notes for the first draft — the package layer's one-page retry uses this. */
+  revisionNotes?: string[]
   onStep?: (info: { attempt: number; detail: string }) => void
+}
+
+/**
+ * What the gate accepts as a company fact: the name, the domain, the grounded
+ * points and FACT claims. Not the summary and not inferences — the summary is
+ * the researcher's prose and an inference is a guess, and neither is a
+ * source a hiring manager can be pointed to.
+ */
+export function companyPoolFor(job: Pick<CoverLetterJob, 'company'>, research: CompanyResearchForLetter): string[] {
+  return [job.company, research.domain ?? '', ...research.points.map((p) => p.text), ...(research.factClaims ?? [])].filter((s) => s.trim().length > 0)
 }
 
 function storyText(bank: EvidenceBank, id: string): string | null {
@@ -99,6 +122,7 @@ export function buildLetterInput(params: Omit<CoverLetterParams, 'ctx' | 'deps' 
     user: params.user,
     narrative: NARRATIVE,
     length: params.length ?? DEFAULT_LENGTH,
+    ...(params.revisionNotes?.length ? { revisionNotes: params.revisionNotes } : {}),
   }
 }
 
@@ -110,9 +134,10 @@ export async function runCoverLetterPipeline(params: CoverLetterParams): Promise
   const writer = params.deps?.writer ?? ((input, ctx) => runCoverLetterWriter(input, ctx))
   const base = buildLetterInput(params)
   const pools = {
-    companyPool: [params.job.company, params.companyResearch.summary, ...params.companyResearch.points.map((p) => p.text)],
+    companyPool: companyPoolFor(params.job, params.companyResearch),
     personalPool: buildBankPool(params.bank),
     safeNames: [params.user.name, params.job.company, params.job.title, params.job.location ?? ''],
+    postingPool: [params.job.summary, params.job.postingText ?? ''].filter((s) => s.trim().length > 0),
   }
 
   const runs: AgentResult<unknown>[] = []
@@ -126,6 +151,16 @@ export async function runCoverLetterPipeline(params: CoverLetterParams): Promise
     runs.push(run as AgentResult<unknown>)
     if (run.status !== 'succeeded' || !run.output) {
       error = `writer ${run.status}: ${run.error ?? 'no output'}`
+      // A validator rejection is a draft that missed the band, not a model
+      // that broke — the loop's own retry only says "re-read the schema". One
+      // more draft with the actual reason as a note; the cover-letter eval
+      // lost a letter (Rondo) to exactly this.
+      const reason = run.status === 'invalid_output' ? run.error?.match(/\((.+)\)\s*$/)?.[1] : null
+      if (attempt === 1 && reason) {
+        params.onStep?.({ attempt, detail: `rejected before review: ${reason}` })
+        input = { ...base, revisionNotes: [...(base.revisionNotes ?? []), `The previous draft was rejected before review: ${reason}. Fix that and change nothing else.`] }
+        continue
+      }
       break
     }
     const out = run.output
@@ -135,7 +170,7 @@ export async function runCoverLetterPipeline(params: CoverLetterParams): Promise
     last = { out, grounding, version: run.trace.prompt_version }
     error = null
     if (grounding.ok) break
-    input = { ...base, revisionNotes: revisionNotesFrom(grounding) }
+    input = { ...base, revisionNotes: [...(base.revisionNotes ?? []), ...revisionNotesFrom(grounding)] }
   }
 
   const costUsd = Number(runs.reduce((s, r) => s + (r.trace?.cost_usd ?? 0), 0).toFixed(4))

@@ -1,0 +1,234 @@
+'use client'
+
+// The main view: every job the scout found, ranked by fit, answering at a
+// glance whether it is worth a package. Everything on screen is server-derived
+// — a refresh shows the same decisions, because none of them live here.
+
+import { Suspense, useCallback, useEffect, useState } from 'react'
+import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
+import type { CareerMission } from '@/lib/career/types'
+import { api } from '@/components/career/api'
+import InlineNotice, { MigrationNotice } from '@/components/career/InlineNotice'
+import JobCard, { type JobCardData } from './JobCard'
+import JobFilters, { DEFAULT_FILTERS, filtersToQuery, type JobFilterState } from './JobFilters'
+import ScoutPanel from './ScoutPanel'
+import AddByUrl from './AddByUrl'
+
+const PAGE = 25
+
+interface JobsResponse {
+  jobs: JobCardData[]
+  total: number
+  filters: { role_families: string[]; tiers: number[]; statuses: string[] }
+}
+
+interface Counts {
+  open: number
+  saved: number
+  warm: number
+}
+
+export default function JobsPage() {
+  return (
+    <Suspense fallback={<p className="p-8 text-sm text-slate-500">Loading…</p>}>
+      <JobsView />
+    </Suspense>
+  )
+}
+
+function JobsView() {
+  // `?search=` lets the watchlist link to one company's jobs; every other filter starts at its default.
+  const initialSearch = useSearchParams().get('search') ?? ''
+  const [mission, setMission] = useState<CareerMission | null>(null)
+  const [filters, setFilters] = useState<JobFilterState>(initialSearch ? { ...DEFAULT_FILTERS, search: initialSearch } : DEFAULT_FILTERS)
+  const [offset, setOffset] = useState(0)
+  const [data, setData] = useState<JobsResponse | null>(null)
+  const [counts, setCounts] = useState<Counts | null>(null)
+  const [bankEmpty, setBankEmpty] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [migrationMissing, setMigrationMissing] = useState(false)
+  const [scouting, setScouting] = useState(false)
+
+  const loadJobs = useCallback(async () => {
+    setLoading(true)
+    const r = await api<JobsResponse>(`/api/career/jobs?${filtersToQuery(filters, PAGE, offset)}`)
+    setLoading(false)
+    if (!r.ok) {
+      setMigrationMissing(r.migrationMissing)
+      setError(r.error)
+      setData(null)
+      return
+    }
+    setError(null)
+    setData(r.data)
+  }, [filters, offset])
+
+  // Header counts and the "do you have a bank yet?" check. Cheap (limit=1
+  // reads carry `total`), and independent of the current filters.
+  const loadContext = useCallback(async () => {
+    const [m, open, saved, warm, bank] = await Promise.all([
+      api<{ missions: CareerMission[]; activeId: string | null }>('/api/career/missions'),
+      api<JobsResponse>('/api/career/jobs?freshness=likely&disposition=new,saved&limit=1'),
+      api<JobsResponse>('/api/career/jobs?freshness=any&disposition=saved&limit=1'),
+      api<JobsResponse>('/api/career/jobs?freshness=likely&disposition=new,saved&hasWarmPath=1&limit=200'),
+      api<{ counts?: { experiences: number; facts: number } }>('/api/career/evidence'),
+    ])
+    if (m.ok && m.data) setMission(m.data.missions.find((x) => x.id === m.data!.activeId) ?? m.data.missions[0] ?? null)
+    if (open.ok && saved.ok && warm.ok) {
+      setCounts({ open: open.data?.total ?? 0, saved: saved.data?.total ?? 0, warm: warm.data?.jobs.length ?? 0 })
+    }
+    if (bank.ok && bank.data?.counts) setBankEmpty(bank.data.counts.experiences === 0 && bank.data.counts.facts === 0)
+  }, [])
+
+  useEffect(() => {
+    loadJobs()
+  }, [loadJobs])
+  useEffect(() => {
+    loadContext()
+  }, [loadContext])
+
+  function changeFilters(next: JobFilterState) {
+    setOffset(0)
+    setFilters(next)
+  }
+
+  function patchJob(id: string, patch: Partial<JobCardData>) {
+    setData((prev) => (prev ? { ...prev, jobs: prev.jobs.map((j) => (j.id === id ? { ...j, ...patch } : j)) } : prev))
+  }
+
+  const total = data?.total ?? 0
+  const jobs = data?.jobs ?? []
+
+  return (
+    <div className="p-8 max-w-6xl">
+      <div className="flex items-start justify-between gap-4 mb-5">
+        <div>
+          <h1 className="text-2xl font-semibold text-slate-900">Jobs</h1>
+          <p className="text-sm text-slate-500 mt-1">
+            Mission:{' '}
+            <Link href="/dashboard/jobs/mission" className="text-indigo-600 hover:underline font-medium">
+              {mission?.name ?? 'default'}
+            </Link>
+            {counts && (
+              <>
+                {' '}
+                · <strong className="text-slate-700">{counts.open}</strong> open · <strong className="text-slate-700">{counts.saved}</strong> saved ·{' '}
+                <strong className="text-slate-700">{counts.warm}</strong> with a warm path
+              </>
+            )}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Link href="/dashboard/companies" className="text-sm text-slate-600 hover:text-slate-900">
+            Watchlist
+          </Link>
+          <Link href="/dashboard/applications" className="text-sm text-slate-600 hover:text-slate-900">
+            Applications
+          </Link>
+          <button
+            type="button"
+            onClick={() => setScouting((s) => !s)}
+            disabled={migrationMissing}
+            className="px-3 py-1.5 rounded-md bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-50"
+          >
+            Scout now
+          </button>
+        </div>
+      </div>
+
+      {migrationMissing && (
+        <div className="mb-4">
+          <MigrationNotice />
+        </div>
+      )}
+      {error && !migrationMissing && (
+        <div className="mb-4">
+          <InlineNotice kind="error">{error}</InlineNotice>
+        </div>
+      )}
+      {bankEmpty && !migrationMissing && (
+        <div className="mb-4">
+          <InlineNotice kind="warn">
+            The Evidence Bank is empty, so nothing can be ranked or tailored yet.{' '}
+            <Link href="/dashboard/evidence" className="underline font-medium">
+              Import your résumé
+            </Link>{' '}
+            first.
+          </InlineNotice>
+        </div>
+      )}
+
+      {scouting && (
+        <div className="mb-4">
+          <ScoutPanel
+            missionId={mission?.id ?? null}
+            onFinished={() => {
+              loadJobs()
+              loadContext()
+            }}
+            onClose={() => setScouting(false)}
+          />
+        </div>
+      )}
+
+      <div className="mb-4">
+        <AddByUrl
+          onAdded={() => {
+            loadJobs()
+            loadContext()
+          }}
+        />
+      </div>
+
+      <div className="mb-4">
+        <JobFilters value={filters} onChange={changeFilters} roleFamilies={data?.filters.role_families ?? []} tiers={data?.filters.tiers ?? []} />
+      </div>
+
+      {loading && !data ? (
+        <p className="text-sm text-slate-500">Loading…</p>
+      ) : jobs.length === 0 && !error ? (
+        <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center">
+          <p className="text-slate-700 font-medium">{total === 0 && filters === DEFAULT_FILTERS ? 'No jobs yet.' : 'Nothing matches these filters.'}</p>
+          <p className="text-sm text-slate-500 mt-1">
+            {total === 0 && filters === DEFAULT_FILTERS
+              ? 'Press Scout now to plan a search from your mission, check watched companies and search the web — or paste a posting URL above.'
+              : 'Loosen the freshness or disposition filter, or reset.'}
+          </p>
+        </div>
+      ) : (
+        <>
+          <p className="text-xs text-slate-500 mb-2">
+            {total} job{total === 1 ? '' : 's'}
+            {loading ? ' · refreshing…' : ''}
+            {(filters.hasWarmPath || filters.state) && ' · counts are per page when filtering by warm path or state'}
+          </p>
+          <div className="space-y-3">
+            {jobs.map((j) => (
+              <JobCard key={j.id} job={j} onChange={(p) => patchJob(j.id, p)} />
+            ))}
+          </div>
+          <div className="mt-4 flex items-center justify-between text-xs text-slate-500">
+            <button type="button" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE))} className="px-2 py-1 rounded border border-slate-200 disabled:opacity-40">
+              ← Previous
+            </button>
+            <span>
+              {offset + 1}–{Math.min(offset + PAGE, offset + jobs.length)} of {total}
+            </span>
+            <button type="button" disabled={offset + PAGE >= total} onClick={() => setOffset(offset + PAGE)} className="px-2 py-1 rounded border border-slate-200 disabled:opacity-40">
+              Next →
+            </button>
+          </div>
+        </>
+      )}
+
+      <p className="mt-8 text-xs text-slate-400">
+        Why did a run cost that?{' '}
+        <Link href="/dashboard/runs" className="text-slate-500 hover:text-slate-900 underline">
+          Runs
+        </Link>
+      </p>
+    </div>
+  )
+}

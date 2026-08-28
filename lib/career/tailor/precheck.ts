@@ -82,7 +82,9 @@ function wordIn(text: string, term: string): boolean {
  */
 function smallCounts(text: string): string[] {
   const out: string[] = []
-  const re = /\b(\d)(?:\+)?\b(?![\d.,:%])/g
+  // The lookbehind keeps a decimal fraction ("$1.5 million") from reading as
+  // a count of 5 — the factuality eval blocked an emphasis-only change on it.
+  const re = /(?<![\d.,$])\b(\d)(?:\+)?\b(?![\d.,:%])/g
   let m: RegExpExecArray | null
   while ((m = re.exec(text))) {
     const after = text.slice(m.index + m[0].length, m.index + m[0].length + 8).toLowerCase()
@@ -152,6 +154,17 @@ function illegalEmphasis(original: string | null, proposedRaw: string): string[]
 export function isEmphasisOnly(original: string | null, proposed: string | null): boolean {
   if (!original || !proposed) return false
   return stripMarkdown(original).trim() === stripMarkdown(proposed).trim() && original.trim() !== proposed.trim()
+}
+
+/**
+ * The words are the original's — bold moved or nothing moved at all. The
+ * factuality eval found the tailor proposing a "reword" that was verbatim the
+ * master bullet, and the verifier duly spent a call confirming it was
+ * identical to itself. Neither case has a clause to audit.
+ */
+export function isWordingUnchanged(original: string | null, proposed: string | null): boolean {
+  if (!original || !proposed) return false
+  return stripMarkdown(original).trim() === stripMarkdown(proposed).trim()
 }
 
 // ─── The pre-check ───────────────────────────────────────────────────────────

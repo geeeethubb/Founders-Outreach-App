@@ -25,6 +25,9 @@ export interface ScoutStats {
   verification: Record<VerificationStatus, number>
   jobs_inserted: number
   jobs_updated: number
+  /** Post-scout ranking: jobs that got a fit evaluation before the run returned, and what it cost. */
+  jobs_ranked: number
+  rank_cost_usd: number
   cost_usd: number
   latency_ms: number
   web_searches: number
@@ -49,6 +52,8 @@ export function emptyStats(): ScoutStats {
     verification,
     jobs_inserted: 0,
     jobs_updated: 0,
+    jobs_ranked: 0,
+    rank_cost_usd: 0,
     cost_usd: 0,
     latency_ms: 0,
     web_searches: 0,
@@ -83,7 +88,7 @@ export function summarizeStats(stats: ScoutStats): string[] {
     `extracted: ${stats.jobs_extracted} · rejected: ${rejected}${rejected ? ` (${histogram(stats.jobs_rejected)})` : ''}`,
     `clusters: ${stats.clusters} · duplicates removed: ${stats.duplicates_removed}`,
     `verification: ${histogram(stats.verification)}`,
-    `persisted: ${stats.jobs_inserted} new, ${stats.jobs_updated} updated`,
+    `persisted: ${stats.jobs_inserted} new, ${stats.jobs_updated} updated · ranked: ${stats.jobs_ranked}${stats.rank_cost_usd ? ` ($${stats.rank_cost_usd.toFixed(4)})` : ''}`,
     `cost: $${stats.cost_usd.toFixed(4)} · ${(stats.latency_ms / 1000).toFixed(1)}s${stats.deadline_hit ? ' · DEADLINE HIT' : ''}`,
   ]
   return lines

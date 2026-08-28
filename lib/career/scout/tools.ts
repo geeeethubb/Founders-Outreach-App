@@ -15,6 +15,14 @@ import type { PageFetcher, RawJobPosting, SourceRegistry } from '../sources/type
 import { bump, noteQuery, type ScoutStats } from './stats'
 
 export const LOOKUP_POSTING_LIMIT = 40
+/**
+ * Internship-only listings go three times deeper. The filter runs before the
+ * cap, so on a board with 60 internships the 40 cap silently dropped a third
+ * of the openings — Zipline and Palantir both hit it in the discovery eval,
+ * and the pool, not the ranking, is what held P@20 at 65%. The adapters
+ * cache the whole board per process, so the deeper list costs nothing.
+ */
+export const INTERNSHIP_LOOKUP_LIMIT = 120
 export const FETCH_LINK_CAP = 120
 
 export interface ScoutToolDeps {
@@ -68,7 +76,8 @@ export function createLookupBoard(deps: ScoutToolDeps = {}): LookupBoardFn {
         note: `board is on ${detection.board.ats}, which has no keyless listing API here — treat the board URL as the careers page`,
       }
     }
-    const listing = await adapter.listPostings(detection.board, { internshipsOnly: input.internships_only !== false, limit: LOOKUP_POSTING_LIMIT })
+    const internshipsOnly = input.internships_only !== false
+    const listing = await adapter.listPostings(detection.board, { internshipsOnly, limit: internshipsOnly ? INTERNSHIP_LOOKUP_LIMIT : LOOKUP_POSTING_LIMIT })
     if (deps.stats) {
       bump(deps.stats.sources_consulted, adapter.source_type, listing.postings.length)
       if (listing.postings.length) deps.stats.companies_with_openings++

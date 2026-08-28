@@ -342,6 +342,30 @@ send pacing, `max_active_outreach`, and one-person-per-company at the send gate.
 
 ---
 
+## Phase 11 — Career OS ✅ built (founder action pending)
+
+The product became a Career OS: Summer 2027 internship discovery, verification, fit, company
+research, evidence matching, warm paths, conservative résumé tailoring with an independent fact
+verifier, DOCX/PDF generation from the master template, cover letters, an application tracker
+with immutable submitted documents, feedback that adjusts ranking through a bounded modifier,
+and six eval suites.
+
+Built as three waves of parallel workstreams, each independently reviewed:
+
+| Wave | Workstreams |
+|---|---|
+| A | evidence bank + importer · ATS adapters + job core · document engine · discovery agents · intelligence agents · tailoring agents · eval fixtures/judges |
+| B1 | scout orchestration + jobs/companies/cron API · intelligence + package orchestration + API |
+| B2 | Jobs/Companies/Mission/Runs UI · discovery + fit evals · factuality + minimal-edit + cover-letter evals and hardening |
+
+What it deliberately does not do: submit applications, send outreach from a warm path, or learn
+weights from outcomes. Full note: [CAREER_OS.md](CAREER_OS.md); measurements in
+[EVALS.md](EVALS.md) and [BUILD_LOG.md](BUILD_LOG.md).
+
+**Founder action:** apply `014_career_os.sql`, then `npm run career:seed -- --approve`.
+
+---
+
 ## Checkpoints
 
 Each phase ends with: `tsc --noEmit` clean · V1 functionality verified working ·

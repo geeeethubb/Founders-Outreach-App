@@ -46,6 +46,13 @@ export interface LetterPools {
   personalPool: EvidencePool
   /** True by construction: the applicant's name, the company, the role title. */
   safeNames?: string[]
+  /**
+   * The posting's own text. A term the hiring manager wrote into the job
+   * description ("GD&T", "Platform 2") is theirs to be echoed back; the
+   * cover-letter eval saw a letter blocked for naming a skill the posting
+   * itself asked for. Kept apart from companyPool, which stays FACT-only.
+   */
+  postingPool?: string[]
 }
 
 /** Share of a paragraph's 6-word shingles found in the bullets above which it is narration. */
@@ -72,7 +79,7 @@ export function repetitionScore(paragraph: string, poolLines: string[]): number 
 }
 
 export function gateCoverLetter(text: string, pools: LetterPools): LetterGrounding {
-  const evidence = [...pools.companyPool, ...pools.personalPool.lines]
+  const evidence = [...pools.companyPool, ...(pools.postingPool ?? []), ...pools.personalPool.lines]
   const shared = checkGrounding({ subject: '', body: text, evidence, safeNames: pools.safeNames ?? [] })
 
   const blocking: LetterFinding[] = []

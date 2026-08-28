@@ -158,6 +158,14 @@ async function main() {
     check('precheck allows a faithful reword', r.ok, JSON.stringify(r.blocking))
   }
   {
+    // A decimal in the evidence is not a small count. The factuality eval
+    // blocked an emphasis-only change for the "5" in "$1.5 million".
+    const decimal = `${CS_ORIGINAL} Sourced leads for a $1.5 million round.`
+    const decimalPool = { ...pool, lines: [...pool.lines, 'Sourced investment leads for $1.5 million round.'] }
+    const r = precheckChange(reword(decimal.replace('$4M+', '**$4M+**')), decimalPool, decimal)
+    check('precheck does not read the 5 in $1.5 million as an unsupported count', !r.blocking.some((f) => f.kind === 'quantity' && f.span === '5'), JSON.stringify(r.blocking))
+  }
+  {
     const r = precheckChange(reword(CS_ORIGINAL.replace('Built and piloted', 'Architected and piloted')), pool, CS_ORIGINAL)
     check('precheck warns on built→architected', r.warnings.some((f) => f.kind === 'ownership' && f.span === 'architected'), JSON.stringify(r.warnings))
     check('ownership escalation is a warning, not a block', r.ok)
@@ -295,6 +303,10 @@ async function main() {
     check('verifier was called exactly once (blocked change never reached it)', verifierCalls === 1, String(verifierCalls))
     const emphasis = await verifyChange(bank, reword(CS_ORIGINAL.replace('$4M+', '**$4M+**')), CTX, { deps: { verifier: verifierStub } })
     check('emphasis-only change is SUPPORTED without the verifier', emphasis.verification_result === 'SUPPORTED' && verifierCalls === 1 && emphasis.final_text?.includes('**$4M+**') === true)
+    // The factuality eval caught the tailor proposing a "reword" that was the
+    // master bullet verbatim, and a verifier call confirming it equalled itself.
+    const verbatim = await verifyChange(bank, reword(CS_ORIGINAL), CTX, { deps: { verifier: verifierStub } })
+    check('verbatim-identical reword is SUPPORTED without the verifier', verbatim.verification_result === 'SUPPORTED' && verifierCalls === 1 && /Wording unchanged/.test(verbatim.verification_notes ?? ''), `${verbatim.verification_notes} calls=${verifierCalls}`)
     const reorder = r.changes.find((c) => c.change_type === 'reorder')
     check('reorder is SUPPORTED without a verifier', reorder?.verification_result === 'SUPPORTED' && reorder.review_status === 'pending')
     check('pipeline distance is 0 when nothing survived', r.distance.distance === 0, JSON.stringify(r.distance))

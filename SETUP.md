@@ -111,6 +111,26 @@ Update `NEXT_PUBLIC_APP_URL` to your Vercel URL.
 
 ---
 
+## Step 7 — Career OS (Summer 2027 job search)
+
+1. In the Supabase SQL editor, run `supabase/migrations/014_career_os.sql` (idempotent; it also
+   creates the private `career-docs` storage bucket). Run 013 first if you have not.
+2. Put your master résumé at `./Zuyu_Resume.docx` (untracked — it is gitignored). Set
+   `ANTHROPIC_API_KEY`; optionally `CAREER_MASTER_RESUME_PATH`, `CAREER_OUTPUT_DIR`, `CRON_SECRET`
+   (see `.env.local.example`).
+3. `npm run career:seed -- --approve` — stores the master, builds the Evidence Bank from it, seeds
+   preferences and the default mission. Open `/dashboard/evidence` to inspect and edit.
+4. `/dashboard/jobs` → **Scout now** (bounded to the 300 s web ceiling), or `npm run career:scout`
+   for a deeper run from the terminal. `/dashboard/jobs/mission` edits tiers, company types and
+   fit weights; weight edits re-rank instantly.
+5. Open a job → **Generate Package** → review the résumé diff (every change shows its evidence and
+   verifier verdict; rejected changes keep the original) → approve → download
+   `Zuyu_Liu_<Company>_Resume.pdf` and `Zuyu_Liu_<Company>_Cover_Letter.pdf` → apply through the
+   posting → **I applied**. PDF rendering uses Microsoft Word on Windows (or LibreOffice); without
+   either you get the DOCX and QA says so.
+6. `npm run career:verify` (or the daily cron at `/api/career/cron/verify` with `CRON_SECRET`)
+   re-checks saved and tracked postings and closes ones that disappeared before you applied.
+
 ## How to Use — Workflow
 
 ### For YC Founder / Speaker Outreach

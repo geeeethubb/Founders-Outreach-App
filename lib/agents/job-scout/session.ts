@@ -51,6 +51,13 @@ export interface JobScoutSessionParams {
   runRound?: RunScoutRoundFn
   /** Passed through to the live round. */
   cache?: boolean
+  /**
+   * Absolute epoch ms. The orchestrator checks its deadline between
+   * strategies, but a strategy is two rounds of up to ten steps each, and a
+   * retry storm inside one call can cost minutes — the discovery eval saw a
+   * 600s run take 3996s. Past this, no further round starts.
+   */
+  deadline?: number
 }
 
 export interface JobScoutSessionResult {
@@ -127,6 +134,10 @@ export async function runJobScoutSession(params: JobScoutSessionParams, ctx: Too
   for (let round = 1; round <= params.maxRounds; round++) {
     const remaining = params.targetCount - postings.length
     if (remaining <= 0) break
+    if (params.deadline !== undefined && Date.now() > params.deadline) {
+      errors.push(`scout round ${round} (${params.strategy.name}): not started, deadline passed`)
+      break
+    }
 
     const lookupsUsed = toolLog.filter((e) => e.tool === 'lookup_ats_board').length
     const fetchesUsed = toolLog.filter((e) => e.tool === 'fetch_page').length

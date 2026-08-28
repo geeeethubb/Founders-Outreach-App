@@ -48,7 +48,14 @@
     "career:verify": "tsx scripts/career-verify.ts",
     "career:package": "tsx scripts/career-package.ts",
     "test:career-scout": "tsx scripts/test-career-scout.ts",
-    "test:career-package": "tsx scripts/test-career-package.ts"
+    "test:career-package": "tsx scripts/test-career-package.ts",
+    "eval:career-discovery": "tsx scripts/career-eval-discovery.ts",
+    "eval:career-fit": "tsx scripts/career-eval-fit.ts",
+    "test:career-letter": "tsx scripts/test-career-letter.ts",
+    "eval:career": "tsx scripts/career-eval-all.ts",
+    "eval:career-factuality": "tsx scripts/career-eval-factuality.ts",
+    "eval:career-minimal-edit": "tsx scripts/career-eval-minimal-edit.ts",
+    "eval:career-cover-letter": "tsx scripts/career-eval-cover-letter.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.116.0",

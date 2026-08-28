@@ -94,6 +94,25 @@ export function recordWebSearches(n: number, costUsd: number): void {
 
 let callBudget = Number(process.env.ANTHROPIC_MAX_CALLS_PER_RUN ?? 500)
 
+// ─── Run deadline ────────────────────────────────────────────────────────────
+// The retry loop below is right to be patient with a flaky API — up to four
+// attempts, each with a two-minute timeout. It is wrong to be patient PAST the
+// point where the orchestrator has already given up: a scout run with a 600s
+// deadline spent 4120s inside retries during an API outage, because nothing
+// here knew a deadline existed. An orchestrator that has one sets it; a call
+// that would retry after it returns an error instead, and the run degrades
+// the way every other failure does.
+
+let runDeadlineMs: number | null = null
+
+export function setAnthropicDeadline(epochMs: number | null): void {
+  runDeadlineMs = epochMs
+}
+
+function pastRunDeadline(): boolean {
+  return runDeadlineMs !== null && Date.now() > runDeadlineMs
+}
+
 export function setAnthropicBudget(n: number): void {
   callBudget = n
 }
@@ -196,6 +215,10 @@ export async function anthropicComplete(params: CompleteParams): Promise<Complet
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     if (attempt > 0) {
+      if (pastRunDeadline()) {
+        usage.errors++
+        return { ...empty, error: `Anthropic: run deadline passed during retry — ${lastError.slice(0, 200)}` }
+      }
       usage.retries++
       const base = Math.min(16_000, 700 * Math.pow(2, attempt))
       await sleep(Math.round(base * (0.5 + Math.random() * 0.5)))

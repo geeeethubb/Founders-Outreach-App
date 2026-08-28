@@ -21,9 +21,9 @@ import { isExcludedHost, slugCandidates, internshipLike } from '../lib/career/so
 import { extractHints } from '../lib/career/sources/careers'
 import type { FetchedPage, JobSourceAdapter, PageFetcher, RawJobPosting } from '../lib/career/sources/types'
 
-import { parseLocation, locationTier } from '../lib/career/jobs/location'
-import { normalizeTitle, roleFamilyFromTitle, detectEmploymentType, detectSeason, buildNormalizedJob } from '../lib/career/jobs/normalize'
-import { clusterJobs, duplicateRate, shingleJaccard } from '../lib/career/jobs/dedupe'
+import { parseLocation, locationTier, metroHints } from '../lib/career/jobs/location'
+import { normalizeTitle, roleFamilyFromTitle, detectEmploymentType, detectSeason, buildNormalizedJob, titleSaysOtherSeason } from '../lib/career/jobs/normalize'
+import { clusterJobs, duplicateRate, shingleJaccard, titleSimilarity, TITLE_SIMILARITY_THRESHOLD } from '../lib/career/jobs/dedupe'
 import { verifyJob, applyStaleness, titleCoverage } from '../lib/career/jobs/verify'
 import { applyHardConstraints, isInternshipLike } from '../lib/career/jobs/filters'
 import { buildSnapshot, descriptionSha } from '../lib/career/jobs/snapshot'
@@ -375,6 +375,46 @@ eq('constraint tier before', applyHardConstraints(base, [{ dimension: 'location_
 eq('constraint work_mode', applyHardConstraints(base, [{ dimension: 'work_mode', operator: 'in', value: ['remote', 'hybrid'], label: 'wm' }]).pass, false)
 eq('constraint unknown dimension passes', applyHardConstraints(base, [{ dimension: 'graduation_window', operator: 'after', value: '2027', label: 'g' }]).pass, true)
 check('isInternshipLike', isInternshipLike({ employment_type: 'unknown', title: 'Summer Analyst' }) && !isInternshipLike({ employment_type: 'full_time', title: 'Intern Coordinator' }) && isInternshipLike({ employment_type: 'co_op', title: 'x' }))
+
+// ─── discovery-eval regressions (wave 2) ─────────────────────────────────────
+// Each of these is a case the live discovery eval got wrong once. They stay
+// here so the fix cannot quietly come undone.
+
+// Location: suburbs and 'Greater X area' parentheticals name the metro.
+eq('tier Newark via Greater NYC parenthetical', T('Newark, NJ (Greater New York City area)'), 1)
+eq('tier Woburn is Boston metro', T('Woburn, MA'), 2)
+check('metroHints reads Greater Boston area', metroHints('Cambridge, MA (Greater Boston area)').some((h) => h.includes('boston')), JSON.stringify(metroHints('Cambridge, MA (Greater Boston area)')))
+// Country: Hungary parsed null before, and an unknown country passes the US constraint by design.
+eq('loc Budapest → HU', L('Budapest, Hungary').country, 'HU')
+eq('Budapest fails the United States constraint', applyHardConstraints({ ...base, location_country: L('Budapest, Hungary').country }, DEFAULT_HARD_CONSTRAINTS).failed.map((f) => f.label), ['United States'])
+
+// Dedupe: shared templates are not shared jobs.
+const TEMPLATE = 'Join our engineering internship program. You will work alongside senior engineers on real projects, present your results and learn our tooling. Requirements: pursuing a BS in engineering, strong fundamentals, curiosity. '.repeat(3)
+const rawPost = (over: Partial<RawJobPosting>): RawJobPosting => ({
+  source_type: 'greenhouse', source_url: 'https://boards.greenhouse.io/zip/jobs/1', external_id: '1', company_name: 'Zip', company_domain: 'zip.com',
+  title: 'Materials Engineer Intern', location_raw: 'South San Francisco, CA', description_text: TEMPLATE, description_html: null, department: null, posted_at: null, updated_at: null,
+  apply_url: null, canonical_url: 'https://boards.greenhouse.io/zip/jobs/1', ats_type: 'greenhouse', ats_job_id: '1', requisition_id: null,
+  employment_type_hint: 'Intern', raw: {}, retrieved_at: new Date().toISOString(), ...over,
+})
+const nz = (over: Partial<RawJobPosting>) => buildNormalizedJob(rawPost(over), null, { geo_tiers: tiers })
+const pageOnly = (over: Partial<RawJobPosting>): Partial<RawJobPosting> => ({ source_type: 'careers_page', ats_type: null, ats_job_id: null, canonical_url: null, source_url: `https://zip.com/careers/${Math.random()}`, ...over })
+eq('dedupe: two ids on the same board never merge, identical bodies or not', clusterJobs([nz({}), nz({ ats_job_id: '2', canonical_url: 'https://boards.greenhouse.io/zip/jobs/2', source_url: 'https://boards.greenhouse.io/zip/jobs/2' })]).clusters.length, 2)
+eq('dedupe: control — same posting without ids merges on title + location', clusterJobs([nz(pageOnly({})), nz(pageOnly({}))]).clusters.length, 1)
+eq('dedupe: Spring vs Summer 2027 twins never merge', clusterJobs([nz(pageOnly({ title: 'Materials Engineer Intern (Spring 2027)' })), nz(pageOnly({ title: 'Materials Engineer Intern (Summer 2027)' }))]).clusters.length, 2)
+check('titleSimilarity: Backend vs Security SWE intern below the threshold', titleSimilarity('backend software engineer intern', 'security engineer intern') < TITLE_SIMILARITY_THRESHOLD, String(titleSimilarity('backend software engineer intern', 'security engineer intern')))
+eq('dedupe: identical template bodies with dissimilar titles never merge', clusterJobs([nz(pageOnly({ title: 'Backend Software Engineer Intern' })), nz(pageOnly({ title: 'Security Engineer Intern' }))]).clusters.length, 2)
+
+// Season: a title naming only a non-summer season of the target year overrules the extractor.
+eq('titleSaysOtherSeason Spring 2027', titleSaysOtherSeason('Computational Physics Intern (Spring 2027)'), true)
+eq('titleSaysOtherSeason Spring & Summer 2027', titleSaysOtherSeason('Materials Engineer Intern (Spring & Summer 2027)'), false)
+eq('titleSaysOtherSeason Fall 2027 Co-op', titleSaysOtherSeason('Fall 2027 Co-op'), true)
+eq('titleSaysOtherSeason no season', titleSaysOtherSeason('Process Engineering Intern'), false)
+const springOverride = buildNormalizedJob(rawPost({ title: 'Computational Physics Intern (Spring 2027)' }), {
+  employment_type: 'internship', season_relevance: 'summer_2027', work_mode: 'onsite', role_family: 'research', location_raw: null, deadline: null,
+  compensation: null, min_qualifications: [], preferred_qualifications: [], graduation_eligibility: null, work_authorization: null,
+  skills: [], responsibilities: [], industry: null, appears_closed: false, confidence: 0.9,
+}, { geo_tiers: tiers })
+eq('buildNormalizedJob: title season overrides extractor summer_2027', springOverride.season_relevance, 'other_season')
 
 // ─── snapshot ────────────────────────────────────────────────────────────────
 

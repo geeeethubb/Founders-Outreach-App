@@ -229,13 +229,21 @@ async function noDbMode(): Promise<void> {
   const research = intel.research
   const letter = await generateCoverLetter({
     bank: mem.bank, job, ctx, run, output: { kind: 'dir', dir: out }, persist: null,
-    research: { points: research ? groundedPoints(research).map((p) => ({ id: p.id, text: p.text })) : [], summary: research?.summary ?? '' },
+    // The gate's company pool: name + grounded points + FACT claims. The
+    // summary and INFERENCE claims are shown to the writer but are not citable.
+    research: {
+      points: research ? groundedPoints(research).map((p) => ({ id: p.id, text: p.text })) : [],
+      summary: research?.summary ?? '',
+      factClaims: research ? research.claims.filter((c) => c.type === 'FACT').map((c) => c.claim) : [],
+      domain: null,
+    },
     evidenceMap: intel.evidenceMap ?? { why_i_fit: null, fact_ids: [], story_ids: [], top_experience_ids: [] },
     user: { name, email: contact.email ?? '', phone: contact.phone ?? '', linkedin: contact.linkedin },
     onStep: (s) => console.log(`  attempt ${s.attempt}: ${s.detail}`),
   })
   for (const e of letter.errors) console.log(`  error: ${e}`)
   const g = letter.letter.grounding
+  if (letter.onePageRetried) console.log(`  one-page retry: first draft ${letter.onePageRetryFrom} words rendered past one page`)
   console.log(`  ${letter.letter.wordCount ?? '-'} words · ${letter.letter.attempts} attempt(s) · grounding ${g ? (g.ok ? 'ok' : `${g.blocking.length} BLOCKING`) : '-'} · ${g?.warnings.length ?? 0} warning(s) · ${letter.flagged ? 'FLAGGED' : 'clean'}`)
   for (const f of g?.blocking ?? []) console.log(`    blocking ${f.kind}: "${f.span}" — ${f.reason}`)
   for (const f of g?.warnings ?? []) console.log(`    warn ${f.kind}: "${f.span}" — ${f.reason}`)

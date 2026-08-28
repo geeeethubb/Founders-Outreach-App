@@ -23,12 +23,15 @@ import { loadEvidenceBank } from '../evidence/store'
 import { renderExperienceSummaries, renderPreferences, renderSkills } from '../evidence/render'
 import { renderFeedbackHints, type FeedbackRow } from '../fit/feedback'
 import { clusterJobs } from '../jobs/dedupe'
+import { isInternshipLike } from '../jobs/filters'
 import { normalizeCompanyName, type NormalizedJob } from '../jobs/normalize'
 import { listJobs, listWatchlist, updateJobVerification, upsertJobs, type JobListRow, type ListJobsFilters, type UpsertJobsResult } from '../jobs/store'
 import type { VerifyResult } from '../jobs/verify'
 import { verifyWithAgent, type VerifierFn } from '../jobs/verify-batch'
+import { runIntelligenceBatch, type BatchResult } from '../intelligence/orchestrator'
 import { ensureDefaultMission, getMission, renderMission } from '../missions/store'
 import { DEFAULT_SCOUT_BUDGET, startCareerRun, type CareerBudget, type CareerRun } from '../runs'
+import { setAnthropicDeadline } from '@/lib/providers/anthropic/client'
 import { getPageFetcher } from '../sources/fetch'
 import { getSourceRegistry } from '../sources/registry'
 import type { PageFetcher, RawJobPosting, SourceRegistry } from '../sources/types'
@@ -42,6 +45,43 @@ import { createScoutTools } from './tools'
 const ATS_SOURCES = new Set(['greenhouse', 'lever', 'ashby', 'smartrecruiters', 'workable'])
 const ACTIVE_WATCH: WatchStatus[] = ['target', 'watching', 'opening_available']
 const MAX_SCOUT_COMPANY_CHECKS = 10
+// Post-scout ranking: how many of this run's jobs get a fit number before the
+// run returns, how many at once, and how much of the deadline must be left.
+// Research is skipped here (it is the slow stage); the package flow runs it.
+const MAX_RANK_JOBS = 12
+const RANK_CONCURRENCY = 3
+const RANK_DEADLINE_RESERVE_MS = 20_000
+const RANK_MIN_WINDOW_MS = 30_000
+
+/**
+ * Which of this run's stored jobs get a fit number first. Store order is
+ * arrival order — whichever board answered first — and a large run left the
+ * mission-targeted rows past the cap. Deterministic preference, most
+ * promising first: extracted this run (a thin heuristic row is a weaker
+ * candidate for the evaluator), then confirmed open, then the target season,
+ * then the closest tier (unknown last), then an internship-shaped title.
+ * Ties keep store order, so the choice is stable across runs.
+ */
+export function rankCandidatePriority(job: NormalizedJob): number {
+  const tier = job.location_tier ?? 4
+  return (
+    (job.extraction_version ? 10_000 : 0) +
+    (job.verification_status === 'VERIFIED_OPEN' ? 1_000 : 0) +
+    (job.season_relevance === 'summer_2027' ? 100 : 0) +
+    (4 - tier) * 10 +
+    (isInternshipLike(job) ? 1 : 0)
+  )
+}
+
+/** The ids to rank, best first. Falls back to store order when ids and jobs do not line up (a partial upsert). */
+export function selectJobsToRank(jobs: NormalizedJob[], ids: string[], max: number): string[] {
+  if (ids.length !== jobs.length) return ids.slice(0, max)
+  return jobs
+    .map((job, i) => ({ id: ids[i], i, priority: rankCandidatePriority(job) }))
+    .sort((a, b) => b.priority - a.priority || a.i - b.i)
+    .slice(0, max)
+    .map((x) => x.id)
+}
 
 // ─── Store + deps ────────────────────────────────────────────────────────────
 
@@ -106,6 +146,8 @@ export interface JobScoutDeps {
   registry?: SourceRegistry
   fetcher?: PageFetcher
   store?: ScoutStore
+  /** Post-scout ranking. Defaults to the live intelligence batch; the offline test injects a stub. */
+  rank?: (userId: string, jobIds: string[], opts: { concurrency: number; deadlineMs: number; skip: { research: true }; label: string }) => Promise<BatchResult>
 }
 
 export interface JobScoutParams {
@@ -118,6 +160,8 @@ export interface JobScoutParams {
   maxExtract?: number
   concurrency?: number
   verify?: boolean
+  /** False turns off post-scout ranking (the eval measures ranking separately). Default on. */
+  rank?: boolean
   onProgress?: (stage: string, detail: string) => void
   label?: string
 }
@@ -169,6 +213,9 @@ export async function runJobScout(params: JobScoutParams, deps: JobScoutDeps = {
   const fetcher = deps.fetcher ?? getPageFetcher()
   const budget: CareerBudget = { ...DEFAULT_SCOUT_BUDGET, ...(params.budget ?? {}) }
   const deadline = started + budget.deadlineMs
+  // The API client stops retrying past this point too (see setAnthropicDeadline):
+  // a run that has already given up must not sit inside a retry storm.
+  setAnthropicDeadline(deadline)
   const stats = emptyStats()
   const errors: string[] = []
   let rejected: RejectedJob[] = []
@@ -282,7 +329,7 @@ export async function runJobScout(params: JobScoutParams, deps: JobScoutDeps = {
       try {
         res = await session(
           {
-            strategy, mission: missionText, alreadyFound: [...alreadyFound], maxRounds: params.maxRoundsPerStrategy ?? 2, targetCount: 12,
+            strategy, mission: missionText, alreadyFound: [...alreadyFound], maxRounds: params.maxRoundsPerStrategy ?? 2, targetCount: 12, deadline,
             tools: { lookupBoard: tools.lookupBoard ?? live.lookupBoard, fetchPage: tools.fetchPage ?? live.fetchPage, maxLookups: perSessionLookups, maxFetches: perSessionFetches },
             onRound: (h) => { noteQuery(stats, h.query_used); progress('job-first', `${strategy.name} r${h.round}: ${h.postings_kept} kept · ${h.diagnosis} → ${h.action}`) },
           },
@@ -394,14 +441,42 @@ export async function runJobScout(params: JobScoutParams, deps: JobScoutDeps = {
     }
   }
 
+  // (j) Rank what was just stored, so the list the user gets back has fit
+  // numbers on it. Stored evaluations at the current prompt version are reused
+  // inside the batch, so only jobs without one cost anything. Bounded by count,
+  // by concurrency and by what is left of the deadline; a batch that cannot
+  // start is reported, never silently skipped.
+  if (up.ids.length > 0 && params.rank !== false) {
+    const window = deadline - Date.now() - RANK_DEADLINE_RESERVE_MS
+    if (window < RANK_MIN_WINDOW_MS) {
+      errors.push(`ranking skipped: ${Math.max(0, Math.round(window / 1000))}s left of the deadline`)
+    } else {
+      progress('rank', `${Math.min(MAX_RANK_JOBS, up.ids.length)} jobs`)
+      const rank = deps.rank ?? runIntelligenceBatch
+      try {
+        const r = await rank(params.userId, selectJobsToRank(jobs, up.ids, MAX_RANK_JOBS), { concurrency: RANK_CONCURRENCY, deadlineMs: window, skip: { research: true }, label: `post-scout ranking · ${mission.name}` })
+        stats.jobs_ranked = Object.values(r.results).filter((x) => x.fit !== null).length
+        stats.rank_cost_usd = Number(r.costUsd.toFixed(4))
+        if (r.skipped.length) errors.push(`ranking: ${r.skipped.length} job(s) not started before the deadline`)
+        errors.push(...r.errors)
+      } catch (e) {
+        errors.push(`ranking: ${e instanceof Error ? e.message : String(e)}`)
+      }
+    }
+  }
+
   return finish(run, 'succeeded', null, false, jobs.map((j, i) => ({
     id: idFor(i), title: j.title, company_name: j.company_name, location_raw: j.location_raw, location_tier: j.location_tier, season_relevance: j.season_relevance,
     employment_type: j.employment_type, verification_status: j.verification_status, canonical_url: j.canonical_url, source_types: [...new Set(j.sources.map((s) => s.source_type))],
   })))
 
   async function finish(r: CareerRun, status: 'succeeded' | 'failed', error: string | null, migrationMissing: boolean, out: JobScoutResultJob[] = []): Promise<JobScoutResult> {
+    // The deadline belongs to this run only; a later call in the same process
+    // (a package build, an eval) must not inherit an expired one.
+    setAnthropicDeadline(null)
     if (error) errors.push(error)
-    stats.cost_usd = Number(r.costUsd().toFixed(4))
+    // The ranking batch runs under its own run row; its cost is added here so the scout's number is what the whole call cost.
+    stats.cost_usd = Number((r.costUsd() + stats.rank_cost_usd).toFixed(4))
     stats.latency_ms = Date.now() - started
     await r.finish(status, { ...stats }, error)
     return {

@@ -34,6 +34,7 @@ Full definition: [docs/PRODUCT.md](docs/PRODUCT.md)
 | [docs/EVALS.md](docs/EVALS.md) | Before touching quality gates |
 | [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) | To know what phase we're in and what's next |
 | [docs/PHASE_NETWORK_AND_REFERENCE.md](docs/PHASE_NETWORK_AND_REFERENCE.md) | Before touching internal retrieval or the campaign reference flow |
+| [docs/CAREER_OS.md](docs/CAREER_OS.md) | Before touching anything under `lib/career/`, the Career OS agents, `app/dashboard/{jobs,applications,companies,evidence}` or `app/api/career/` |
 | [docs/BUILD_LOG.md](docs/BUILD_LOG.md) | Append after any meaningful change |
 
 **Documentation is a deliverable, not an afterthought.** The founder must be able to
@@ -234,6 +235,12 @@ and that column holds an RFC822 Message-ID this app generates.
 | A truncated stem before `\b` in a regex | `\bmanufactur\b` cannot match "Manufacturing" — the `i` is a word character. This silently sent every inflected title to `unknown` in `lib/network/normalize.ts`. Write `manufactur\w*`. |
 | SQL inside `$$ … $$` | Invisible to a parser reading the outer file, and validated by Postgres at `CREATE` time. `npm run check:sql` parses bodies separately for this reason. |
 | An agent that "hangs" | Usually `stop_reason: max_tokens` on `submit_result`. The output is truncated mid-JSON, validation fails, and the loop used to escalate a tier — which writes *more* and truncates again, at 5× the price. `runtime/loop.ts` now handles truncation separately. Check `onStep` before assuming a hang. |
+| `resume_bullets.text` | Markdown with `**bold**` markers. The document engine renders them as bold runs; the verifier and QA see them stripped. Store nothing else in it. |
+| A pending résumé change | Is NOT in the document. Only `review_status` approved/edited changes reach `applyResumePatch`; a `SUPPORTED` verdict alone does nothing. |
+| `evidence_fact_ids` on a change | May contain **metric** ids as well as fact ids (a bold-the-number change cites the metric). Resolve against both tables. |
+| A `VERIFIED_OPEN` job | Was listed by an ATS API *at `last_verified_at`*. It is a timestamped status, not a promise; `npm run career:verify` and the cron re-check it. |
+| PDF rendering | Word via COM on this machine, LibreOffice when installed, otherwise DOCX only with QA saying so. There is no HTML-to-PDF fallback, deliberately (ADR-033). |
+| `applications.locked` | Set on APPLIED. Submitted documents are never overwritten; a new package is a new version under a new storage path. |
 | ⚠ `Apollo API.txt` | A credential-shaped string tracked in git. See [CURRENT_STATE.md §9](docs/CURRENT_STATE.md#9-configuration). |
 
 ---
@@ -274,31 +281,47 @@ The seven product agents are TypeScript modules, not Claude Code subagents.
 
 ## Current phase
 
-**Phase 10 complete** — the loop now starts with the people you already have, and writes in
-a voice you supply:
+**Phase 11 — Career OS** is built on top of the Phase 10 loop. The outreach loop is unchanged:
 
 ```
 MISSION → STRATEGY → EXISTING NETWORK → [enough?] → discovery → RESEARCH → RANK
         → POSITION → DRAFT (in the campaign's voice) → APPROVE → SEND → TRACK → OUTCOME
 ```
 
-Phases 0, 3, 6, 7, 8, 9 and 10 have shipped. See [docs/BUILD_LOG.md](docs/BUILD_LOG.md) for
-what each one changed and
-[docs/PHASE_NETWORK_AND_REFERENCE.md](docs/PHASE_NETWORK_AND_REFERENCE.md) for the latest.
+and beside it, sharing the runtime, the traces, the research facts and the contact index:
 
-**Requires founder action:** apply `supabase/migrations/013_network_and_reference.sql` in the
-Supabase SQL editor, then run `npm run index:network` once. Until both happen, internal-first
-scouting finds an empty index and says so; `npm run index:network` exits 2.
+```
+JOB MISSION → PLAN → DISCOVER (company-first ATS + job-first scout) → NORMALIZE → EXTRACT
+           → DEDUPE → VERIFY → FIT → RESEARCH → MATCH EVIDENCE → WARM PATHS
+           → [Generate Package] → TAILOR → FACT-VERIFY → REVIEW DIFF → DOCX/PDF + QA
+           → COVER LETTER → READY FOR REVIEW → READY TO APPLY → (you apply) → APPLIED → OUTCOME
+```
 
-**Thirteen agents now, not seven.** Person Triage (7), Conversation and Follow-Up (9),
-Contact Classifier, Network Retrieval and Style Analyst (10) each earned a place against the
-test in [docs/AGENTS.md](docs/AGENTS.md): a judgment problem no existing agent owned. Three
-candidates were *rejected* during Phase 10 design for failing it — the test still applies to
-the fourteenth.
+Architecture note: [docs/CAREER_OS.md](docs/CAREER_OS.md). ADR-030–037 in
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Twelve Career OS agents in
+[docs/AGENTS.md](docs/AGENTS.md), each argued against the same test — three candidates were
+rejected for failing it.
 
-**Not built yet:** the `no_response` timer (the most common outcome is currently recorded
-only by hand), send pacing, and a scheduler for `followup_due_at`. The Talent Knowledge Base
-is still the fixture at `evals/phase3/user-profile.ts` — and the claim-safety gate's
-verification corpus is only as complete as that file.
+**Requires founder action, in this order:**
+
+1. Apply `supabase/migrations/013_network_and_reference.sql` (Phase 10) and
+   `supabase/migrations/014_career_os.sql` (Phase 11) in the Supabase SQL editor.
+   `npm run check:sql` has parsed both.
+2. `npm run index:network` once (Phase 10).
+3. `npm run career:seed -- --approve` once — reads `./Zuyu_Resume.docx`, stores it as the
+   master, seeds the Evidence Bank (experiences, bullets, facts, metrics, skills, preferences)
+   and the default Summer 2027 mission. ~$0.25 the first time, $0 after (cached).
+4. Then `/dashboard/jobs` → **Scout now**, or `npm run career:scout` for a deep run.
+
+Until 014 is applied every Career OS route answers `409 { migrationMissing: true }` and every
+Career OS script exits 2 naming the file. Nothing is spent before that check.
+
+**Offline checks:** `npm run test:career` (10 suites, no keys). **Evals:** `npm run eval:career`
+and the per-suite `eval:career-*` scripts — they cost money and cache by content.
+
+**Not built yet:** autonomous submission (never), outreach auto-send from a warm path (never —
+it hands off to the existing approval queue), an ML ranking model (deliberately — feedback is a
+bounded modifier, ADR-036). Still outstanding from Phase 10: the `no_response` timer, send
+pacing, and the `followup_due_at` scheduler.
 
 See [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md).

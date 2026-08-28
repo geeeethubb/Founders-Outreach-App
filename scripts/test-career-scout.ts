@@ -20,7 +20,7 @@ import { defaultMission } from '../lib/career/missions/store'
 import { emptyBank } from '../lib/career/evidence/store'
 import type { CareerRun } from '../lib/career/runs'
 import type { NormalizedJob } from '../lib/career/jobs/normalize'
-import { runJobScout, type ScoutStore } from '../lib/career/scout/orchestrator'
+import { runJobScout, selectJobsToRank, type JobScoutDeps, type ScoutStore } from '../lib/career/scout/orchestrator'
 import { resolveScoutedPosting } from '../lib/career/scout/resolve'
 import { emptyStats, summarizeStats } from '../lib/career/scout/stats'
 import { constraintRejections, extractAndNormalize, orderForExtraction } from '../lib/career/scout/extract'
@@ -130,9 +130,14 @@ const extractor = async (input: { title: string; text: string }): Promise<AgentR
   }, 'job_extractor')
 const verifier = async (): Promise<AgentResult<JobVerification>> => agentResult<JobVerification>({ verdict: 'OPEN', reasoning: 'title present', closed_signals: [] }, 'job_verifier')
 
-interface Mem { jobs: NormalizedJob[]; upserts: number; watch: { name: string; source: string; status: string }[]; checked: { id: string; status: string | null | undefined; openings: number }[]; runs: { status: string; stats: Record<string, unknown> }[]; traces: string[]; refreshed: { id: string; status: string }[] }
-function memStore(opts: { watchlist?: Record<string, unknown>[]; slowCheck?: number; rerun?: boolean } = {}): { store: ScoutStore; mem: Mem } {
-  const mem: Mem = { jobs: [], upserts: 0, watch: [], checked: [], runs: [], traces: [], refreshed: [] }
+interface Mem { jobs: NormalizedJob[]; upserts: number; watch: { name: string; source: string; status: string }[]; checked: { id: string; status: string | null | undefined; openings: number }[]; runs: { status: string; stats: Record<string, unknown> }[]; traces: string[]; refreshed: { id: string; status: string }[]; ranked: { ids: string[]; skipResearch: boolean; deadlineMs: number; concurrency: number }[] }
+function memStore(opts: { watchlist?: Record<string, unknown>[]; slowCheck?: number; rerun?: boolean } = {}): { store: ScoutStore; mem: Mem; rank: NonNullable<JobScoutDeps['rank']> } {
+  const mem: Mem = { jobs: [], upserts: 0, watch: [], checked: [], runs: [], traces: [], refreshed: [], ranked: [] }
+  // The post-scout ranking stub: records what it was asked, answers a fit for every id, costs a cent each.
+  const rank: NonNullable<JobScoutDeps['rank']> = async (_u, ids, o) => {
+    mem.ranked.push({ ids, skipResearch: o.skip.research, deadlineMs: o.deadlineMs, concurrency: o.concurrency })
+    return { results: Object.fromEntries(ids.map((id) => [id, { fit: 0.7, eligibility: 'QUALIFIED', errors: [] }])), skipped: [], costUsd: 0.01 * ids.length, errors: [], runId: null }
+  }
   const watchlist = opts.watchlist ?? []
   const run: CareerRun = {
     runId: 'run-1', migrationMissing: false, costUsd: () => 0.05, agentCalls: () => mem.traces.length,
@@ -157,16 +162,16 @@ function memStore(opts: { watchlist?: Record<string, unknown>[]; slowCheck?: num
     async markCareersChecked(id, c) { if (opts.slowCheck) await sleep(opts.slowCheck); mem.checked.push({ id, status: c.status, openings: c.openings }); return { error: null } },
     async ensureCompany() { return { id: 'c-x', error: null, migrationMissing: false } },
   }
-  return { store, mem }
+  return { store, mem, rank }
 }
 
 async function main() {
   // ─── A0. Re-run: ATS-listed rows already in the store get their verification refreshed ──
   console.log('orchestrator: re-run refresh')
   {
-    const { store, mem } = memStore({ rerun: true, watchlist: [{ id: 'c-acme', name: 'Acme', domain: 'acme.com', careers_url: null, ats_type: 'greenhouse', ats_identifier: 'acme', watch_status: 'target', watch_priority: 90 }] })
+    const { store, mem, rank } = memStore({ rerun: true, watchlist: [{ id: 'c-acme', name: 'Acme', domain: 'acme.com', careers_url: null, ats_type: 'greenhouse', ats_identifier: 'acme', watch_status: 'target', watch_priority: 90 }] })
     const r = await runJobScout({ userId: USER, maxStrategies: 1 }, {
-      store, registry, fetcher, extractor, verifier,
+      store, rank, registry, fetcher, extractor, verifier,
       planner: async () => agentResult(PLAN, 'job_mission_planner'),
       session: async () => sessionResult(SCOUTED),
     })
@@ -179,13 +184,13 @@ async function main() {
   // ─── A. Full run ──────────────────────────────────────────────────────────
   console.log('orchestrator: full run')
   {
-    const { store, mem } = memStore({ watchlist: [{ id: 'c-acme', name: 'Acme', domain: 'acme.com', careers_url: null, ats_type: 'greenhouse', ats_identifier: 'acme', watch_status: 'target', watch_priority: 90 }] })
+    const { store, mem, rank } = memStore({ watchlist: [{ id: 'c-acme', name: 'Acme', domain: 'acme.com', careers_url: null, ats_type: 'greenhouse', ats_identifier: 'acme', watch_status: 'target', watch_priority: 90 }] })
     fetched.length = 0
     let sessionCalls = 0
     const r = await runJobScout({ userId: USER, maxStrategies: 1 }, {
-      store, registry, fetcher, extractor, verifier,
+      store, rank, registry, fetcher, extractor, verifier,
       planner: async () => agentResult(PLAN, 'job_mission_planner'),
-      session: async (p) => { sessionCalls++; check('session receives the highest-priority strategy', p.strategy.name === 'Bay Area process interns'); return sessionResult(SCOUTED) },
+      session: async (p) => { sessionCalls++; check('session receives the highest-priority strategy', p.strategy.name === 'Bay Area process interns'); check('session receives the run deadline', typeof p.deadline === 'number' && p.deadline > Date.now()); return sessionResult(SCOUTED) },
     })
     check('run succeeded', !r.migrationMissing && mem.runs[0]?.status === 'succeeded', JSON.stringify(r.errors))
     check('one session for maxStrategies 1', sessionCalls === 1)
@@ -211,7 +216,10 @@ async function main() {
     check('stats: queries include planner and session queries', r.stats.queries.includes('process engineer intern summer 2027 san francisco') && r.stats.queries.includes('process engineer intern summer 2027'))
     check('stats: verification histogram sums to jobs', Object.values(r.stats.verification).reduce((a, b) => a + b, 0) === mem.jobs.length)
     check('stats: web searches and model calls counted', r.stats.web_searches >= 2 && r.stats.model_calls >= 4)
-    check('stats: cost from the run', r.costUsd === 0.05 && mem.runs[0].stats.cost_usd === 0.05)
+    check('post-scout ranking asked for every stored id, research skipped, within the deadline', mem.ranked.length === 1 && mem.ranked[0].ids.length === mem.jobs.length && mem.ranked[0].skipResearch && mem.ranked[0].deadlineMs > 0 && mem.ranked[0].deadlineMs < 270_000 && mem.ranked[0].concurrency === 3, JSON.stringify(mem.ranked))
+    check('post-scout ranking puts the extracted, board-verified Summer 2027 tier-1 intern first and the unverified lead last', mem.ranked[0]?.ids[0] === `job-${mem.jobs.indexOf(acme!)}` && mem.ranked[0]?.ids[mem.ranked[0].ids.length - 1] === `job-${mem.jobs.indexOf(delta!)}`, JSON.stringify(mem.ranked[0]?.ids))
+    check('stats: ranked count and rank cost recorded', r.stats.jobs_ranked === mem.jobs.length && r.stats.rank_cost_usd === 0.03, `${r.stats.jobs_ranked} ranked, $${r.stats.rank_cost_usd}`)
+    check('stats: cost from the run plus ranking', r.costUsd === 0.08 && mem.runs[0].stats.cost_usd === 0.08, `${r.costUsd}`)
     check('location tier from mission geo tiers', acme?.location_tier === 1 && beta?.location_tier === 1)
     check('summarizeStats renders lines', summarizeStats(r.stats).length === 8 && summarizeStats(r.stats)[3].includes('Internships only'))
   }
@@ -219,14 +227,14 @@ async function main() {
   // ─── B. Deadline ──────────────────────────────────────────────────────────
   console.log('orchestrator: deadline')
   {
-    const { store, mem } = memStore({ slowCheck: 30, watchlist: [
+    const { store, mem, rank } = memStore({ slowCheck: 30, watchlist: [
       { id: 'c-acme', name: 'Acme', domain: 'acme.com', careers_url: null, ats_type: 'greenhouse', ats_identifier: 'acme', watch_status: 'target', watch_priority: 90 },
       { id: 'c-beta', name: 'Beta', domain: 'beta.com', careers_url: null, ats_type: null, ats_identifier: null, watch_status: 'watching', watch_priority: 10 },
     ] })
     let sessionCalls = 0
     let extractCalls = 0
     const r = await runJobScout({ userId: USER, budget: { deadlineMs: 20 }, concurrency: 1 }, {
-      store, registry, fetcher, verifier,
+      store, rank, registry, fetcher, verifier,
       extractor: async (i) => { extractCalls++; return extractor(i) },
       planner: async () => agentResult(PLAN, 'job_mission_planner'),
       session: async () => { sessionCalls++; return sessionResult(SCOUTED) },
@@ -238,6 +246,38 @@ async function main() {
     check('jobs found before the deadline still persist (the UK one is constraint-rejected)', mem.upserts === 1 && mem.jobs.length === 1 && (r.stats.jobs_rejected['United States'] ?? 0) === 1, `${mem.jobs.length}`)
     check('unextracted ATS postings still VERIFIED_OPEN', mem.jobs.every((j) => j.verification_status === 'VERIFIED_OPEN'))
     check('run still finishes succeeded', mem.runs[0]?.status === 'succeeded')
+    check('ranking is not started past the deadline, and says so', mem.ranked.length === 0 && r.errors.some((e) => e.startsWith('ranking skipped')) && r.stats.jobs_ranked === 0, r.errors.join(' | '))
+  }
+
+  // ─── B1b. selectJobsToRank: the best 12, not the first 12 ─────────────────
+  console.log('orchestrator: rank selection')
+  {
+    const j = (over: Partial<NormalizedJob>): NormalizedJob => ({ title: 'Process Engineer Intern', employment_type: 'internship', extraction_version: 'x', verification_status: 'VERIFIED_OPEN', season_relevance: 'summer_2027', location_tier: 1, ...over } as NormalizedJob)
+    const best = j({})
+    const thin = j({ extraction_version: null })
+    const unverified = j({ verification_status: 'UNVERIFIED' })
+    const otherSeason = j({ season_relevance: 'unspecified' })
+    const tier3 = j({ location_tier: 3 })
+    const noTier = j({ location_tier: null })
+    const notIntern = j({ employment_type: 'unknown', title: 'Engineering Program' })
+    // Fourteen rows in store order with the strongest candidates at the end — the old slice(0, 12) would have dropped them.
+    const jobs = [thin, thin, unverified, otherSeason, tier3, noTier, notIntern, thin, unverified, tier3, noTier, thin, best, j({ location_tier: 2 })]
+    const ids = jobs.map((_, i) => `job-${i}`)
+    const picked = selectJobsToRank(jobs, ids, 12)
+    check('selection: 12 of 14, the best (stored last) first', picked.length === 12 && picked[0] === 'job-12' && picked.includes('job-13'), picked.join(','))
+    check('selection: preference order extracted > verified > season > tier > internship-like', picked.join(',') === 'job-12,job-6,job-13,job-4,job-9,job-5,job-10,job-3,job-2,job-8,job-0,job-1', picked.join(','))
+    check('selection: thin unextracted rows are what gets dropped', !picked.includes('job-7') && !picked.includes('job-11'), picked.join(','))
+    check('selection: ties keep store order', picked.indexOf('job-4') < picked.indexOf('job-9') && picked.indexOf('job-5') < picked.indexOf('job-10'))
+    check('selection: fewer jobs than the cap → every id, best first', selectJobsToRank([thin, best], ['a', 'b'], 12).join(',') === 'b,a')
+    check('selection: ids that do not line up with jobs fall back to store order', selectJobsToRank([best, thin], ['a'], 12).join(',') === 'a')
+  }
+
+  // ─── B2. rank: false ─────────────────────────────────────────────────────
+  console.log('orchestrator: rank off')
+  {
+    const { store, mem, rank } = memStore({ watchlist: [{ id: 'c-acme', name: 'Acme', domain: 'acme.com', careers_url: null, ats_type: 'greenhouse', ats_identifier: 'acme', watch_status: 'target', watch_priority: 90 }] })
+    const r = await runJobScout({ userId: USER, maxStrategies: 1, rank: false }, { store, rank, registry, fetcher, extractor, verifier, planner: async () => agentResult(PLAN, 'job_mission_planner'), session: async () => sessionResult(SCOUTED) })
+    check('rank: false never calls the batch', mem.ranked.length === 0 && r.stats.jobs_ranked === 0 && r.costUsd === 0.05)
   }
 
   // ─── C. Migration missing ─────────────────────────────────────────────────

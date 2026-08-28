@@ -224,6 +224,15 @@ The agent sees the job, the company research, and a *shortlist* of Evidence Bank
 never the whole bank (principle 5). It emits components with explanation and evidence,
 uncertainties, red flags and missing qualifications. It never sees the weights.
 
+**Gates, added by the fit eval.** The weighted mean alone ranked "a great job you cannot have"
+above real options — a Summer 2026 posting scored 0.70 while `NOT_QUALIFIED`. Three deterministic
+gates now sit between the components and the number, applied identically at evaluation time, on
+every re-sum and in the eval: `NOT_QUALIFIED` halves the mean; a failed mission hard constraint
+multiplies by 0.6 **and caps at 0.30** (a job that fails a mission rule can never leave the WEAK
+band); `role_fit` below 0.35 scales the mean proportionally, because location 0.9 + company 0.7
++ ownership 0.75 were lifting software roles level with real process roles. `base_overall` keeps
+the ungated mean and `gates` lists what applied. The model still only judges (ADR-004).
+
 Explicit feedback adjusts ranking through `lib/career/fit/feedback.ts`: a small, bounded,
 logged modifier derived from reasons (e.g. three `NOT_INTERESTED: too software-heavy` verdicts
 lower `role_fit` for software-only role families by a capped amount). Hard preferences are never

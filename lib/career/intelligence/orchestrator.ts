@@ -27,6 +27,7 @@ import { renderExperienceSummaries, renderPreferences, renderSkills, renderStori
 import { renderRetrievedDetail, retrieveEvidenceForJob } from '../evidence/retrieve'
 import { buildFitEvaluationRow, evaluateFit, type FitEvaluation } from '../fit/evaluate'
 import { computeFeedbackAdjustment, renderFeedbackHints, type FeedbackRow } from '../fit/feedback'
+import { applyHardConstraints } from '../jobs/filters'
 import { descriptionSha } from '../jobs/snapshot'
 import { renderMission } from '../missions/store'
 import { findWarmPathCandidates } from '../network/candidates'
@@ -47,12 +48,24 @@ export interface IntelligenceForce {
 
 export type IntelligenceStage = 'research' | 'fit' | 'match' | 'paths'
 
+/**
+ * Stages to leave out entirely. Post-scout ranking skips research: the list
+ * the user gets back needs a fit number in seconds, and the researcher's web
+ * searches are the slow, expensive stage — the package flow runs it later,
+ * when one job has been chosen. Skipped is not failed: the fit prompt reads
+ * '(no research yet)', exactly as it does for a company nobody researched.
+ */
+export interface IntelligenceSkip {
+  research?: boolean
+}
+
 export interface IntelligenceParams {
   userId: string
   jobId: string
   ctx?: ToolContext
   run?: CareerRun
   force?: IntelligenceForce
+  skip?: IntelligenceSkip
   /** A context the caller already loaded (the package orchestrator has one). */
   context?: JobContext
   feedbackRows?: FeedbackRow[]
@@ -190,7 +203,9 @@ export async function runJobIntelligence(params: IntelligenceParams): Promise<In
     research = researchFromStored(context.existing.research.summary, company, context.existing.research.facts)
     researchFromCache = research !== null
   }
-  if (!research) {
+  if (!research && params.skip?.research) {
+    // Stored research is still used when fresh; only a NEW researcher call is skipped.
+  } else if (!research) {
     progress('research', job.company_name)
     try {
       const res = await runCompanyResearcher(researchInputFrom(job, company, mission), ctx)
@@ -221,10 +236,12 @@ export async function runJobIntelligence(params: IntelligenceParams): Promise<In
     { id: job.id, role_family: job.role_family, industry: job.industry, company_name: job.company_name, location_tier: job.location_tier, company_type: company?.company_type ?? null },
     feedbackRows
   )
+  // Discovery rejects these before storing; a manual add keeps them with a warning. Either way the rank must show it.
+  const hardConstraintFailures = applyHardConstraints(job, mission.hard_constraints).failed.map((f) => f.label)
   const stored = context.existing.fit
   if (!force.fit && stored && stored.prompt_version === fitEvaluatorPrompt.version) {
     const judgment = judgmentFromRow(stored)
-    fit = { judgment, evaluation: evaluateFit({ judgment, weights: mission.fit_weights, feedbackAdjustment: adjustment.adjustment }), row: stored }
+    fit = { judgment, evaluation: evaluateFit({ judgment, weights: mission.fit_weights, feedbackAdjustment: adjustment.adjustment, hardConstraintFailures }), row: stored }
     fitFromStore = true
   } else {
     progress('fit', job.title)
@@ -252,7 +269,7 @@ export async function runJobIntelligence(params: IntelligenceParams): Promise<In
       )
       const agentRunId = await run.trace(res, { job_id: job.id, mission_id: mission.id })
       if (res.output) {
-        const evaluation = evaluateFit({ judgment: res.output, weights: mission.fit_weights, feedbackAdjustment: adjustment.adjustment })
+        const evaluation = evaluateFit({ judgment: res.output, weights: mission.fit_weights, feedbackAdjustment: adjustment.adjustment, hardConstraintFailures })
         const row = buildFitEvaluationRow({
           userId: params.userId, jobId: job.id, missionId: mission.id, judgment: res.output, evaluation,
           promptVersion: res.trace.prompt_version, agentRunId,
@@ -388,11 +405,11 @@ export interface BatchResult {
 export async function runIntelligenceBatch(
   userId: string,
   jobIds: string[],
-  opts: { concurrency?: number; deadlineMs?: number; force?: IntelligenceForce; onProgress?: (jobId: string, stage: IntelligenceStage, detail: string) => void } = {}
+  opts: { concurrency?: number; deadlineMs?: number; force?: IntelligenceForce; skip?: IntelligenceSkip; label?: string; onProgress?: (jobId: string, stage: IntelligenceStage, detail: string) => void } = {}
 ): Promise<BatchResult> {
   const started = Date.now()
   const deadline = opts.deadlineMs ?? DEFAULT_PACKAGE_BUDGET.deadlineMs
-  const run = await startCareerRun({ userId, kind: 'package', label: `intelligence batch: ${jobIds.length} jobs`, mission: { job_ids: jobIds }, budget: DEFAULT_PACKAGE_BUDGET })
+  const run = await startCareerRun({ userId, kind: 'package', label: opts.label ?? `intelligence batch: ${jobIds.length} jobs`, mission: { job_ids: jobIds }, budget: DEFAULT_PACKAGE_BUDGET })
   const feedback = (await loadFeedbackRows(userId)).rows
   const results: BatchResult['results'] = {}
   const skipped: string[] = []
@@ -404,7 +421,7 @@ export async function runIntelligenceBatch(
       return
     }
     const r = await runJobIntelligence({
-      userId, jobId, run, force: opts.force, feedbackRows: feedback,
+      userId, jobId, run, force: opts.force, skip: opts.skip, feedbackRows: feedback,
       onProgress: (stage, detail) => opts.onProgress?.(jobId, stage, detail),
     })
     results[jobId] = { fit: r.fit?.evaluation.overall ?? null, eligibility: r.fit?.judgment.eligibility ?? null, errors: r.errors }

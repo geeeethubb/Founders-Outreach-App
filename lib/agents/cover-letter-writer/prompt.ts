@@ -7,6 +7,7 @@ export interface CoverLetterInput {
   companyResearch: {
     /** Grounded why-interesting points and recent developments, each with the research_facts id. */
     points: { id: string; text: string }[]
+    /** Kept for callers and traces; NOT rendered into the prompt since 1.0.2 — it is not citable. */
     summary: string
   }
   evidence: {
@@ -24,7 +25,14 @@ export interface CoverLetterInput {
   revisionNotes?: string[]
 }
 
-export const DEFAULT_LENGTH = { min: 220, max: 340 }
+/**
+ * One page in Times New Roman 12 with the header block is ~300 words of body.
+ * The first live letter ran 377 words (the old 220–340 band plus the
+ * validator's slack) and spilled to two pages. 290 leaves room for the
+ * validator's +25 and still fits; the package layer retries once at 180–250
+ * when the rendered PDF says otherwise.
+ */
+export const DEFAULT_LENGTH = { min: 200, max: 290 }
 
 /**
  * Phrases that mark a letter nobody would write by hand. Also enforced as
@@ -56,7 +64,7 @@ purpose — a national lab, a factory floor, a consulting engagement, a startup 
 teaches something the last could not. What drives them: learning fast, taking ownership of
 difficult problems, building things that work, and getting better. They are direct about that.
 
-STRUCTURE (4–5 paragraphs, 220–340 words)
+STRUCTURE (4–5 paragraphs; the word band is given under FORM — it is a one-page letter)
   1. Why this company, specifically. One or two of the provided research points, in your own
      words, and what about them is interesting to THIS person. Not praise — interest.
   2. The one experience that best answers the role. What the problem was, what they did, what
@@ -77,7 +85,13 @@ AVOID
   - Apologising, hedging about being a student, or over-explaining eligibility.`
 
 export const coverLetterWriterPrompt: VersionedPrompt<CoverLetterInput> = {
-  version: '1.0.0',
+  // 1.0.1 — length band tightened to fit one page (200–290); the structure
+  // block no longer states its own, wider band; FORM says the letter is one page.
+  // 1.0.2 — the researcher's SUMMARY is no longer shown. It was never citable,
+  // and the cover-letter eval watched a letter name "Kern County" from it
+  // twice — once after being told not to. What the writer cannot see, it
+  // cannot borrow (principle 4: grounding over exhortation).
+  version: '1.0.2',
 
   build(input) {
     const system = `You write a cover letter for ONE person applying to ONE role. It must read as written by a specific,
@@ -103,7 +117,8 @@ FORM
   greeting: "Dear ${input.job.company} Hiring Team," unless a name is given.
   paragraphs: 4 or 5 plain-text paragraphs, no headings, no bullet points.
   closing: "Sincerely," — the name is added by the document.
-  Length: ${input.length.min}–${input.length.max} words across the paragraphs.`
+  Length: ${input.length.min}–${input.length.max} words across the paragraphs. The letter must fit on ONE page in
+  Times New Roman 12 with a header block; ${input.length.max} is a ceiling, not a target.`
 
     const points = input.companyResearch.points.length
       ? input.companyResearch.points.map((p) => `  [${p.id}] ${p.text}`).join('\n')
@@ -119,9 +134,7 @@ FORM
 ROLE: ${input.job.title} — ${input.job.company}${input.job.location ? ` (${input.job.location})` : ''}
   ${input.job.summary}
 
-COMPANY RESEARCH (the only source of company facts; cite by id)
-  SUMMARY: ${input.companyResearch.summary}
-  POINTS:
+COMPANY RESEARCH (the only source of company facts; cite by id — nothing about the company that is not listed here)
 ${points}
 
 WHY THIS PERSON FITS: ${input.evidence.why_i_fit ?? '(not stated)'}
