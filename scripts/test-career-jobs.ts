@@ -22,7 +22,7 @@ import { extractHints } from '../lib/career/sources/careers'
 import type { FetchedPage, JobSourceAdapter, PageFetcher, RawJobPosting } from '../lib/career/sources/types'
 
 import { parseLocation, locationTier, metroHints } from '../lib/career/jobs/location'
-import { normalizeTitle, roleFamilyFromTitle, detectEmploymentType, detectSeason, buildNormalizedJob, titleSaysOtherSeason } from '../lib/career/jobs/normalize'
+import { normalizeTitle, roleFamilyFromTitle, detectEmploymentType, detectSeason, buildNormalizedJob, titleSaysOtherSeason, parseDeadline } from '../lib/career/jobs/normalize'
 import { clusterJobs, duplicateRate, shingleJaccard, titleSimilarity, TITLE_SIMILARITY_THRESHOLD } from '../lib/career/jobs/dedupe'
 import { verifyJob, applyStaleness, titleCoverage } from '../lib/career/jobs/verify'
 import { applyHardConstraints, isInternshipLike } from '../lib/career/jobs/filters'
@@ -429,6 +429,17 @@ check('snapshot structured', s1.structured.employment_type === 'internship')
 // ─── run ─────────────────────────────────────────────────────────────────────
 
 verifyTests().then(() => {
+  // ─── deadline parsing — the column is a timestamp, the extractor writes prose ──
+  console.log('deadline parsing')
+  check('deadline: ISO date parses to end of that day', parseDeadline('2026-10-15') === '2026-10-15T23:59:59.000Z')
+  check('deadline: "August 2026" is the last day of the month', parseDeadline('August 2026') === '2026-08-31T23:59:59.000Z')
+  check('deadline: "by Oct 2026" is the last day of October', parseDeadline('by Oct 2026') === '2026-10-31T23:59:59.000Z')
+  check('deadline: a full date in prose parses', parseDeadline('October 15, 2026')?.startsWith('2026-10-15') === true)
+  check('deadline: rolling is null', parseDeadline('Rolling') === null)
+  check('deadline: "open until filled" is null', parseDeadline('Open until filled') === null)
+  check('deadline: garbage is null', parseDeadline('as soon as possible please') === null)
+  check('deadline: null in, null out', parseDeadline(null) === null)
+
   console.log(`\ntest-career-jobs: ${passed} passed, ${failed} failed`)
   for (const f of failures) console.log(`  FAIL ${f}`)
   process.exit(failed ? 1 : 0)

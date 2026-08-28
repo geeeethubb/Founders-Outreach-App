@@ -36,6 +36,7 @@ import { DEFAULT_PACKAGE_BUDGET, startCareerRun, type CareerRun } from '../runs'
 import type { EvidenceBank, FitJudgment, JobEvidenceMap, JobFitEvaluation, WarmPath } from '../types'
 import { fitJobInputFrom, loadFeedbackRows, loadJobContext, researchFromStored, researchInputFrom, type JobContext } from './load'
 import { persistCompanyResearch, replaceWarmPaths, upsertEvidenceMap, upsertFitEvaluation } from './persist'
+import { ensureExtracted, needsExtraction } from './extract'
 
 export const RESEARCH_TTL_DAYS = 30
 
@@ -46,7 +47,7 @@ export interface IntelligenceForce {
   paths?: boolean
 }
 
-export type IntelligenceStage = 'research' | 'fit' | 'match' | 'paths'
+export type IntelligenceStage = 'extract' | 'research' | 'fit' | 'match' | 'paths'
 
 /**
  * Stages to leave out entirely. Post-scout ranking skips research: the list
@@ -182,7 +183,8 @@ export async function runJobIntelligence(params: IntelligenceParams): Promise<In
     context = loaded.ctx
   }
   errors.push(...context.errors)
-  const { job, company, mission, bank } = context
+  const { company, mission, bank } = context
+  let job = context.job
 
   const ownRun = !params.run
   const run = params.run ?? (noDb ? memoryRun() : await startCareerRun({
@@ -195,6 +197,20 @@ export async function runJobIntelligence(params: IntelligenceParams): Promise<In
   }))
   const ctx = params.ctx ?? packageToolContext(params.userId, run.runId)
   const costBefore = run.costUsd()
+
+  // ─── (0) Extraction backfill ───
+  // A job the scout persisted under its deadline has a description and nothing
+  // else. Complete it here, once, before anything judges it.
+  if (needsExtraction(job)) {
+    progress('extract', `backfilling extraction for ${job.title}`)
+    const ex = await ensureExtracted({ userId: params.userId, job, mission, ctx, run, noDb })
+    if (ex.error) errors.push(ex.error)
+    if (ex.extracted) {
+      job = ex.job
+      context = { ...context, job }
+      if (ex.closedByText) errors.push('the posting text says this role is closed; stored as CLOSED')
+    }
+  }
 
   // ─── (a) Company research ───
   let research: CompanyResearch | null = null

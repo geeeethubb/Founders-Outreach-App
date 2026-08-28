@@ -14,7 +14,7 @@
 
 import { loadDocument } from '../documents/store'
 import { ensureApplication, transitionApplication, updateApplicationDetails } from '../applications/store'
-import { runJobIntelligence, packageToolContext } from '../intelligence/orchestrator'
+import { runJobIntelligence, packageToolContext, type IntelligenceStage } from '../intelligence/orchestrator'
 import { letterPointsFromFacts, loadJobContext, type JobContext } from '../intelligence/load'
 import { groundedPoints } from '../research/company'
 import type { CompanyResearch } from '@/lib/agents/company-researcher'
@@ -87,7 +87,7 @@ export async function generatePackage(params: {
   jobId: string
   ctx?: ToolContext
   deps?: PackageDeps
-  onProgress?: (stage: PackageStage | 'research' | 'fit' | 'match' | 'paths', detail: string) => void
+  onProgress?: (stage: PackageStage | IntelligenceStage, detail: string) => void
 }): Promise<PackageResult> {
   const progress = params.onProgress ?? (() => {})
   const warnings: string[] = []

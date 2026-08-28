@@ -62,7 +62,10 @@ async function main() {
     userId = profiles[0].id as string
   }
 
-  const deadlineMs = num('deadline', DEFAULT_SCOUT_BUDGET.deadlineMs / 1000) * 1000
+  // 1200s by default, not the web route's 270s: that ceiling exists because of
+  // Vercel, and the first live CLI run spent 226s in the planner alone and then
+  // hit the deadline before extracting or ranking anything.
+  const deadlineMs = num('deadline', Math.max(1200, DEFAULT_SCOUT_BUDGET.deadlineMs / 1000)) * 1000
   console.log(`\nJOB SCOUT — user ${userId}\n`)
   const started = Date.now()
   const result = await runJobScout({

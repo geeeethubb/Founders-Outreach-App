@@ -17,6 +17,7 @@ import { computeFeedbackAdjustment, renderFeedbackHints, type FeedbackRow } from
 import { groundedPoints, renderCompanyResearchForPrompt, researchClaimsToFactRows } from '../lib/career/research/company'
 import { FIT_DIMENSIONS } from '../lib/career/types'
 import { mentionsAlumni } from '../lib/career/network/candidates'
+import { needsExtraction } from '../lib/career/intelligence/extract'
 
 let passed = 0
 let failed = 0
@@ -318,6 +319,17 @@ const close = (a: number, b: number, tol = 0.0011) => Math.abs(a - b) < tol
   check('alumni: an education sentence about them counts', mentionsAlumni(row('Jane graduated from the University of Illinois with a BS in chemical engineering before joining Acme.')))
   check('alumni: "UIUC alum" in a fact counts', mentionsAlumni(row('UIUC alum; leads the Houston plant.')))
   check('alumni: a partnership mention does not count', !mentionsAlumni(row('Acme partners with UIUC on a research consortium.')))
+}
+
+// ─── extraction backfill gate ─────────────────────────────────────────────
+// A job the scout persisted under its deadline has a description and no
+// extraction; the intelligence orchestrator completes it once, before judging.
+{
+  const long = 'x'.repeat(300)
+  check('backfill: unextracted job with a description needs extraction', needsExtraction({ extraction_confidence: null, description_text: long }))
+  check('backfill: an extracted job does not', !needsExtraction({ extraction_confidence: 0.8, description_text: long }))
+  check('backfill: a thin description is not worth a call', !needsExtraction({ extraction_confidence: null, description_text: 'short' }))
+  check('backfill: no description, no call', !needsExtraction({ extraction_confidence: null, description_text: null }))
 }
 
 process.stdout.write(`\n${passed} passed, ${failed} failed\n`)

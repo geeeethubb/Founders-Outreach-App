@@ -184,6 +184,45 @@ export function companyKeyFor(name: string, domain: string | null | undefined): 
   return `n:${normalizeCompanyName(name) ?? name.trim().toLowerCase()}`
 }
 
+const MONTHS: Record<string, number> = {
+  january: 0, february: 1, march: 2, april: 3, may: 4, june: 5, july: 6, august: 7,
+  september: 8, october: 9, november: 10, december: 11,
+  jan: 0, feb: 1, mar: 2, apr: 3, jun: 5, jul: 6, aug: 7, sep: 8, sept: 8, oct: 9, nov: 10, dec: 11,
+}
+
+/**
+ * The extractor reports a deadline "as written" — "August 2026", "Rolling",
+ * "2026-10-15", "Oct 15, 2026". The column is a timestamp, and the first live
+ * backfill failed on exactly this: `invalid input syntax for type timestamp
+ * with time zone: "August 2026"`. Anything that names a day parses as-is; a
+ * month alone is read as its last day (the latest date the text supports);
+ * "rolling", "ASAP" and other prose become null — no deadline is not a bug.
+ */
+export function parseDeadline(text: string | null | undefined): string | null {
+  const s = (text ?? '').trim()
+  if (!s || s.length > 60) return null
+  if (/rolling|asap|until filled|open until|ongoing|n\/a|none/i.test(s)) return null
+  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (iso) {
+    const d = new Date(Date.UTC(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]), 23, 59, 59))
+    return Number.isNaN(d.getTime()) ? null : d.toISOString()
+  }
+  const monthYear = s.match(/^(?:by |before |until |end of |late |early |mid[- ])?([A-Za-z]+)\.?,?\s+(\d{4})$/)
+  if (monthYear && MONTHS[monthYear[1].toLowerCase()] !== undefined) {
+    const y = Number(monthYear[2])
+    const m = MONTHS[monthYear[1].toLowerCase()]
+    // Day 0 of the next month is the last day of this one.
+    return new Date(Date.UTC(y, m + 1, 0, 23, 59, 59)).toISOString()
+  }
+  const parsed = Date.parse(s.replace(/^(by|before|until|due)\s+/i, ''))
+  if (Number.isNaN(parsed)) return null
+  const d = new Date(parsed)
+  // A parse that lands before 2000 is a misread ("Fall 2026" → year 2026 only
+  // parses on some engines as January 1); refuse anything implausible.
+  if (d.getUTCFullYear() < 2020 || d.getUTCFullYear() > 2100) return null
+  return d.toISOString()
+}
+
 export function buildNormalizedJob(raw: RawJobPosting, extracted?: ExtractedJobFields | null, mission?: NormalizeOptions): NormalizedJob {
   const title = raw.title.trim()
   const normalized_title = normalizeTitle(title).toLowerCase()
@@ -217,7 +256,7 @@ export function buildNormalizedJob(raw: RawJobPosting, extracted?: ExtractedJobF
     season_relevance,
     posted_at: raw.posted_at,
     source_updated_at: raw.updated_at,
-    deadline: extracted?.deadline ?? null,
+    deadline: parseDeadline(extracted?.deadline ?? null),
     canonical_url: raw.canonical_url ?? raw.source_url,
     apply_url: raw.apply_url ?? raw.canonical_url ?? raw.source_url,
     ats_type: raw.ats_type,
