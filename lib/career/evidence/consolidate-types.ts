@@ -101,6 +101,12 @@ export interface ApplyOptions {
   only?: { entity_type: MergeEntityType; keep_id: string; merge_id: string }[]
   /** Also apply POSSIBLE pairs listed in `only` (user-confirmed). Never applies CONFLICT. */
   allowPossible?: boolean
+  /**
+   * Run the bank-wide organization / canonical-key / provenance backfill
+   * (steps 2–3) before merging. Default true (the CLI full run); mergePair
+   * passes false so a single review-tab merge has no side effects beyond its pair.
+   */
+  backfill?: boolean
   /** Skip the snapshot (tests only). */
   skipSnapshot?: boolean
   reason?: string
