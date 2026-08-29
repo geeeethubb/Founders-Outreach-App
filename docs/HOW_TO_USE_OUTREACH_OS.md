@@ -49,7 +49,7 @@ Everything the job-search agents may claim about me comes from approved Evidence
 | **Jobs** | Ranked, verified internship postings; Scout now; Add by URL; feedback; Generate package. Mission editor lives here. | Daily triage in recruiting season. |
 | **Applications** | Tracker: Saved → Applied → OA → Interview → Offer/Rejected, with notes and the exact documents submitted. | After applying or hearing back. |
 | **Companies** | Watchlist (target / watching / opening available). "Check now" reads one company's job board today. | Add dream companies; check one board without a full run. |
-| **Evidence** | The Personal Evidence Bank: experiences, résumé bullets, facts, metrics, skills, stories, preferences — with approval. | Once at setup; whenever I gain a new project or skill. |
+| **Evidence** | The Personal Evidence Bank. **Canonical**: organization → role → facts, each with its sources. **Review**: suggested merges and conflicts. Plus experiences, bullets, facts, skills, stories, preferences with approval. | Setup; after any import (check Review); when I gain a project or skill. |
 | **Outreach** | Review queue + funnel for every Scout draft: edit, approve, send, interpret replies, one follow-up suggestion, record outcome. | After every Scout run; after sends. |
 | **Contacts** | Address book: add by LinkedIn URL (Apollo), bulk, or manually; older "research" summaries; add to campaigns. | To add a known person or look one up. |
 | **Templates** | My own email skeletons with `[bracketed]` slots the AI fills. | When I want my wording, AI only fills the person-specific bits. |
@@ -78,7 +78,8 @@ changes*, *Mark READY TO APPLY*, *I applied* · Evidence → *Approve all*, *Upl
 - **Watch a company for an opening** → Companies → Add company
 - **Build a résumé + cover letter for a job** → Jobs → open job → Package tab
 - **See what I applied with** → Applications (documents are locked after "I applied")
-- **Change what the AI knows about me** → Evidence (jobs) · My Profile (older loop, Gmail)
+- **Change what the AI knows about me** → Evidence (jobs and Scout) · My Profile (older loop, Gmail)
+- **Clean up duplicate experiences after an import** → Evidence → Review
 - **See what a run cost** → Jobs → footer link *Runs*
 
 ---
@@ -93,15 +94,17 @@ changes*, *Mark READY TO APPLY*, *I applied* · Evidence → *Approve all*, *Upl
 - **My Profile** holds identity (name, links, bio) and the Gmail connection, plus "Career
   Context" text. That text feeds only the older loop (Contacts research scores, Compose/Campaign
   drafts). It reaches Evidence only if I tick *include profile free text* when importing.
-- Scout (people search) reads neither — it uses a fixed built-in summary of my résumé. Known gap.
+- Scout and its drafts read Evidence too: each prospect's proof points come from my approved
+  experiences and facts, ranked for that mission. Edit Evidence and the next run changes.
 
 **How imports work.** The master résumé creates experiences and bullets (approved as-is) and
-proposes facts, metrics and skills (pending until I approve). A second source — pasted
-LinkedIn text, notes — *adds facts to experiences I already have* when the organization and
-title match closely (aliases like P&G / Procter & Gamble count; different roles at one
-organization stay separate). Re-importing the same résumé changes nothing. **If a duplicate
-experience still appears**, edit or delete the extra one on the Experiences tab — there is no
-merge button yet (`docs/KNOWLEDGE_BASE_DEDUP_PLAN.md`).
+proposes facts, metrics and skills (pending until I approve). A second source — pasted LinkedIn
+text, a post, notes — is kept as a source record and files its sentences under the experiences I
+already have (P&G = Procter & Gamble; different roles at one organization stay separate). A
+sentence repeating a known fact adds a second source to it rather than a new row. Re-importing
+the same text changes nothing. When two rows *might* be one role, nothing merges by itself —
+the **Review** tab shows the pair with why, what is preserved and the risk; I click *Merge* or
+*Keep separate*. A merge hides the extra row and moves its facts over; nothing is deleted.
 
 ### Scout vs Contacts
 Scout is **discovery**: it searches my indexed network first, then the market, and ranks.
@@ -130,3 +133,4 @@ application exists once I track it or generate a package, and locks its document
 - **Campaign stats miss Scout sends**: emails sent from Scout/Outreach don't count toward a campaign, even when written in its voice.
 - **Compose leaves orphans**: single-contact "Generate fresh" saves all three variants; the two unsent ones sit in Draft Emails, and *Approve All* would send them.
 - **Preferences live in two places**: Evidence → Preferences (weights) and Jobs → Mission (the hard constraints and fit weights that actually gate and rank). Edit the Mission page.
+- **A merged experience looks gone**: it is hidden, not deleted — its facts now sit under the surviving row, and every apply is preceded by a snapshot.

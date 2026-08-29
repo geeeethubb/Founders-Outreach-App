@@ -512,6 +512,33 @@ Everything around them stays deterministic: ATS calls, robots checks, dedupe, ve
 status, hard constraints, fit arithmetic, feedback adjustment, DOCX editing, PDF rendering, QA,
 filenames, storage and the application state machine.
 
+### How agents read the Evidence Bank (2026-08-28)
+
+No agent reads evidence rows directly. `lib/career/evidence/retrieval.ts`
+`getRelevantPersonalEvidence({ bank, mission, target, maxExperiences, maxFacts, … })` ranks
+canonical, approved, non-tombstoned experiences and facts for a mission and a target (a job, a
+person, a company) with deterministic lexical scoring, and returns a bounded slice with source
+labels and confidence. Consumers and what they receive:
+
+| Consumer | Target | Slice |
+|---|---|---|
+| People Scout / Positioning (`lib/outreach/background.ts`) | mission goal | ≤12 experiences as `BackgroundItem`s — the fixture `RESUME_ITEMS` only when the bank is empty |
+| Fit Evaluator, Evidence Matcher | the job | 6 experiences, 16 facts (compact for fit, detailed for the matcher) |
+| Job Mission Planner | generic | 8 experiences + skills + preferences |
+| Resume Tailor | the job | every experience with master-résumé bullets, facts ranked ≤8 each; other experiences only when retrieved |
+| Cover Letter Writer | the job | matcher-chosen facts first, retrieval fills to 10 |
+
+The **Resume Importer** (prompt 1.2.0) is the one agent shown the bank's existing experiences
+and their facts: it files a sentence under an existing experience and marks a restatement with
+`corroborates: <fact id>` instead of inventing a new wording. Code decides what that means —
+the sentence must share content words with the fact, and it supports the fact's *numbers* only
+when it carries them; otherwise the provenance row is recorded at confidence 0.5 (event
+corroborated, metric not). The deterministic matcher (`plan.ts`) remains the second check.
+
+Prompt-size numbers from the live bank (2026-08-28, `npm run evidence:benchmark`): whole-bank
+summaries for a persona 1,835 tokens → 468–699 retrieved; the tailor's input 6,334 → 4,245; the
+outreach background fixture 1,205 → 768 bank-derived.
+
 ---
 
 ## Migrating V1's AI modules

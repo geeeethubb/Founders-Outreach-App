@@ -691,6 +691,44 @@ RLS follows the V1 pattern on every table; child tables (`job_sources`, `job_sna
 
 ---
 
+### Evidence canonical layer — `015_evidence_canonical.sql` (shipped, applied 2026-08-28)
+
+Eight tables and tombstone / canonical columns on the 014 evidence tables. Reasoning:
+[ADR-038](ARCHITECTURE.md#adr-038).
+
+```
+evidence_organizations     canonical_name · normalized_name (unique per user) · aliases[] · kind · company_id
+evidence_sources           kind (resume | linkedin_profile | linkedin_post | pasted_context | notes | profile_field | other)
+                           · label · sha256 (unique per user) · content (raw text) · resume_document_id · metadata
+evidence_fact_sources      fact_id ↔ source_id · location ("¶6", "L350") · quote · confidence (1.0 full, 0.5 event-only)
+evidence_experience_sources experience_id ↔ source_id · title_as_written · dates_as_written
+evidence_projects          experience_id · name · name_norm · fact_ids[] · approved · status · merged_into
+evidence_merge_suggestions entity_type · keep_id · merge_id · confidence (HIGH | POSSIBLE | CONFLICT) · rule · signals
+                           · why · data_preserved · risk · status (open | merged | kept_separate | stale)
+evidence_conflicts         entity_type · entity_id · field · candidates [{value, source_id, source_label}] · status · resolution
+evidence_snapshots         reason · counts · payload (the whole bank, taken before every apply)
+
+evidence_experiences  + organization_id · organization_norm · title_norm · canonical_summary · summary_fact_ids[]
+                      · merge_status (VERIFIED | CORROBORATED | CONFLICTING | NEEDS_REVIEW) · status (active | merged)
+                      · merged_into · edited_by_user · source_count
+evidence_facts        + status · merged_into · project_id · statement_norm · edited_by_user · support_count · fact_status
+evidence_metrics      + status · merged_into · value_norm        evidence_deliverables + status · merged_into
+```
+
+**Reading rules.** `loadEvidenceBank` filters `status = 'merged'` in code (pre-015 rows have no
+status and pass) and reports `canonical: false` when the 015 tables are absent — that is not
+`migrationMissing`, which stays about 014. Every default reproduces pre-015 behaviour, so
+applying the migration changes nothing until `npm run evidence:consolidate -- --apply` runs.
+
+**Writing rules.** Imports create one `evidence_sources` row per import (hashed, so the same
+text twice is one source) and provenance rows for inserted *and* reused facts. Merges are
+tombstones + re-points, never deletes. `edited_by_user` rows are never rewritten by an import or
+a merge; they win the keep side. The unique indexes on the provenance tables use
+`coalesce(location, '')`, which PostgREST cannot target in `onConflict` — writers insert one row
+at a time and treat `23505` as "already recorded".
+
+---
+
 ## 4. Extended V1 tables
 
 ### `contacts` — becomes the person entity

@@ -342,7 +342,7 @@ send pacing, `max_active_outreach`, and one-person-per-company at the send gate.
 
 ---
 
-## Phase 11 — Career OS ✅ built (founder action pending)
+## Phase 11 — Career OS ✅ built and live (2026-08-28)
 
 The product became a Career OS: Summer 2027 internship discovery, verification, fit, company
 research, evidence matching, warm paths, conservative résumé tailoring with an independent fact
@@ -362,7 +362,16 @@ What it deliberately does not do: submit applications, send outreach from a warm
 weights from outcomes. Full note: [CAREER_OS.md](CAREER_OS.md); measurements in
 [EVALS.md](EVALS.md) and [BUILD_LOG.md](BUILD_LOG.md).
 
-**Founder action:** apply `014_career_os.sql`, then `npm run career:seed -- --approve`.
+**Founder actions done:** `014_career_os.sql` applied, `npm run career:seed -- --approve` run,
+one live scout and one live package verified.
+
+**Knowledge base consolidation (2026-08-28, migration 015).** Sources became records, facts
+gained many-to-many provenance, organizations became canonical entities with aliases, merges
+became tombstones behind a snapshot, and every agent now reads the bank through one retrieval
+service. The live bank was audited, dry-run, and consolidated once (3 HIGH merges, 0 deletes);
+the Evidence page gained Canonical and Review tabs; People Scout and positioning left the
+hardcoded fixture. Status and rules: [KNOWLEDGE_BASE_DEDUP_PLAN.md](KNOWLEDGE_BASE_DEDUP_PLAN.md),
+[ADR-038](ARCHITECTURE.md#adr-038).
 
 ---
 

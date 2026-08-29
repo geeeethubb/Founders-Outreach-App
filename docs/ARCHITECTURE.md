@@ -971,6 +971,49 @@ or the scout.
 
 ---
 
+### ADR-038 — Knowledge is canonical; sources are records; merges are tombstones
+
+**Context.** Importing the same role from a résumé and then from pasted LinkedIn text produced
+two `evidence_experiences` rows and two wordings of one fact, each remembering a single
+source. Downstream prompts doubled up; the outreach loop still read a hardcoded fixture.
+
+**Decision.** Three separations, in migration `015_evidence_canonical.sql`:
+
+1. **A source is not knowledge.** `evidence_sources` holds what the user gave us (résumé file,
+   LinkedIn export, one post, a profile field) with its raw content and a content hash.
+   Facts and experiences point at sources through `evidence_fact_sources` /
+   `evidence_experience_sources` — one fact, many sources, each with the wording that source
+   used and a confidence: `1.0` when the source carries the fact's numbers, `0.5` when it only
+   restates the event. **Corroboration of an event is not support for its metric.**
+2. **Identity is computed, never guessed.** Organizations resolve through a normalizer plus an
+   editable alias table (`P&G` = `Procter & Gamble` = `Procter & Gamble, Tabler Station`);
+   roles are head titles (`President; Formerly Head of Events` → `president`); dates are parsed
+   months. The consolidation engine classes a pair **HIGH** only on the same organization key,
+   the same head title (or seniority-qualifier containment), compatible dates and no
+   distinguishing qualifier; **POSSIBLE** when a person is needed (same org + same period +
+   different titles; a qualifier such as a lab name with no dates; both rows hand-edited);
+   **CONFLICT** when the same claim carries different numbers. `Head of Events` ≠ `President`,
+   `VP` ≠ `President`, two summers at one company stay two rows, two labs at one university stay
+   two rows. Fuzzy similarity alone never merges anything.
+3. **A merge deletes nothing.** The merged row keeps `status = 'merged'` and `merged_into`; every
+   child (facts, metrics, deliverables, bullets, projects, provenance) is re-pointed to the
+   survivor; disagreeing fields become `evidence_conflicts` rows with both values and their
+   sources, and the résumé's value stays canonical until the user picks. A snapshot of the whole
+   bank is written to `evidence_snapshots` before any apply. Re-running the pass is a no-op.
+
+Agents read the bank through one retrieval service, `getRelevantPersonalEvidence`, which ranks
+canonical rows for a mission and a target and returns a bounded slice with provenance and
+confidence — never the whole bank, never a tombstone, never an unapproved row.
+
+**Consequences.** More sources make the same rows more confident, not more numerous. The
+Review tab shows every POSSIBLE / CONFLICT pair with why, what is preserved and what could go
+wrong; "Merge all high-confidence" applies only what the engine would apply on its own. The
+hardcoded `RESUME_ITEMS` fixture survives only as the empty-bank fallback for the outreach loop.
+The importer now sees existing experiences and facts and files restatements against them
+(prompt 1.2.0); the deterministic matcher remains the second check on every filing.
+
+---
+
 ## 4. Providers
 
 ```ts

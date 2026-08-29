@@ -6,6 +6,147 @@ architecturally and why.
 
 ---
 
+## 2026-08-28 — Corroboration: one fact, two sources, and a support level the numbers decide
+
+**Type:** fix + feature · **Behavior change:** a pasted text that restates a bank fact no
+longer inserts a second wording; a number-less restatement is recorded as event-only
+support (0.5) and never raises `support_count`; the engine classes it POSSIBLE, not CONFLICT
+
+### What was observed
+
+A LinkedIn post repeating a résumé fact word for word ("Designed a new SOP … reducing scrap
+costs by $300K+ annually.") went through `seedEvidenceFromText`. The importer filed it under
+the right experience but atomized the sentence into two facts, so the exact-statement match in
+`planPersist` never fired: 8 pending rows inserted, 0 corroborated. The consolidation engine
+then classed the number-less half against the résumé fact as CONFLICT ("different numbers":
+none vs $300K) — wrong; it restates the event and says nothing about the metric.
+
+### What changed
+
+- **Importer 1.2.0** (`lib/agents/resume-importer`) is shown each existing experience's
+  active facts (`existing_facts`, ≤20 per row, most-supported first —
+  `existingExperienceInputs` / `existingFromBank` in `import.ts`) and emits
+  `corroborates: <fact id>` on a sentence that restates one instead of inventing a wording.
+  Validation drops the *field* (never the fact) when the id was not in the input, belongs to
+  another experience, or the cited line shares fewer than 3 content words with the fact
+  (`checkCorroborates`, `sharedContentWords`); drops are counted and their reasons returned
+  (`dropped_corroborations`, `corroboration_notes`) and printed by `summarizeSeed`.
+- **Code computes the support level** (`lib/career/evidence/corroborate.ts`): `full` when
+  every numeric token of the bank statement appears in the incoming wording (or the bank
+  statement has none), `event_only` otherwise. A restatement that *introduces* a number the
+  bank fact lacks is never a corroboration — it inserts, and the engine's CONFLICT covers it.
+- **`planPersist`** turns a verified corroboration into a `reuse` decision carrying
+  `{ rule, support, quote }`; two halves of one line pointing at the same fact become one
+  reuse at the stronger support. The deterministic second check (`findFactMatch`) now also
+  reuses a fact with identical numeric multiset and content-word Jaccard ≥ 0.8; the
+  manual-add route passes `nearDuplicate: false`. `Corroboration` records carry
+  `support`, `rule`, `quote`; `summarizeSeed` prints "corroborated: N full, M event-only".
+- **Provenance** rows for a reused fact quote the incoming wording at confidence 1.0 (full)
+  or 0.5 (event-only). `refreshFactSupport` and the mutation planner's `distinctSources`
+  count only rows at ≥ 0.9; an event-only row is visible in labels as "… (event only)"
+  (`sourceLabelsForFact`, canonical `factSourceLabels`) but never makes a metric look
+  supported.
+- **Engine rule** (`compareFacts`): one side number-less, its content words ≥ 0.8 contained
+  in the other → POSSIBLE `weaker_restatement` ("restates the event without its numbers —
+  corroborates the event, not the metric"). CONFLICT stays for two statements that both carry
+  numbers and differ. A `weaker_restatement` merge keeps the numbered statement, re-points the
+  bare wording's provenance at 0.5, and leaves `support_count` alone.
+- **Organization kinds** read the group: award-only → `other`; "Self" / "Self (public
+  profile)" → `other`; "Startup School" → `program`. `planOrganizations` carries `kind`;
+  apply refreshes an existing organization's kind and aliases (`organizations_updated`) and
+  backfills `statement_norm` on facts where it is null (`statement_norms_backfilled`).
+- `numericTokens`: a suffix must end the word ("5 members" is `5`, not `5m`).
+- `SIMILAR_TITLE_THRESHOLD` / `NEAR_MISS_THRESHOLD` moved to `normalize.ts` (re-exported
+  from `plan.ts`) so `consolidate-rules` no longer imports from `plan` — `plan` now imports
+  `corroborate`, which imports the rules.
+
+### Tests
+
+`test:career-provenance` (importer validation of `corroborates`, support levels, plan reuse,
+near-duplicate bands, event-only labels) and `test:career-consolidation` (the SOP pair is
+POSSIBLE `weaker_restatement`, different numbers still CONFLICT, mutation confidences,
+`organizationKindFor`). All five evidence suites and `tsc` pass. Not yet exercised live: a
+re-run of the LinkedIn-post import against the founder's bank.
+
+---
+
+## 2026-08-28 — Knowledge base consolidation: sources, provenance, canonical identity, one retrieval layer
+
+**Type:** architecture + feature · **Behavior change:** imports corroborate instead of
+duplicating; the bank merges only what it can prove and shows the rest for review; every agent —
+including People Scout and positioning, which read a hardcoded fixture until today — takes its
+personal evidence from `getRelevantPersonalEvidence`. Migration `015_evidence_canonical.sql`
+(applied by the founder the same day). ADR-038. Status doc: `KNOWLEDGE_BASE_DEDUP_PLAN.md`.
+
+### What was built (four reviewed workstreams + an integration pass)
+
+- **Sources and provenance** (`sources.ts`, `provenance.ts`, `persist.ts`). Every import creates one
+  `evidence_sources` row (kind, label, raw content, sha256 — the same text twice is one source) and
+  provenance rows for inserted *and* reused facts and experiences, with the wording each source
+  used. Title/date disagreements become `evidence_conflicts`; the résumé's value stays canonical.
+  `support_count` / `CORROBORATED` count only sources at confidence ≥ 0.9.
+- **The importer sees the bank** (prompt 1.1.0 → 1.2.0). `importFromText` passes existing
+  experiences and their facts; the agent files sentences under existing ids and marks a
+  restatement with `corroborates`. Code computes the support level from the numbers — full
+  (1.0) or event-only (0.5) — and the deterministic matcher (`plan.ts`, now with a near-duplicate
+  rule at identical numbers + ≥ 0.8 word overlap) remains the second check. Projects are proposed
+  only when the text names them (validated as a substring of the source).
+- **Consolidation engine** (`consolidate*.ts`, `summary.ts`): a pure plan over normalized
+  organization keys, head titles, parsed dates and qualifiers → HIGH / POSSIBLE / CONFLICT with
+  why, data preserved and risk; `planMutations` lists every write before it happens (re-points,
+  fills, tombstones — never a delete); `applyConsolidation` snapshots first, applies HIGH only,
+  stores the rest as open suggestions, refreshes deterministic canonical summaries. Review found
+  and the pass fixed: chained merges applied against a stale bank, near-duplicate facts
+  auto-applied (now POSSIBLE), two labs at one university HIGH when undated, an edited row on the
+  tombstoned side (edited rows now win the keep side; both edited → POSSIBLE), a number-less
+  restatement classed as a numeric CONFLICT (now `weaker_restatement`, POSSIBLE).
+- **CLI**: `npm run evidence:audit` (read-only report + JSON), `npm run evidence:consolidate`
+  (`--dry-run` default, `--apply`, `--apply --pair keep:merge [--possible]`),
+  `npm run evidence:benchmark`.
+- **Retrieval layer** (`retrieval.ts` + score/render/targets): deterministic lexical ranking with
+  BM25-style idf over the bank, one hit per synonym family, category weights, corroboration and
+  metric bonuses, stable tie-breaks; never unapproved, never tombstoned, never empty for a
+  non-empty bank. `toBackgroundItems` produces the outreach loop's proof-point shape with derived
+  domains and credibility. Consumers migrated: scout route + CLI, positioning, conversation and
+  follow-up sender identity (`lib/outreach/sender.ts` — profile name only when it looks like a
+  person, else an education fact about a student, else env, else the old literal), fit, matcher,
+  planner, tailor (résumé experiences always, facts ranked), letter.
+- **UI**: Evidence → **Canonical** (organization → role → projects → key facts → source chips)
+  and **Review (N)** (Merge · Keep separate · Merge all high-confidence · conflict resolution),
+  behind `/api/career/evidence/{canonical,review,consolidate}`; read-only with a banner on a
+  014-only database.
+
+### Live run on the founder's bank (28 experiences, 59 facts, 25 metrics after a résumé + a LinkedIn export)
+
+Audit → dry run: 3 HIGH (Founders president, IBC project manager, P&G QA intern), 4 POSSIBLE
+(Argonne analyst vs student researcher, LoopEra founding team vs executive assistant, two UIUC
+education rows, Mironenko lab vs undergraduate researcher), 1 POSSIBLE fact, 0 CONFLICT, 6 orphan
+metrics, 2 date conflicts. Apply: snapshot `d1ff7e5d…` → 18 organizations, 4 backfilled sources,
+59 + 28 provenance rows, 3 merges, 17 children re-pointed, **0 rows deleted**, 8 suggestions,
+2 conflicts, 24 summaries. Verified directly: 0 children left on a tombstone, 59/59 facts active.
+Second apply linked one orphan metric; third dry run had nothing to apply.
+
+**Corroboration, exercised live.** A LinkedIn-post text restating two résumé facts filed under
+the right experiences (0 new experiences) but the 1.1.0 importer atomized the sentences, so 0
+facts were corroborated and 8 pending facts were created — the reason the 1.2.0 `corroborates`
+contract and the near-duplicate rule exist. The 1.2.0 re-run (entry above): 0 new experiences, 3 full + 1 event-only corroborations, 1 new fact.
+
+**Context compression** (`evidence:benchmark`, live bank): persona prompts 1,835 → 468–699
+tokens (6 personas); tailor input 6,334 → 4,245; outreach background 1,205 (fixture) → 768
+(bank); total 18,549 → 8,749 (−53 %).
+
+### Tests
+
+`test:career-evidence` 130 · `test:career-provenance` 47+ · `test:career-consolidation` 123 ·
+`test:career-retrieval` 107 · `test:career-canonical-view` 51 — idempotency (same résumé /
+text twice, résumé↔LinkedIn in both orders), aliases (P&G, Founders, UIUC), `PG Solutions` ≠
+P&G, VP ≠ President, Head of Events ≠ President, two labs, two summers, two hackathons with
+different numbers, two IBC engagements, similar metrics, safest wording, no-loss mutations,
+six retrieval personas, tombstone exclusion, fixture-only-when-empty, and "editing a fact
+changes the rendered background".
+
+---
+
 ## 2026-08-28 — Evidence page: the Canonical and Review tabs, and the routes behind them
 
 **Type:** feature · **Behavior change:** the Evidence page opens on a per-organization

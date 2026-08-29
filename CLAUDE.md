@@ -242,6 +242,11 @@ and that column holds an RFC822 Message-ID this app generates.
 | PDF rendering | Word via COM on this machine, LibreOffice when installed, otherwise DOCX only with QA saying so. There is no HTML-to-PDF fallback, deliberately (ADR-033). |
 | `applications.locked` | Set on APPLIED. Submitted documents are never overwritten; a new package is a new version under a new storage path. |
 | ⚠ `Apollo API.txt` | A credential-shaped string tracked in git. See [CURRENT_STATE.md §9](docs/CURRENT_STATE.md#9-configuration). |
+| `evals/phase3/user-profile.ts` `RESUME_ITEMS` | A **fallback fixture**, used by the outreach loop only when the Evidence Bank is empty. Scout, positioning and the reply routes read the bank through `lib/outreach/background.ts`. Do not add to it. |
+| `loadEvidenceBank(...).canonical` | `true` = migration 015 tables exist. It is not `migrationMissing` (which is about 014). A 014-only database returns `canonical: false` and empty 015 arrays, never an error. |
+| A `status = 'merged'` evidence row | A tombstone, kept so provenance and snapshots resolve. The loader filters them; a raw query must too. Never delete one — restore from `evidence_snapshots` instead. |
+| A fact with a source at confidence 0.5 | That source restated the *event* without the numbers. It corroborates the claim, not the metric; `support_count` ignores it. |
+| Bash heredocs on this machine | Unescape backslashes (`\\b` in a heredoc lands as a backspace byte). Write files with the Write/Edit tools; keep heredocs for short backslash-free scripts. |
 
 ---
 
@@ -301,6 +306,12 @@ Architecture note: [docs/CAREER_OS.md](docs/CAREER_OS.md). ADR-030–037 in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Twelve Career OS agents in
 [docs/AGENTS.md](docs/AGENTS.md), each argued against the same test — three candidates were
 rejected for failing it.
+
+**Knowledge base consolidated (2026-08-28):** migration 015 applied; `npm run evidence:audit`
+(read-only) and `npm run evidence:consolidate -- --dry-run | --apply` exist; the live bank was
+consolidated once (3 HIGH merges, 0 deletes, snapshot first) and the Evidence page has Canonical
+and Review tabs. Agents read the bank only through `getRelevantPersonalEvidence`
+(ADR-038, [docs/KNOWLEDGE_BASE_DEDUP_PLAN.md](docs/KNOWLEDGE_BASE_DEDUP_PLAN.md)).
 
 **Founder actions done (2026-08-28):** migration 014 applied, `npm run career:seed -- --approve`
 run (Evidence Bank seeded, master résumé stored), one live scout and one live package verified

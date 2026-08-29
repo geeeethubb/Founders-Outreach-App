@@ -143,9 +143,10 @@ npm run index:network
 
 Until then the scout searches an empty network index and says so in the run log.
 
-**Not built yet:** missions as a database object (they are run parameters today), the Talent
-Knowledge Base (a fixture at `evals/phase3/user-profile.ts`), the `no_response` timer, send
-pacing, and the learning surface. See
+**Not built yet:** missions as a database object (they are run parameters today), the
+`no_response` timer, send pacing, and the learning surface. The Talent Knowledge Base is the
+Evidence Bank (`/dashboard/evidence`, migrations 014 + 015); Scout reads it, and the fixture at
+`evals/phase3/user-profile.ts` is only the empty-bank fallback. See
 [IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md).
 
 ---
