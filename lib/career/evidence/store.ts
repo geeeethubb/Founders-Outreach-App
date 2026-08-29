@@ -166,6 +166,8 @@ export function factIdsBelongTo(bank: EvidenceBank, ids: string[], experienceId:
 type Table =
   | 'evidence_experiences' | 'evidence_facts' | 'evidence_metrics' | 'evidence_deliverables'
   | 'evidence_skills' | 'evidence_stories' | 'evidence_preferences' | 'resume_bullets' | 'resume_documents'
+  | 'evidence_organizations' | 'evidence_sources' | 'evidence_fact_sources' | 'evidence_experience_sources'
+  | 'evidence_projects' | 'evidence_merge_suggestions' | 'evidence_conflicts' | 'evidence_snapshots'
 
 export async function insertRows<T extends Record<string, unknown>>(
   table: Table,
