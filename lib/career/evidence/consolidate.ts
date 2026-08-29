@@ -103,6 +103,10 @@ function planExperiences(bank: EvidenceBank, nowMonth: number, warnings: string[
         const titleConflict = conflicts.some((c) => c.field === 'title')
         let confidence: MergeProposal['confidence'] = verdict.class
         if (confidence === 'HIGH' && titleConflict) confidence = 'POSSIBLE'
+        // preferKeep puts a hand-edited row on the keep side; when BOTH were
+        // edited the tombstoned side still carries edits, so a person decides.
+        const mergeEdited = merge.edited_by_user ?? false
+        if (confidence === 'HIGH' && mergeEdited) confidence = 'POSSIBLE'
         const mc = childCounts(bank, merge.id)
         proposals.push({
           entity_type: 'experience',
@@ -118,13 +122,16 @@ function planExperiences(bank: EvidenceBank, nowMonth: number, warnings: string[
             keep_source: keep.source, merge_source: merge.source,
             keep_approved: keep.approved, merge_approved: merge.approved,
             keep_kind: keep.kind, merge_kind: merge.kind,
-            downgraded: verdict.class === 'HIGH' && titleConflict ? 'title_conflict' : null,
+            downgraded: verdict.class === 'HIGH' && titleConflict ? 'title_conflict'
+              : verdict.class === 'HIGH' && mergeEdited ? 'merge_side_edited_by_user' : null,
           },
           keep_label: experienceLabelShort(keep),
           merge_label: experienceLabelShort(merge),
           why: describeExperienceWhy(verdict.rule, verdict.similarity, verdict.class === 'POSSIBLE' ? verdict.overlap : null, titleConflict),
           data_preserved: `${mc.facts} facts, ${mc.metrics} metrics, ${mc.bullets} bullets re-pointed to keep; merged row tombstoned (status=merged), both titles/dates stored${conflicts.length ? ` as ${conflicts.length} conflict(s)` : ''}`,
-          risk: confidence === 'HIGH' ? 'low — same org, same role, compatible dates' : 'needs a human: titles differ',
+          risk: confidence === 'HIGH' ? 'low — same org, same role, compatible dates'
+            : verdict.class === 'HIGH' && mergeEdited ? 'needs a human: both rows were edited by hand'
+            : 'needs a human: titles differ',
           conflicts,
         })
       }

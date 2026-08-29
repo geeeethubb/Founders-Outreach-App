@@ -67,7 +67,13 @@ export async function POST(request: NextRequest) {
 
     // The full BackgroundItem list from the Evidence Bank — positioning chooses
     // FROM it (≤3 proof points); the fixture only when the bank is empty.
-    const bankRes = await loadEvidenceBank(user.id, { approvedOnly: true }).catch(() => null)
+    let bankWarning: string | null = null
+    const bankRes = await loadEvidenceBank(user.id, { approvedOnly: true }).catch((e) => {
+      bankWarning = `Evidence Bank could not be loaded (${e instanceof Error ? e.message : String(e)}) — using the fixture background`
+      return null
+    })
+    if (bankRes?.migrationMissing) bankWarning = 'migration 014_career_os.sql has not been applied — using the fixture background'
+    if (bankWarning) console.warn(`[positioning] ${bankWarning}`)
     const bankBackground = backgroundForOutreach(bankRes?.bank ?? null, { mission: mission.goal, maxExperiences: 12, maxFacts: 24 })
     const background = bankBackground.items
     const byId = new Map(background.map((b) => [b.id, b]))
@@ -239,7 +245,7 @@ export async function POST(request: NextRequest) {
       outreachId,
       persistError,
       referenceWarning,
-      backgroundSource: { source: bankBackground.source, items: background.length },
+      backgroundSource: { source: bankBackground.source, items: background.length, warning: bankWarning },
       sender: { name: sender.name, source: sender.nameSource },
       // What the writer was told to sound like. Shown in the UI so "why does it
       // read like this?" has an answer the founder can inspect and correct.

@@ -368,5 +368,49 @@ const report = renderPlanReport(rp)
 check('report has header counts and sections', /EXPERIENCES — HIGH \(3\)/.test(report) && /CONFLICTS/.test(report) && /WARNINGS/.test(report))
 check('planToJson round-trips', JSON.parse(planToJson(rp)).summary.experiences.high === 3)
 
+// ─── Engine guards folded in from the review route (wave 2) ──────────────────
+{
+  // A qualifier on one side and no dates on either: two labs or two sites
+  // cannot be told apart, so the engine holds the pair instead of merging it.
+  const labs = bank({ experiences: [
+    exp({ id: 'g1', org: 'UIUC', title: 'Research Assistant', kind: 'research' }),
+    exp({ id: 'g2', org: 'UIUC (Diao Lab)', title: 'Research Assistant', kind: 'research', source: 'linkedin' }),
+  ] })
+  const lp = pairOf(plan(labs).experiences, 'g1', 'g2')
+  check('engine: qualifier on one side + no dates → POSSIBLE different_qualifier', cls(lp) === 'POSSIBLE' && lp?.rule === 'different_qualifier', `${cls(lp)} ${lp?.rule}`)
+
+  const sites = bank({ experiences: [
+    exp({ id: 'g3', org: 'Procter & Gamble, Tabler Station', title: 'Intern' }),
+    exp({ id: 'g4', org: 'Procter & Gamble, Cincinnati', title: 'Intern', source: 'linkedin' }),
+  ] })
+  const sp = pairOf(plan(sites).experiences, 'g3', 'g4')
+  check('engine: two sites, undated → POSSIBLE', cls(sp) === 'POSSIBLE', `${cls(sp)} ${sp?.rule}`)
+
+  // The same site pair WITH dates that overlap is still HIGH (the real P&G case).
+  const dated = bank({ experiences: [
+    exp({ id: 'g5', org: 'Procter & Gamble, Tabler Station', title: 'Quality Assurance Intern', start: '5/2026', end: '8/2026' }),
+    exp({ id: 'g6', org: 'Procter & Gamble', title: 'Quality Assurance Intern', start: 'May 2026', end: 'Present', source: 'manual' }),
+  ] })
+  const dp = pairOf(plan(dated).experiences, 'g5', 'g6')
+  check('engine: one-sided site qualifier with overlapping dates stays HIGH', cls(dp) === 'HIGH', `${cls(dp)} ${dp?.rule}`)
+
+  // Hand-edited rows: the edited row is the keep; both edited → held.
+  const oneEdited = bank({ experiences: [
+    exp({ id: 'g7', org: 'IBC', title: 'Project Manager', start: '9/2025', end: 'Present' }),
+    { ...exp({ id: 'g8', org: 'Illinois Business Consulting', title: 'Project Manager', start: 'September 2025', end: 'Present', source: 'manual' }), edited_by_user: true },
+  ] })
+  const op = pairOf(plan(oneEdited).experiences, 'g7', 'g8')
+  check('engine: edited row becomes the keep side', op?.keep_id === 'g8' && op?.merge_id === 'g7', `keep ${op?.keep_id}`)
+  check('engine: edited-keep pair stays HIGH', cls(op) === 'HIGH', cls(op))
+
+  const bothEdited = bank({ experiences: [
+    { ...exp({ id: 'g9', org: 'IBC', title: 'Project Manager', start: '9/2025', end: 'Present' }), edited_by_user: true },
+    { ...exp({ id: 'g10', org: 'Illinois Business Consulting', title: 'Project Manager', start: 'September 2025', end: 'Present', source: 'manual' }), edited_by_user: true },
+  ] })
+  const bp = pairOf(plan(bothEdited).experiences, 'g9', 'g10')
+  check('engine: both rows edited → POSSIBLE, reason recorded', cls(bp) === 'POSSIBLE' && bp?.signals.downgraded === 'merge_side_edited_by_user', `${cls(bp)} ${String(bp?.signals.downgraded)}`)
+}
+
+
 console.log(`\n${passed} passed, ${failed} failed`)
 if (failed) { console.log(failures.map((f) => `  - ${f}`).join('\n')); process.exitCode = 1 }

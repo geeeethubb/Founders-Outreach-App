@@ -13,9 +13,12 @@
 // agree. Favouring false negatives over destructive false positives, per the
 // founder's rule. Pure: plan + bank in, new plan out.
 //
-// TODO(wave2): fold both rules into consolidate-rules.ts (compareExperiences /
-// preferKeep) so the CLI `evidence:consolidate --apply` gets them too; then
-// this file becomes a no-op and can go.
+// Both rules now also live in the engine (consolidate-rules.ts compareExperiences
+// holds qualifier-vs-no-dates pairs; preferKeep puts an edited row on the keep
+// side and consolidate.ts demotes a pair whose merge side was edited), so the
+// CLI apply path is covered too. This gate stays as a second, independent check
+// in front of the unattended UI paths; on a plan the engine already guarded it
+// is a no-op.
 
 import { compareQualifiers, dateOverlapRatio, nowMonthIndex } from '@/lib/career/evidence/consolidate-rules'
 import type { ConsolidationPlan, MergeProposal } from '@/lib/career/evidence/consolidate-types'

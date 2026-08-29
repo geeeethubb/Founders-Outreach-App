@@ -128,31 +128,29 @@ function fact(experience_id: string | null, statement: string, category: FactCat
 }
 
 // ─── Route guard: what "Merge all high-confidence" may never apply unattended ──
+// The engine itself now holds these pairs (consolidate-rules.ts compareExperiences,
+// preferKeep + consolidate.ts). The route guard is a second, independent gate:
+// on an engine-guarded plan it must be a no-op, and it must still demote a
+// hand-built HIGH proposal that bypassed the engine.
 {
-  const cases: { name: string; a: EvidenceExperience; b: EvidenceExperience; expect: string }[] = [
+  const cases: { name: string; a: EvidenceExperience; b: EvidenceExperience; rule: string }[] = [
     {
       name: 'two labs by PI surname, undated',
       a: exp({ organization: 'UIUC (Mironenko)', title: 'Undergraduate Researcher', kind: 'research' }),
       b: exp({ organization: 'University of Illinois (Diao)', title: 'Undergraduate Researcher', kind: 'research', source: 'linkedin' }),
-      expect: 'qualifiers_differ_no_dates',
+      rule: 'different_qualifier',
     },
     {
       name: 'qualifier missing on one side, undated',
       a: exp({ organization: 'UIUC', title: 'Research Assistant', kind: 'research' }),
       b: exp({ organization: 'UIUC (Diao Lab)', title: 'Research Assistant', kind: 'research', source: 'linkedin' }),
-      expect: 'qualifiers_differ_no_dates',
+      rule: 'different_qualifier',
     },
     {
       name: 'two P&G sites, undated',
       a: exp({ organization: 'Procter & Gamble, Tabler Station', title: 'Intern' }),
       b: exp({ organization: 'Procter & Gamble, Cincinnati', title: 'Intern', source: 'linkedin' }),
-      expect: 'qualifiers_differ_no_dates',
-    },
-    {
-      name: 'merge side edited by user',
-      a: exp({ organization: 'Procter & Gamble', title: 'Intern', start_date: 'May 2025', end_date: 'Aug 2025' }),
-      b: exp({ organization: 'Procter & Gamble', title: 'Intern', start_date: 'May 2025', end_date: 'Aug 2025', source: 'linkedin', edited_by_user: true, location: 'Cincinnati' }),
-      expect: 'merge_side_edited_by_user',
+      rule: 'different_qualifier',
     },
   ]
   for (const c of cases) {
@@ -160,12 +158,46 @@ function fact(experience_id: string | null, statement: string, category: FactCat
     bank.experiences = [c.a, c.b]
     const raw = buildConsolidationPlan(bank, { now: NOW })
     const guarded = guardPlan(raw, bank, NOW)
-    const p = guarded.experiences[0]
-    const downgraded = p ? String((p.signals as { downgraded?: string }).downgraded) : ''
+    const p = raw.experiences[0]
     check(`guard: ${c.name} — engine proposes the pair`, raw.experiences.length === 1, `${raw.experiences.length} proposals`)
-    check(`guard: ${c.name} — not HIGH after the guard`, !!p && p.confidence === 'POSSIBLE', p ? `${p.confidence} ${p.rule}` : 'no proposal')
-    check(`guard: ${c.name} — reason recorded`, downgraded === c.expect, downgraded)
-    check(`guard: ${c.name} — summary counts follow`, guarded.summary.experiences.high === 0 && guarded.summary.experiences.possible === guarded.experiences.length)
+    check(`guard: ${c.name} — engine already holds it as POSSIBLE`, !!p && p.confidence === 'POSSIBLE' && p.rule === c.rule, p ? `${p.confidence} ${p.rule}` : 'no proposal')
+    check(`guard: ${c.name} — route guard is a no-op on the engine plan`, guarded === raw)
+    check(`guard: ${c.name} — summary counts follow`, raw.summary.experiences.high === 0 && raw.summary.experiences.possible === raw.experiences.length)
+  }
+  // A hand-edited row becomes the keep side (its edits survive); the pair stays HIGH.
+  {
+    const a = exp({ organization: 'Procter & Gamble', title: 'Intern', start_date: 'May 2025', end_date: 'Aug 2025' })
+    const b = exp({ organization: 'Procter & Gamble', title: 'Intern', start_date: 'May 2025', end_date: 'Aug 2025', source: 'linkedin', edited_by_user: true, location: 'Cincinnati' })
+    const bank: EvidenceBank = emptyBank()
+    bank.experiences = [a, b]
+    const raw = buildConsolidationPlan(bank, { now: NOW })
+    const p = raw.experiences[0]
+    check('guard: edited row is the keep side', !!p && p.keep_id === b.id && p.merge_id === a.id, p ? `keep ${p.keep_id === b.id ? 'edited' : 'résumé'}` : 'no proposal')
+    check('guard: edited-keep pair stays HIGH and the guard leaves it', !!p && p.confidence === 'HIGH' && guardPlan(raw, bank, NOW) === raw, p ? `${p.confidence} ${p.rule}` : 'no proposal')
+  }
+  // Both rows edited: the tombstoned side would carry edits, so the engine holds it.
+  {
+    const a = exp({ organization: 'Procter & Gamble', title: 'Intern', start_date: 'May 2025', end_date: 'Aug 2025', edited_by_user: true })
+    const b = exp({ organization: 'Procter & Gamble', title: 'Intern', start_date: 'May 2025', end_date: 'Aug 2025', source: 'linkedin', edited_by_user: true })
+    const bank: EvidenceBank = emptyBank()
+    bank.experiences = [a, b]
+    const raw = buildConsolidationPlan(bank, { now: NOW })
+    const p = raw.experiences[0]
+    const downgraded = p ? String((p.signals as { downgraded?: string }).downgraded) : ''
+    check('guard: both edited — engine demotes to POSSIBLE', !!p && p.confidence === 'POSSIBLE', p ? `${p.confidence} ${p.rule}` : 'no proposal')
+    check('guard: both edited — reason recorded by the engine', downgraded === 'merge_side_edited_by_user', downgraded)
+  }
+  // The route guard still catches a HIGH proposal that did not come through the engine's rules.
+  {
+    const a = exp({ organization: 'Procter & Gamble', title: 'Intern', start_date: 'May 2025', end_date: 'Aug 2025' })
+    const b = exp({ organization: 'Procter & Gamble', title: 'Intern', start_date: 'May 2025', end_date: 'Aug 2025', source: 'linkedin', edited_by_user: true })
+    const bank: EvidenceBank = emptyBank()
+    bank.experiences = [a, b]
+    const raw = buildConsolidationPlan(bank, { now: NOW })
+    const forced = { ...raw, experiences: raw.experiences.map((p) => ({ ...p, keep_id: a.id, merge_id: b.id, confidence: 'HIGH' as const })) }
+    const guarded = guardPlan(forced, bank, NOW)
+    const p = guarded.experiences[0]
+    check('guard: a bypassing HIGH pair with an edited merge side is still demoted', !!p && p.confidence === 'POSSIBLE' && String((p.signals as { downgraded?: string }).downgraded) === 'merge_side_edited_by_user', p ? `${p.confidence}` : 'no proposal')
   }
   // The safe case stays HIGH: same qualifier, same dates, nothing edited.
   const bank: EvidenceBank = emptyBank()

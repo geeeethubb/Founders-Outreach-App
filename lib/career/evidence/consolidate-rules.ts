@@ -289,8 +289,14 @@ export type ExperienceVerdict =
 
 export const DATE_OVERLAP_THRESHOLD = 0.8
 
-/** Which of the two rows is the canonical one: résumé first, then the older. */
+/**
+ * Which of the two rows is the canonical one: a row the user edited by hand
+ * first (their edits must survive), then the résumé row, then the older.
+ */
 export function preferKeep(a: EvidenceExperience, b: EvidenceExperience): [EvidenceExperience, EvidenceExperience] {
+  const ae = a.edited_by_user ?? false
+  const be = b.edited_by_user ?? false
+  if (ae !== be) return ae ? [a, b] : [b, a]
   const am = a.source === 'master_resume'
   const bm = b.source === 'master_resume'
   if (am !== bm) return am ? [a, b] : [b, a]
@@ -310,6 +316,13 @@ export function compareExperiences(a: EvidenceExperience, b: EvidenceExperience,
   const qualifiers = compareQualifiers(a.organization, b.organization)
   if (sameTitle || similarity >= SIMILAR_TITLE_THRESHOLD) {
     if (qualifiers === 'different') {
+      return { class: 'POSSIBLE', rule: 'different_qualifier', similarity, overlap: null, titleConflict: !sameTitle }
+    }
+    // One side carries a qualifier the other lacks ("UIUC (Mironenko lab)" vs
+    // "University of Illinois") or the two differ by a site, and no dates on
+    // either side can tell two labs or two sites apart: hold for a human.
+    const anyQualifier = qualifierOf(a.organization) !== null || qualifierOf(b.organization) !== null
+    if (anyQualifier && qualifiers !== 'same' && dateOverlapRatio(a, b, nowMonth) === null) {
       return { class: 'POSSIBLE', rule: 'different_qualifier', similarity, overlap: null, titleConflict: !sameTitle }
     }
     return { class: 'HIGH', rule: sameTitle ? 'exact_title' : 'similar_title', similarity }

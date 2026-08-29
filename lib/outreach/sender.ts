@@ -32,13 +32,16 @@ export function looksLikePersonName(value: string | null | undefined): boolean {
   return words.length >= 2 && words.length <= 4 && words.every((w) => /^[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ'’.-]*$/.test(w))
 }
 
-const NAME_IN_FACT = /^([A-Z][a-zà-ÿ'-]+ [A-Z][a-zà-ÿ'-]+) (?:is|was) (?:a|an|the) /
+// "Zuyu Liu is a Chemical Engineering student at …" — the sentence must be
+// about a student, so "Procter Gamble is a consumer goods company" (an
+// organization, not a person) can never become the sender's name.
+const NAME_IN_FACT = /^([A-Z][a-zà-ÿ'-]+ [A-Z][a-zà-ÿ'-]+) (?:is|was) (?:a|an|the) [^.]*\b(?:student|undergraduate|candidate|major|majoring|studying)\b/
 
-/** "Zuyu Liu is a Chemical Engineering student…" → "Zuyu Liu". Education/other facts only; deterministic. */
+/** "Zuyu Liu is a Chemical Engineering student…" → "Zuyu Liu". Approved education facts only; deterministic. */
 export function nameFromBank(bank: EvidenceBank | null | undefined): string | null {
   if (!bank) return null
   const candidates = bank.facts
-    .filter((f) => f.approved && f.status !== 'merged' && (f.category === 'education' || f.category === 'other'))
+    .filter((f) => f.approved && f.status !== 'merged' && f.category === 'education')
     .sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id))
   for (const f of candidates) {
     const m = NAME_IN_FACT.exec(f.statement.trim())
