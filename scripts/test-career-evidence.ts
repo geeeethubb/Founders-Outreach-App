@@ -1,5 +1,5 @@
 // Deterministic tests for the Evidence Bank: retrieval ranking, the number
-// check, and the importer's validator. No network, no keys, no database.
+// check, the importer's validator, and the persist plan's matching. No network, no keys, no database.
 //
 //   npx tsx scripts/test-career-evidence.ts
 //
@@ -16,7 +16,19 @@ import {
   validateImporterOutput,
   type ResumeImporterInput,
 } from '../lib/agents/resume-importer'
-import type { EvidenceBank, EvidenceExperience, EvidenceFact } from '../lib/career/types'
+import type { EvidenceBank, EvidenceExperience, EvidenceFact, FactSource } from '../lib/career/types'
+import {
+  datesCompatible,
+  experienceKey,
+  normalizeMetricValue,
+  normalizeOrg,
+  normalizeStatement,
+  normalizeTitle,
+  parseResumeDate,
+  titleSimilarity,
+} from '../lib/career/evidence/normalize'
+import { SIMILAR_TITLE_THRESHOLD, findExperienceMatch, findFactMatch, planPersist } from '../lib/career/evidence/plan'
+import type { ImportProposal, ProposedExperience, ProposedFact, ProposedMetric } from '../lib/career/evidence/import'
 
 let passed = 0
 let failed = 0
@@ -282,6 +294,152 @@ const textOut = validateImporterOutput(
 check('text mode: proposed experience accepted', textOut !== null && textOut.experiences.length === 1 && textOut.experiences[0].new_experience?.organization === 'Acme Corp')
 check('text mode: nameless block rejected', textOut !== null && textOut.dropped_experiences === 1)
 check('text mode: wrong number dropped', textOut !== null && textOut.experiences[0].facts.length === 1 && textOut.dropped_unverifiable === 1)
+
+// ─── Normalization and the persist plan ──────────────────────────────────────
+//
+// planPersist is the pure half of persistProposal: given a bank and a
+// proposal it decides every reuse, insert, near-miss and corroboration
+// without a database. These are the cases the audit found doubled in the
+// founder's bank.
+
+check('normalizeOrg: P&G == Procter & Gamble', normalizeOrg('P&G') === normalizeOrg('Procter & Gamble'))
+check('normalizeOrg: site qualifier folds', normalizeOrg('Procter & Gamble, Tabler Station') === normalizeOrg('Procter & Gamble'))
+check('normalizeOrg: parenthetical + dash variants', normalizeOrg('Founders: Illinois Entrepreneurs (UIUC)') === normalizeOrg('Founders — Illinois Entrepreneurs'))
+check('normalizeOrg: UIUC == full name', normalizeOrg('UIUC') === normalizeOrg('University of Illinois at Urbana-Champaign'))
+check('normalizeOrg: legal suffix and leading the', normalizeOrg('The Acme Co.') === 'acme')
+check('normalizeOrg: diacritics', normalizeOrg('Société Générale') === 'societe generale')
+check('normalizeOrg: unrelated orgs stay apart', normalizeOrg('Argonne National Laboratory') !== normalizeOrg('Illinois Business Consulting'))
+
+check('normalizeTitle: drops org qualifier', normalizeTitle('President, Founders') === 'president')
+check('normalizeTitle: drops previous role', normalizeTitle('Project Manager, prev. Senior Consultant') === 'project manager')
+check('normalizeTitle: semicolon clause', normalizeTitle('President; Formerly Head of Events') === 'president')
+check('experienceKey: aliases meet', experienceKey('P&G', 'Quality Assurance Intern') === experienceKey('Procter & Gamble', 'Quality Assurance Intern'))
+
+check('titleSimilarity: identical', titleSimilarity('President', 'President') === 1)
+check('titleSimilarity: containment counts as 1', titleSimilarity('Project Manager', 'Senior Project Manager') === 1)
+check('titleSimilarity: disjoint is 0', titleSimilarity('Head of Events', 'President') === 0)
+check('titleSimilarity: partial', titleSimilarity('Process Engineering Intern', 'Process Intern') >= SIMILAR_TITLE_THRESHOLD && titleSimilarity('Quality Assurance Engineer', 'Quality Assurance Intern') === 0.5)
+// Containment is not identity when the extra word changes the job.
+check('titleSimilarity: Vice President is not President', titleSimilarity('Vice President', 'President') < SIMILAR_TITLE_THRESHOLD)
+check('titleSimilarity: Software Intern is not every Intern', titleSimilarity('Intern', 'Software Intern') < SIMILAR_TITLE_THRESHOLD)
+check('titleSimilarity: co-president is president', titleSimilarity('Co-President', 'President') === 1)
+
+check('parseResumeDate: 5/2026', JSON.stringify(parseResumeDate('5/2026')) === JSON.stringify({ year: 2026, month: 5 }))
+check('parseResumeDate: May 2026', JSON.stringify(parseResumeDate('May 2026')) === JSON.stringify({ year: 2026, month: 5 }))
+check('parseResumeDate: Present', parseResumeDate('Present') === 'present')
+check('parseResumeDate: garbage is null', parseResumeDate('n/a') === null)
+check('datesCompatible: null side', datesCompatible({ start_date: null, end_date: null }, { start_date: '5/2026', end_date: '8/2026' }))
+check('datesCompatible: overlap', datesCompatible({ start_date: '5/2026', end_date: '8/2026' }, { start_date: 'Jun 2026', end_date: 'Present' }))
+check('datesCompatible: touching months', datesCompatible({ start_date: '1/2025', end_date: '5/2025' }, { start_date: '5/2025', end_date: '8/2025' }))
+check('datesCompatible: disjoint summers', !datesCompatible({ start_date: '5/2025', end_date: '8/2025' }, { start_date: '5/2026', end_date: '8/2026' }))
+check('datesCompatible: bare years', datesCompatible({ start_date: '2024', end_date: 'Present' }, { start_date: '9/2024', end_date: null }))
+
+check('normalizeStatement: case, period', normalizeStatement('Organized Forge 2026.') === normalizeStatement('organized forge 2026'))
+check('normalizeStatement: quotes, dashes, markdown', normalizeStatement('Led “Forge” — a **hackathon**') === 'led "forge" - a hackathon')
+check('normalizeStatement: different claims differ', normalizeStatement('Hosted an AI hackathon with 200+ participants') !== normalizeStatement('Organized the largest AI hackathon in UIUC history'))
+check('normalizeMetricValue: $4M+ == 4M', normalizeMetricValue('$4M+') === normalizeMetricValue('4M'))
+check('normalizeMetricValue: 4 million == 4M', normalizeMetricValue('4 million') === normalizeMetricValue('$4M'))
+check('normalizeMetricValue: 1,600+ == 1600', normalizeMetricValue('1,600+') === '1600')
+check('normalizeMetricValue: M vs B differ', normalizeMetricValue('4M') !== normalizeMetricValue('4B'))
+
+// A bank as the DOCX seed leaves it.
+function planBank(): EvidenceBank {
+  const b = emptyBank()
+  const now = '2026-08-27T00:00:00Z'
+  const exp = (id: string, organization: string, title: string, start_date: string | null, end_date: string | null): EvidenceExperience => ({
+    id, user_id: 'u', kind: 'experience', organization, title, start_date, end_date, location: null, description: null,
+    display_order: 0, source: 'master_resume', approved: true, created_at: now, updated_at: now,
+  })
+  b.experiences.push(
+    exp('exp-founders', 'Founders: Illinois Entrepreneurs', 'President; Formerly Head of Events', '8/2025', 'Present'),
+    exp('exp-png-2025', 'Procter & Gamble', 'Quality Assurance Intern', '5/2025', '8/2025'),
+    exp('exp-uiuc', 'University of Illinois Urbana-Champaign', 'Undergraduate Researcher', '9/2024', 'Present')
+  )
+  b.facts.push({
+    id: 'fact-forge', user_id: 'u', experience_id: 'exp-founders', statement: 'Organized Forge 2026.', category: 'achievement',
+    source: 'master_resume', source_location: 'resume.docx ¶12', confidence: 1, approved: true, created_at: now, updated_at: now,
+  })
+  b.metrics.push({ id: 'm-4m', user_id: 'u', experience_id: 'exp-png-2025', value: '$4M+', unit: 'projected savings', context: null, fact_ids: [], source: 'master_resume', approved: true, created_at: now })
+  return b
+}
+
+function proposalWith(experiences: ProposedExperience[], facts: ProposedFact[] = [], metrics: ProposedMetric[] = []): ImportProposal {
+  return { experiences, bullets: [], facts, metrics, skills: [], deliverables: [], dropped: { unverifiable: 0, metrics: 0, skills: 0, misfiled: 0, experiences: 0 }, trace: null, agentError: null, model: null }
+}
+function pexp(key: string, organization: string, title: string, start_date: string | null = null, end_date: string | null = null): ProposedExperience {
+  return { key, kind: 'experience', organization, title, location: null, start_date, end_date, description: null, display_order: 0, source: 'linkedin', bulletParagraphIndexes: [], identityParagraphIndex: null, summary: null }
+}
+function pfact(experience_key: string, statement: string, source: FactSource = 'linkedin', source_location = 'pasted.linkedin L3'): ProposedFact {
+  return { experience_key, statement, category: 'achievement', source, source_location, paragraph_index: null, confidence: 1 }
+}
+
+const pb = planBank()
+
+// LinkedIn spelling of the DOCX's Founders role → one experience.
+const p1 = planPersist(pb, proposalWith([pexp('li-founders', 'Founders — Illinois Entrepreneurs (UIUC)', 'President')]))
+check('plan: LinkedIn Founders block reuses the DOCX row', p1.experiences[0].action === 'reuse' && p1.experiences[0].existingId === 'exp-founders', JSON.stringify(p1.experiences[0]))
+check('plan: alias match is reported', p1.matched.length === 1 && p1.matched[0].rule === 'alias' && p1.nearMisses.length === 0)
+
+// Head of Events vs President at the same org → two rows, no merge.
+const p2 = planPersist(pb, proposalWith([pexp('li-events', 'Founders: Illinois Entrepreneurs', 'Head of Events', '1/2025', '8/2025')]))
+check('plan: different title at same org is inserted', p2.experiences[0].action === 'insert' && p2.matched.length === 0)
+
+// Two P&G internships in different summers → two rows even with the same title.
+const p3 = planPersist(pb, proposalWith([pexp('li-png-2026', 'P&G', 'Quality Assurance Intern', '5/2026', '8/2026')]))
+check('plan: same title, disjoint dates → insert', p3.experiences[0].action === 'insert', JSON.stringify(p3.experiences[0]))
+check('plan: same title, same dates → exact reuse (re-import is idempotent)', planPersist(pb, proposalWith([pexp('x', 'Procter & Gamble', 'Quality Assurance Intern', '5/2025', '8/2025')])).experiences[0].action === 'reuse')
+
+// Same org, similar title, overlapping dates → one.
+const p4 = planPersist(pb, proposalWith([pexp('li-png', 'Procter & Gamble', 'Quality Assurance Summer Intern', 'Jun 2025', 'Aug 2025')]))
+check('plan: similar title + compatible dates → reuse', p4.experiences[0].action === 'reuse' && p4.experiences[0].existingId === 'exp-png-2025' && p4.matched[0]?.rule === 'similar_title', JSON.stringify(p4))
+
+// Promotion at the same org with no dates (a text import): two rows, reported, never merged.
+const pVp = planPersist(pb, proposalWith([pexp('li-vp', 'Founders: Illinois Entrepreneurs', 'Vice President')]))
+check('plan: Vice President at the org of a President → insert + near-miss', pVp.experiences[0].action === 'insert' && pVp.matched.length === 0 && pVp.nearMisses.length === 1, JSON.stringify(pVp))
+
+// Near miss: same org, similarity in [0.3, 0.6) → inserted AND reported.
+const p5 = planPersist(pb, proposalWith([pexp('li-png-eng', 'Procter & Gamble', 'Quality Assurance Engineer', '5/2025', '8/2025')]))
+check('plan: near-miss is inserted', p5.experiences[0].action === 'insert')
+check('plan: near-miss is reported with the candidate', p5.nearMisses.length === 1 && p5.nearMisses[0].candidateId === 'exp-png-2025', JSON.stringify(p5.nearMisses))
+
+// Within one proposal, two blocks with the same key collapse; their facts land under one experience.
+const p6 = planPersist(pb, proposalWith(
+  [pexp('a', 'Acme Corp', 'Engineering Intern', '2025', null), pexp('b', 'Acme', 'Engineering Intern', '2025', null)],
+  [pfact('a', 'Reduced downtime 12%'), pfact('b', 'Reduced downtime 12%'), pfact('b', 'Wrote the SOP')]
+))
+check('plan: duplicate block collapses into the first', p6.experiences[0].action === 'insert' && p6.experiences[1].action === 'collapse' && p6.experiences[1].intoKey === 'a')
+check('plan: facts under the collapsed block dedupe against the first', p6.facts[0].action === 'insert' && p6.facts[1].action === 'collapse' && p6.facts[2].action === 'insert', JSON.stringify(p6.facts))
+check('plan: fact under a new experience never matches an orphan bank fact', planPersist(
+  { ...pb, facts: [{ ...pb.facts[0], id: 'orphan', experience_id: null }] },
+  proposalWith([pexp('n', 'Nowhere Labs', 'Intern')], [pfact('n', 'Organized Forge 2026')])
+).facts[0].action === 'insert')
+
+// Fact dedupe with corroboration.
+const p7 = planPersist(pb, proposalWith([pexp('li-founders', 'Founders', 'President')], [
+  pfact('li-founders', 'organized forge 2026'),
+  pfact('li-founders', 'Hosted an AI hackathon with 200+ participants'),
+  pfact('li-founders', 'Organized the largest AI hackathon in UIUC history'),
+]))
+check('plan: same claim, different spelling → reused', p7.facts[0].action === 'reuse' && p7.facts[0].existingId === 'fact-forge')
+check('plan: second source is recorded as corroboration', p7.corroborated.length === 1 && p7.corroborated[0].factId === 'fact-forge' && p7.corroborated[0].source === 'linkedin', JSON.stringify(p7.corroborated))
+check('plan: different claims stay two facts', p7.facts[1].action === 'insert' && p7.facts[2].action === 'insert')
+check('plan: same source is not a corroboration', planPersist(pb, proposalWith([pexp('li-founders', 'Founders', 'President')], [pfact('li-founders', 'Organized Forge 2026.', 'master_resume', 'resume.docx ¶12')])).corroborated.length === 0)
+
+// Metrics: '$4M+' vs '4M' under the same experience → one; within-proposal duplicates → one.
+const p8 = planPersist(pb, proposalWith([pexp('li-png', 'P&G', 'Quality Assurance Intern', '5/2025', '8/2025')], [], [
+  { experience_key: 'li-png', value: '4M', unit: 'savings', context: null, fact_refs: [], source: 'linkedin' },
+  { experience_key: 'li-png', value: '1,600+', unit: 'hours', context: null, fact_refs: [], source: 'linkedin' },
+  { experience_key: 'li-png', value: '1600', unit: 'hours', context: null, fact_refs: [], source: 'linkedin' },
+]))
+check('plan: metric $4M+ vs 4M → skipped', p8.metrics[0] === false)
+check('plan: within-proposal metric duplicate → one', p8.metrics[1] === true && p8.metrics[2] === false)
+
+// Manual add (the rows route): the pure lookups it uses.
+check('manual add: fact with same normalized statement is found', findFactMatch(pb.facts, 'exp-founders', 'Organized Forge 2026')?.id === 'fact-forge')
+check('manual add: fact under another experience is not found', findFactMatch(pb.facts, 'exp-uiuc', 'Organized Forge 2026') === null)
+check('manual add: experience by alias, no similar-title guessing', findExperienceMatch(pb.experiences, { organization: 'UIUC', title: 'Undergraduate Researcher', start_date: null, end_date: null }, { allowSimilar: false }).match?.rule === 'alias')
+check('manual add: distinct title typed by a human is not matched', findExperienceMatch(pb.experiences, { organization: 'UIUC', title: 'Undergraduate Research Assistant', start_date: null, end_date: null }, { allowSimilar: false }).match === null)
+check('manual add: exact key reports exact', findExperienceMatch(pb.experiences, { organization: 'Procter & Gamble', title: 'Quality Assurance Intern', start_date: null, end_date: null }).match?.rule === 'exact')
 
 // ─── Report ──────────────────────────────────────────────────────────────────
 

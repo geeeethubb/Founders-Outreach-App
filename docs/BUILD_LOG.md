@@ -6,6 +6,53 @@ architecturally and why.
 
 ---
 
+## 2026-08-28 — The Evidence Bank dedupes by what a row IS, not how it was spelled
+
+**Type:** correctness · **Behavior change:** imports and manual adds reuse existing rows
+under normalized keys; a new master résumé demotes the old master's bullets
+
+### What happened
+
+An audit of the founder's bank found the same job three times: the DOCX said
+`Founders: Illinois Entrepreneurs / President; Formerly Head of Events`, LinkedIn said
+`Founders — Illinois Entrepreneurs (UIUC) / President`, and `persistProposal` compared
+raw lowercase `org::title` strings. Facts, metrics and deliverables followed the same rule
+(`'Organized Forge 2026.'` ≠ `'organized forge 2026'`, `'$4M+'` ≠ `'4M'`), the
+existing-row map was built from the bank only so two blocks in one proposal both landed,
+and a reused fact silently dropped the second source. Uploading a second master DOCX
+demoted the old `resume_documents` row but left its bullets `is_on_master=true`, so the
+tailor and the package read two full bullet sets as the current résumé.
+
+- `lib/career/evidence/normalize.ts` (new, pure): `normalizeOrg` (diacritics,
+  parentheticals, `&`→`and`, legal suffixes, a founder-editable `ORG_ALIASES` table like
+  `SYNONYM_GROUPS`), `normalizeTitle` (drops what follows a comma/dash/semicolon and
+  `formerly`/`prev.`), `experienceKey`, `titleSimilarity` (token Jaccard; containment
+  is 1 only when the extra words are seniority qualifiers — review caught `Vice
+  President` ≡ `President` and `Intern` ≡ `Software Intern` merging silently when a text
+  import carried no dates; those now score 0.5 and land in the near-miss report),
+  `parseResumeDate`/`datesCompatible` (free-text résumé dates; unknown is
+  compatible, disjoint is not), `normalizeStatement`, `normalizeMetricValue`.
+- `lib/career/evidence/plan.ts` (new, pure): `planPersist(bank, proposal)` decides every
+  reuse, insert, collapse, near-miss and corroboration before a row is written.
+  Experiences: same key and compatible dates → reuse; same org, similarity ≥ 0.6 and
+  compatible dates → reuse (reported as `matched`); similarity in [0.3, 0.6) → **insert
+  and report as a near-miss** — never guess. Two P&G summers with the same title stay two
+  rows. `persistProposal` now executes the plan; `SeedCounts` gained `matched`,
+  `nearMisses`, `corroborated` and `summarizeSeed` prints them. A corroborating source
+  is reported, not stored — real multi-source provenance is in
+  [KNOWLEDGE_BASE_DEDUP_PLAN.md](KNOWLEDGE_BASE_DEDUP_PLAN.md).
+- `ensureMasterDocument` demotes the old master's bullets (`is_on_master=false`, still
+  approved — exactly the alternates the tailor's Level-3 swap draws from) and re-promotes a
+  previously demoted document's bullets when its hash is uploaded again.
+- `POST /api/career/evidence/rows` returns `{ id, existing: true, rule }` for a fact,
+  skill or experience the bank already has, instead of a second row or a unique-violation
+  500. Manual experience adds use exact/alias only — a human typing a distinct title means it.
+
+53 new checks in `scripts/test-career-evidence.ts` (104 total). No migration, no prompt
+change, no downstream consumer touched, seed not re-run against the live bank.
+
+---
+
 ## 2026-08-28 — Phase 11: Career OS
 
 **Type:** product extension · **Behavior change:** new surfaces only; the outreach loop and

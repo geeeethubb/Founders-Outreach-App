@@ -107,8 +107,9 @@ export async function ensureMasterDocument(
   if (existing?.length) {
     const doc = existing[0] as ResumeDocument
     if (asMaster && !doc.is_master) {
-      await supabase.from('resume_documents').update({ is_master: false } as never).eq('user_id', userId).eq('is_master', true)
+      await demoteMasters(userId, doc.id)
       await supabase.from('resume_documents').update({ is_master: true } as never).eq('id', doc.id)
+      await supabase.from('resume_bullets').update({ is_on_master: true } as never).eq('user_id', userId).eq('resume_document_id', doc.id)
       doc.is_master = true
     }
     return { document: doc, reused: true, error: null, migrationMissing: false }
@@ -131,9 +132,7 @@ export async function ensureMasterDocument(
     warning = `document not re-saved: ${e instanceof Error ? e.message : String(e)}`
   }
 
-  if (asMaster) {
-    await supabase.from('resume_documents').update({ is_master: false } as never).eq('user_id', userId).eq('is_master', true)
-  }
+  if (asMaster) await demoteMasters(userId, null)
   const { data, error } = await supabase
     .from('resume_documents')
     .insert({
@@ -150,6 +149,22 @@ export async function ensureMasterDocument(
     .single()
   if (error) return { document: null, reused: false, error: error.message, migrationMissing: isMissingSchema(error.message) }
   return { document: data as ResumeDocument, reused: false, error: null, migrationMissing: false, warning }
+}
+
+/**
+ * A new master replaces the old one's bullets too. Demoting only the document
+ * row left both bullet sets flagged is_on_master, and the tailor and the
+ * package read that flag as "the current résumé" — so a second upload doubled
+ * the résumé. Demoted bullets keep approved=true and become alternates, which
+ * is exactly what the tailor's Level-3 swap draws from.
+ */
+async function demoteMasters(userId: string, keepId: string | null): Promise<void> {
+  const supabase = createServiceClient()
+  const { data } = await supabase.from('resume_documents').select('id').eq('user_id', userId).eq('is_master', true)
+  const ids = ((data ?? []) as { id: string }[]).map((d) => d.id).filter((id) => id !== keepId)
+  if (ids.length === 0) return
+  await supabase.from('resume_documents').update({ is_master: false } as never).in('id', ids)
+  await supabase.from('resume_bullets').update({ is_on_master: false } as never).eq('user_id', userId).in('resume_document_id', ids)
 }
 
 // ─── End to end ──────────────────────────────────────────────────────────────
@@ -294,6 +309,15 @@ export function summarizeSeed(result: SeedResult): string[] {
     `dropped — unverifiable numbers: ${result.dropped.unverifiable}, metrics: ${result.dropped.metrics}, skills: ${result.dropped.skills}, misfiled: ${result.dropped.misfiled}, experiences: ${result.dropped.experiences}`,
     `cost: $${result.costUsd.toFixed(4)}`,
   ]
+  if (c.matched.length) {
+    lines.push(`matched ${c.matched.length} experience(s) to existing rows by alias/similar title:`)
+    for (const m of c.matched) lines.push(`  ${m.proposed} → ${m.existingId} (${m.rule})`)
+  }
+  if (c.nearMisses.length) {
+    lines.push(`near-miss ${c.nearMisses.length} experience(s) inserted, not merged — same org, title too different; merge by hand if they are one job:`)
+    for (const n of c.nearMisses) lines.push(`  ${n.proposed} ~ ${n.candidate} (${n.similarity})`)
+  }
+  if (c.corroborated.length) lines.push(`${c.corroborated.length} fact(s) corroborated by a second source (source not stored — see docs/KNOWLEDGE_BASE_DEDUP_PLAN.md)`)
   if (result.agentError) lines.push(`importer error: ${result.agentError}`)
   return lines
 }

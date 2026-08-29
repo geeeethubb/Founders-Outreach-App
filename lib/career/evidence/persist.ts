@@ -1,11 +1,18 @@
 // Persisting an ImportProposal into the Evidence Bank.
 //
-// Idempotent by content, not by run: an experience with the same organization
-// + title is reused, a bullet at the same paragraph of the same document is
-// reused, a fact with the same statement under the same experience is skipped,
-// a metric or deliverable already recorded under that experience is skipped,
-// a skill with the same name is merged. Re-running is the normal operating
-// condition — the same rule migrations live by.
+// Idempotent by content, not by run: an experience that IS one already in the
+// bank (normalized org + title, or a same-org row with a similar title and
+// compatible dates — see ./plan) is reused, a bullet at the same paragraph of
+// the same document is reused, a fact with the same normalized statement
+// under the same experience is reused, a metric or deliverable already
+// recorded under that experience is skipped, a skill with the same name is
+// merged. Re-running is the normal operating condition — the same rule
+// migrations live by.
+//
+// The decisions are made by planPersist, a pure function; this file executes
+// them in dependency order (experiences → facts → bullets → metrics,
+// deliverables → skills) because fact ids are needed before anything can
+// cite them.
 //
 // What the résumé itself asserts (experiences, bullets) lands approved: those
 // are the document's own identity lines. What the agent DERIVED lands with
@@ -13,6 +20,7 @@
 
 import { createServiceClient } from '@/lib/supabase/server'
 import type { ImportProposal } from './import'
+import { planPersist, type Corroboration, type MatchedExperience, type NearMiss } from './plan'
 import { insertRows, loadEvidenceBank } from './store'
 
 export interface SeedCounts {
@@ -27,12 +35,19 @@ export interface SeedCounts {
   deliverables: number
   preferences: number
   missionCreated: boolean
+  /** Experiences reused under a rule other than the exact string — worth a glance. */
+  matched: MatchedExperience[]
+  /** Same org, title too different to merge on: inserted, and flagged for a human. */
+  nearMisses: NearMiss[]
+  /** Facts already in the bank that a second source also states. */
+  corroborated: Corroboration[]
 }
 
 export function emptyCounts(): SeedCounts {
   return {
     documents: 0, documentReused: false, experiences: 0, experiencesReused: 0, bullets: 0,
     facts: 0, metrics: 0, skills: 0, deliverables: 0, preferences: 0, missionCreated: false,
+    matched: [], nearMisses: [], corroborated: [],
   }
 }
 
@@ -61,18 +76,21 @@ export async function persistProposal(
   const { bank, migrationMissing } = await loadEvidenceBank(userId, { approvedOnly: false })
   if (migrationMissing) return { counts, errors: ['migration 014_career_os.sql has not been applied'], migrationMissing: true }
 
-  // 1. Experiences — reuse by organization + title.
+  const plan = planPersist(bank, proposal)
+  counts.matched.push(...plan.matched)
+  counts.nearMisses.push(...plan.nearMisses)
+  counts.corroborated.push(...plan.corroborated)
+
+  // 1. Experiences.
   const experienceId = new Map<string, string>()
-  const keyOf = (org: string, title: string) => `${org.trim().toLowerCase()}::${title.trim().toLowerCase()}`
-  const existingExp = new Map(bank.experiences.map((e) => [keyOf(e.organization, e.title), e.id]))
-  const toInsert = proposal.experiences.filter((e) => {
-    const id = existingExp.get(keyOf(e.organization, e.title))
-    if (id) {
-      experienceId.set(e.key, id)
+  const toInsert = proposal.experiences.filter((e, i) => {
+    const d = plan.experiences[i]
+    if (d.action === 'reuse') {
+      experienceId.set(e.key, d.existingId)
       counts.experiencesReused++
       return false
     }
-    return true
+    return d.action === 'insert'
   })
   if (toInsert.length) {
     const res = await insertRows('evidence_experiences', toInsert.map((e) => ({
@@ -93,24 +111,29 @@ export async function persistProposal(
     toInsert.forEach((e, i) => experienceId.set(e.key, res.ids[i]))
     counts.experiences += res.ids.length
   }
+  // A second block of the same job in this proposal points at the first.
+  plan.experiences.forEach((d) => {
+    if (d.action !== 'collapse') return
+    const id = experienceId.get(d.intoKey)
+    if (id) experienceId.set(d.key, id)
+    counts.experiencesReused++
+  })
 
-  // 2. Facts — reuse by (experience, statement). Ids are needed before bullets
-  //    and metrics can cite them.
+  // 2. Facts. Ids are needed before bullets and metrics can cite them.
   const factId: (string | null)[] = new Array(proposal.facts.length).fill(null)
-  const existingFacts = new Map(bank.facts.map((f) => [`${f.experience_id}::${f.statement.toLowerCase()}`, f.id]))
   const factRows: Record<string, unknown>[] = []
   const factRowIndex: number[] = []
   proposal.facts.forEach((f, i) => {
-    const expId = experienceId.get(f.experience_key) ?? null
-    const had = existingFacts.get(`${expId}::${f.statement.toLowerCase()}`)
-    if (had) {
-      factId[i] = had
+    const d = plan.facts[i]
+    if (d.action === 'reuse') {
+      factId[i] = d.existingId
       return
     }
+    if (d.action === 'collapse') return // resolved after inserts, below
     factRowIndex.push(i)
     factRows.push({
       user_id: userId,
-      experience_id: expId,
+      experience_id: experienceId.get(f.experience_key) ?? null,
       statement: f.statement,
       category: f.category,
       source: f.source,
@@ -127,7 +150,13 @@ export async function persistProposal(
       counts.facts += res.ids.length
     }
   }
-  const resolve = (refs: number[]) => refs.map((i) => factId[i]).filter((id): id is string => Boolean(id))
+  proposal.facts.forEach((f, i) => {
+    const d = plan.facts[i]
+    if (d.action !== 'collapse') return
+    factId[i] = factId[d.intoIndex]
+    if (d.corroborates && factId[i]) counts.corroborated.push({ factId: factId[i] as string, source: f.source, source_location: f.source_location })
+  })
+  const resolve = (refs: number[]) => [...new Set(refs.map((i) => factId[i]).filter((id): id is string => Boolean(id)))]
 
   // 3. Bullets — reuse by (document, paragraph). Fact ids by paragraph.
   const factsByParagraph = new Map<number, string[]>()
@@ -135,7 +164,7 @@ export async function persistProposal(
     const id = factId[i]
     if (f.paragraph_index === null || !id) return
     const list = factsByParagraph.get(f.paragraph_index) ?? []
-    list.push(id)
+    if (!list.includes(id)) list.push(id)
     factsByParagraph.set(f.paragraph_index, list)
   })
   const existingBullets = new Set(
@@ -172,14 +201,11 @@ export async function persistProposal(
     }
   }
 
-  // 4. Metrics and deliverables — reuse by (experience, value) and
-  //    (experience, description). The importer is cached by input hash, so a
-  //    re-seed replays the identical proposal; without this every run would
-  //    double the metrics while leaving the facts alone.
-  const metricKey = (expId: string | null, value: string) => `${expId}::${value.trim().toLowerCase()}`
-  const existingMetrics = new Set(bank.metrics.map((m) => metricKey(m.experience_id, m.value)))
+  // 4. Metrics and deliverables. The importer is cached by input hash, so a
+  //    re-seed replays the identical proposal; without the plan's sets every
+  //    run would double the metrics while leaving the facts alone.
   const metricRows = proposal.metrics
-    .filter((m) => !existingMetrics.has(metricKey(experienceId.get(m.experience_key) ?? null, m.value)))
+    .filter((_, i) => plan.metrics[i])
     .map((m) => ({
       user_id: userId,
       experience_id: experienceId.get(m.experience_key) ?? null,
@@ -195,9 +221,8 @@ export async function persistProposal(
     if (res.error) errors.push(`metrics: ${res.error}`)
     else counts.metrics += res.ids.length
   }
-  const existingDeliverables = new Set(bank.deliverables.map((d) => metricKey(d.experience_id, d.description)))
   const deliverableRows = proposal.deliverables
-    .filter((d) => !existingDeliverables.has(metricKey(experienceId.get(d.experience_key) ?? null, d.description)))
+    .filter((_, i) => plan.deliverables[i])
     .map((d) => ({
       user_id: userId,
       experience_id: experienceId.get(d.experience_key) ?? null,
