@@ -41,6 +41,10 @@ export function emptyBank(): EvidenceBank {
     stories: [],
     preferences: [],
     bullets: [],
+    organizations: [],
+    sources: [],
+    factSources: [],
+    projects: [],
     masterDocument: null,
   }
 }
@@ -117,6 +121,10 @@ export async function loadEvidenceBank(
       stories,
       preferences: (prefRows ?? []) as EvidencePreference[],
       bullets,
+      organizations: [],
+      sources: [],
+      factSources: [],
+      projects: [],
       masterDocument: ((docRows ?? [])[0] as ResumeDocument | undefined) ?? null,
     },
     migrationMissing,

@@ -40,6 +40,10 @@ function atomicStatements(summary: string): string[] {
 export function buildFixtureBank(): EvidenceBank {
   const bank: EvidenceBank = {
     experiences: [], facts: [], metrics: [], deliverables: [], skills: [], stories: [], preferences: [], bullets: [],
+    organizations: [],
+    sources: [],
+    factSources: [],
+    projects: [],
     masterDocument: null,
   }
   RESUME_ITEMS.forEach((item, order) => {

@@ -74,7 +74,7 @@ function bankFromFixture(): EvidenceBank {
       skills.push({ id: `skill-${skills.length + 1}`, user_id: 'probe', name: d, category: 'domain', evidence_fact_ids: [fid], approved: true, created_at: now })
     }
   })
-  return { experiences, facts, metrics: [], deliverables: [], skills, stories: [], preferences: [], bullets: [], masterDocument: null }
+  return { experiences, facts, metrics: [], deliverables: [], skills, stories: [], preferences: [], bullets: [], organizations: [], sources: [], factSources: [], projects: [], masterDocument: null }
 }
 
 async function main() {

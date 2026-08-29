@@ -117,5 +117,5 @@ export function bankFromProposal(
     page_count: 1, uploaded_at: now,
   }
 
-  return { experiences, facts, metrics, deliverables, skills, stories: [], preferences: [], bullets, masterDocument }
+  return { experiences, facts, metrics, deliverables, skills, stories: [], preferences: [], bullets, organizations: [], sources: [], factSources: [], projects: [], masterDocument }
 }

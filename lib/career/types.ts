@@ -73,7 +73,24 @@ export interface EvidenceExperience {
   approved: boolean
   created_at: string
   updated_at: string
+  // 015_evidence_canonical — optional so pre-015 rows and fixtures still type-check.
+  organization_id?: string | null
+  organization_norm?: string | null
+  title_norm?: string | null
+  canonical_summary?: string | null
+  summary_fact_ids?: string[]
+  merge_status?: MergeStatus
+  status?: RowStatus
+  merged_into?: string | null
+  edited_by_user?: boolean
+  source_count?: number
 }
+
+/** 'active' rows are read; 'merged' rows are tombstones pointing at `merged_into`. */
+export type RowStatus = 'active' | 'merged'
+
+/** Confidence in a canonical row, from how many independent sources agree. */
+export type MergeStatus = 'VERIFIED' | 'CORROBORATED' | 'CONFLICTING' | 'NEEDS_REVIEW'
 
 export type FactCategory =
   | 'responsibility' | 'achievement' | 'metric' | 'skill' | 'tool'
@@ -95,6 +112,14 @@ export interface EvidenceFact {
   approved: boolean
   created_at: string
   updated_at: string
+  // 015_evidence_canonical
+  status?: RowStatus
+  merged_into?: string | null
+  project_id?: string | null
+  statement_norm?: string | null
+  edited_by_user?: boolean
+  support_count?: number
+  fact_status?: MergeStatus
 }
 
 export interface EvidenceMetric {
@@ -108,6 +133,9 @@ export interface EvidenceMetric {
   source: string
   approved: boolean
   created_at: string
+  status?: RowStatus
+  merged_into?: string | null
+  value_norm?: string | null
 }
 
 export interface EvidenceDeliverable {
@@ -213,6 +241,11 @@ export interface EvidenceBank {
   stories: EvidenceStory[]
   preferences: EvidencePreference[]
   bullets: ResumeBullet[]
+  /** 015 entities. Empty arrays when migration 015 is not applied. */
+  organizations: EvidenceOrganization[]
+  sources: EvidenceSource[]
+  factSources: EvidenceFactSource[]
+  projects: EvidenceProject[]
   masterDocument: ResumeDocument | null
 }
 
@@ -704,4 +737,119 @@ export interface DocumentQaReport {
   warnings: string[]
   /** Set when the page-count fix loop ran. */
   shrink_attempts?: number
+}
+
+// ---------------------------------------------------------------------------
+// 015_evidence_canonical — organizations, sources, provenance, projects,
+// merge suggestions, conflicts, snapshots.
+// ---------------------------------------------------------------------------
+
+export type OrganizationKind = 'company' | 'university' | 'lab' | 'student_org' | 'program' | 'other'
+
+export interface EvidenceOrganization {
+  id: string
+  user_id: string
+  canonical_name: string
+  normalized_name: string
+  aliases: string[]
+  kind: OrganizationKind
+  company_id: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type SourceKind =
+  | 'resume' | 'linkedin_profile' | 'linkedin_post' | 'pasted_context'
+  | 'notes' | 'profile_field' | 'other'
+
+/** A thing the user gave us. Not knowledge — facts point at it. */
+export interface EvidenceSource {
+  id: string
+  user_id: string
+  kind: SourceKind
+  label: string
+  sha256: string | null
+  content: string | null
+  storage_path: string | null
+  resume_document_id: string | null
+  metadata: Record<string, unknown>
+  imported_at: string
+}
+
+export interface EvidenceFactSource {
+  id: string
+  user_id: string
+  fact_id: string
+  source_id: string
+  location: string | null
+  quote: string | null
+  confidence: number
+  created_at: string
+}
+
+export interface EvidenceExperienceSource {
+  id: string
+  user_id: string
+  experience_id: string
+  source_id: string
+  location: string | null
+  title_as_written: string | null
+  dates_as_written: string | null
+  created_at: string
+}
+
+export interface EvidenceProject {
+  id: string
+  user_id: string
+  experience_id: string | null
+  organization_id: string | null
+  name: string
+  name_norm: string
+  description: string | null
+  fact_ids: string[]
+  approved: boolean
+  status: RowStatus
+  merged_into: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type MergeConfidence = 'HIGH' | 'POSSIBLE' | 'CONFLICT'
+export type MergeEntityType = 'experience' | 'fact' | 'metric' | 'project'
+export type MergeSuggestionStatus = 'open' | 'merged' | 'kept_separate' | 'stale'
+
+export interface EvidenceMergeSuggestion {
+  id: string
+  user_id: string
+  entity_type: MergeEntityType
+  keep_id: string
+  merge_id: string
+  confidence: MergeConfidence
+  rule: string | null
+  signals: Record<string, unknown>
+  why: string | null
+  data_preserved: string | null
+  risk: string | null
+  status: MergeSuggestionStatus
+  created_at: string
+  resolved_at: string | null
+}
+
+export interface ConflictCandidate {
+  value: string
+  source_id: string | null
+  source_label: string
+}
+
+export interface EvidenceConflict {
+  id: string
+  user_id: string
+  entity_type: 'experience' | 'fact' | 'metric'
+  entity_id: string
+  field: string
+  candidates: ConflictCandidate[]
+  status: 'open' | 'resolved'
+  resolution: string | null
+  created_at: string
+  resolved_at: string | null
 }
