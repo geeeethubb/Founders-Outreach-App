@@ -4,7 +4,9 @@ import { runPositioning, renderPositioning } from '@/lib/agents/positioning'
 import { positioningPrompt } from '@/lib/agents/positioning/prompt'
 import { runOutreach } from '@/lib/agents/outreach'
 import { outreachPrompt } from '@/lib/agents/outreach/prompt'
-import { RESUME_ITEMS } from '@/evals/phase3/user-profile'
+import { loadEvidenceBank } from '@/lib/career/evidence/store'
+import { backgroundForOutreach } from '@/lib/outreach/background'
+import { resolveSender } from '@/lib/outreach/sender'
 import { anthropicUsage, resetAnthropicUsage } from '@/lib/providers/anthropic/client'
 import { buildEvidence, buildVerificationPool, evidenceFromReference, safeNamesFor } from '@/lib/outreach/evidence'
 import { checkGrounding } from '@/lib/outreach/grounding'
@@ -61,19 +63,15 @@ export async function POST(request: NextRequest) {
 
     resetAnthropicUsage()
 
-    const background = RESUME_ITEMS.map((i) => ({
-      id: i.id,
-      kind: i.kind,
-      title: i.title,
-      org: i.org,
-      period: i.period,
-      summary: i.summary,
-      domains: i.domains,
-      credibility: i.credibility,
-    }))
-    const byId = new Map(background.map((b) => [b.id, b]))
-
     const mission = { goal: body.mission.goal, timeframe: body.mission.timeframe ?? 'Winter 2026-27' }
+
+    // The full BackgroundItem list from the Evidence Bank — positioning chooses
+    // FROM it (≤3 proof points); the fixture only when the bank is empty.
+    const bankRes = await loadEvidenceBank(user.id, { approvedOnly: true }).catch(() => null)
+    const bankBackground = backgroundForOutreach(bankRes?.bank ?? null, { mission: mission.goal, maxExperiences: 12, maxFacts: 24 })
+    const background = bankBackground.items
+    const byId = new Map(background.map((b) => [b.id, b]))
+    const sender = await resolveSender(user.id, bankRes?.bank ?? null)
     const ctx = {
       user_id: user.id,
       run_id: null,
@@ -146,7 +144,7 @@ export async function POST(request: NextRequest) {
       const out = await runOutreach(
         {
           mission,
-          sender: { name: 'Zuyu Liu', signoffContext: 'undergraduate, chemical engineering' },
+          sender: { name: sender.name, signoffContext: sender.signoffContext },
           person: {
             name: body.person.name,
             firstName: body.person.firstName || body.person.name.split(' ')[0],
@@ -171,7 +169,7 @@ export async function POST(request: NextRequest) {
         // campaign reference exists, what the user asserted about THEMSELVES in
         // it counts too; what they said about its own recipient does not.
         const verificationPool = [
-          ...buildVerificationPool(allowed, background, chosen.map((c) => c.id)),
+          ...buildVerificationPool(allowed, background, chosen.map((c) => c.id), bankBackground.facts),
           ...(reference ? evidenceFromReference(reference.body, reference.style.recipient_specific) : []),
         ]
         grounding = checkGrounding({
@@ -181,7 +179,7 @@ export async function POST(request: NextRequest) {
           safeNames: safeNamesFor({
             recipientName: body.person.name,
             recipientCompany: body.person.company,
-            senderName: 'Zuyu Liu',
+            senderName: sender.name,
             timeframe: mission.timeframe,
           }),
         })
@@ -241,6 +239,8 @@ export async function POST(request: NextRequest) {
       outreachId,
       persistError,
       referenceWarning,
+      backgroundSource: { source: bankBackground.source, items: background.length },
+      sender: { name: sender.name, source: sender.nameSource },
       // What the writer was told to sound like. Shown in the UI so "why does it
       // read like this?" has an answer the founder can inspect and correct.
       reference: reference

@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { runScouting } from '@/lib/scouting/orchestrator'
-import { RESUME_ITEMS } from '@/evals/phase3/user-profile'
+import { loadEvidenceBank } from '@/lib/career/evidence/store'
+import { backgroundForOutreach, toScoutItems } from '@/lib/outreach/background'
 import { isSearchMode, summarizeDecision, type SearchMode } from '@/lib/network/sufficiency'
 
 // A scouting run is many sequential agent calls with web search inside them.
@@ -47,12 +48,17 @@ export async function POST(request: NextRequest) {
     // what it needs among people already paid for.
     const searchMode: SearchMode = isSearchMode(body.searchMode) ? body.searchMode : 'internal_first'
 
-    // Retrieved summaries only — never the full résumé (ADR-005). This is the
-    // temporary source until the Talent Knowledge Base exists.
-    const backgroundItems = RESUME_ITEMS.filter((i) => i.credibility !== 'supporting').map((i) => ({
-      id: i.id,
-      summary: `${i.title} — ${i.org} (${i.period}): ${i.summary}`,
-    }))
+    // Retrieved summaries only — never the full résumé (ADR-005). The Evidence
+    // Bank is the source; the fixture is the fallback for an empty bank, and
+    // the response says which one was used so the UI can show it.
+    let bankWarning: string | null = null
+    const bankRes = await loadEvidenceBank(user.id, { approvedOnly: true }).catch((e) => {
+      bankWarning = `Evidence Bank unavailable: ${e instanceof Error ? e.message : String(e)}`
+      return null
+    })
+    if (bankRes?.migrationMissing) bankWarning = 'migration 014_career_os.sql has not been applied — using the fixture background'
+    const background = backgroundForOutreach(bankRes?.bank ?? null, { mission: goal, maxExperiences: 12, maxFacts: 24 })
+    const backgroundItems = toScoutItems(background.items)
 
     const result = await runScouting({
       userId: user.id,
@@ -99,6 +105,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       runId: result.runId,
       searchMode,
+      // "personalized from Evidence (11 items)" vs "fixture" — shown, not assumed.
+      backgroundSource: { source: background.source, items: backgroundItems.length, warning: bankWarning },
       funnel: result.funnel,
       // The internal-first decision, made observable. "Why did this run cost
       // nothing?" and "why did it spend forty credits?" are the same question.

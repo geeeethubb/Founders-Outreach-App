@@ -9,6 +9,8 @@
 import { runCoverLetterWriter, DEFAULT_LENGTH, NARRATIVE, type CoverLetterInput, type CoverLetterOutput } from '@/lib/agents/cover-letter-writer'
 import type { AgentResult, ToolContext } from '@/lib/agents/runtime/types'
 import { buildBankPool, factsById } from '../evidence/render'
+import { getRelevantPersonalEvidence } from '../evidence/retrieval'
+import { retrievalTargetForLetterJob } from '../evidence/retrieval-targets'
 import { gateCoverLetter, revisionNotesFrom, type LetterGrounding } from './grounding'
 import type { CoverLetterClaim, EvidenceBank, JobEvidenceMap } from '../types'
 
@@ -93,18 +95,33 @@ function storyText(bank: EvidenceBank, id: string): string | null {
   return `${s.title}: ${[s.situation, s.task, s.actions, s.result, s.learning].filter(Boolean).join(' → ')}`
 }
 
-/** Choose the ≤10 facts and ≤2 stories the writer may argue from. Principle 5: never the whole bank. */
+/**
+ * Choose the ≤10 facts and ≤2 stories the writer may argue from. Principle 5:
+ * never the whole bank. The matcher's chosen facts come first (it judged
+ * them for this job); retrieval-ranked facts fill the remaining slots, those
+ * from the matcher's top experiences before the rest.
+ */
 export function buildLetterInput(params: Omit<CoverLetterParams, 'ctx' | 'deps' | 'onStep'>): CoverLetterInput {
   const { bank, evidenceMap } = params
-  let facts = factsById(bank, evidenceMap.fact_ids).filter((f) => f.approved)
-  if (facts.length === 0) {
-    // No matcher output: fall back to the top experiences' achievements and
-    // metrics so the letter still has something specific to say.
+  const live = (f: EvidenceBank['facts'][number]) => f.approved && f.status !== 'merged'
+  const chosen = factsById(bank, evidenceMap.fact_ids).filter(live)
+  const seen = new Set(chosen.map((f) => f.id))
+  const facts = [...chosen]
+  if (facts.length < MAX_LETTER_FACTS) {
+    const relevant = getRelevantPersonalEvidence({
+      bank,
+      target: retrievalTargetForLetterJob(params.job),
+      maxExperiences: Math.max(1, bank.experiences.length),
+      maxFacts: Math.max(MAX_LETTER_FACTS, bank.facts.length),
+    })
     const top = new Set(evidenceMap.top_experience_ids)
-    facts = bank.facts.filter(
-      (f) => f.approved && (top.size === 0 || (f.experience_id && top.has(f.experience_id))) &&
-        (f.category === 'achievement' || f.category === 'metric' || f.category === 'responsibility')
-    )
+    const ranked = relevant.facts.map((r) => r.fact).filter((f) => live(f) && !seen.has(f.id))
+    const prefer = (f: EvidenceBank['facts'][number]) => f.experience_id !== null && top.has(f.experience_id)
+    for (const f of [...ranked.filter(prefer), ...ranked.filter((f) => !prefer(f))]) {
+      if (facts.length >= MAX_LETTER_FACTS) break
+      facts.push(f)
+      seen.add(f.id)
+    }
   }
   const stories = evidenceMap.story_ids
     .map((id) => ({ id, text: storyText(bank, id) }))

@@ -23,8 +23,9 @@ import { runEvidenceMatcher, evidenceMatcherPrompt, type EvidenceMatch } from '@
 import { runNetworkPathfinder, type JudgedPath } from '@/lib/agents/network-pathfinder'
 import type { ToolContext } from '@/lib/agents/runtime/types'
 import { mapWithConcurrency } from '@/lib/scouting/concurrency'
-import { renderExperienceSummaries, renderPreferences, renderSkills, renderStories } from '../evidence/render'
-import { renderRetrievedDetail, retrieveEvidenceForJob } from '../evidence/retrieve'
+import { renderPreferences, renderSkills, renderStories } from '../evidence/render'
+import { getRelevantPersonalEvidence, renderRelevantEvidence } from '../evidence/retrieval'
+import { retrievalTargetForJob } from '../evidence/retrieval-targets'
 import { buildFitEvaluationRow, evaluateFit, type FitEvaluation } from '../fit/evaluate'
 import { computeFeedbackAdjustment, renderFeedbackHints, type FeedbackRow } from '../fit/feedback'
 import { applyHardConstraints } from '../jobs/filters'
@@ -263,12 +264,15 @@ export async function runJobIntelligence(params: IntelligenceParams): Promise<In
     progress('fit', job.title)
     try {
       const jobInput = fitJobInputFrom(job)
+      // Retrieval, not the whole bank: the six experiences that plausibly
+      // matter for THIS posting, compact (principle 5).
+      const relevant = getRelevantPersonalEvidence({ bank, mission: renderMission(mission), target: retrievalTargetForJob(job), maxExperiences: 6, maxFacts: 16 })
       const res = await runFitEvaluator(
         {
           mission: renderMission(mission),
           job: jobInput,
           companyResearch: renderCompanyResearchForPrompt(research),
-          evidenceSummaries: renderExperienceSummaries(bank),
+          evidenceSummaries: renderRelevantEvidence(relevant, { style: 'compact' }),
           preferences: renderPreferences(bank),
           feedbackContext: renderFeedbackHints(feedbackRows),
         },
@@ -317,12 +321,12 @@ export async function runJobIntelligence(params: IntelligenceParams): Promise<In
   } else {
     progress('match', job.title)
     try {
-      const retrieval = retrieveEvidenceForJob(bank, job)
+      const relevant = getRelevantPersonalEvidence({ bank, mission: renderMission(mission), target: retrievalTargetForJob(job), maxExperiences: 6, maxFacts: 16, includeStories: true })
       const res = await runEvidenceMatcher(
         {
           job: fitJobInputFrom(job),
-          evidenceSummaries: renderExperienceSummaries(bank),
-          detail: renderRetrievedDetail(bank, retrieval, { maxExperiences: 4 }),
+          evidenceSummaries: renderRelevantEvidence(relevant, { style: 'compact' }),
+          detail: renderRelevantEvidence(relevant, { style: 'detailed', maxFactsPerExperience: 8 }),
           skills: renderSkills(bank),
           stories: renderStories(bank),
           validIds: {

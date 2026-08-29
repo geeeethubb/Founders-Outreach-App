@@ -20,7 +20,8 @@ import type { CompanyToCheck, FetchPageFn, LookupBoardFn } from '@/lib/agents/jo
 import type { AgentResult, ToolContext } from '@/lib/agents/runtime/types'
 import { createServiceClient } from '@/lib/supabase/server'
 import { loadEvidenceBank } from '../evidence/store'
-import { renderExperienceSummaries, renderPreferences, renderSkills } from '../evidence/render'
+import { renderPreferences, renderSkills } from '../evidence/render'
+import { getRelevantPersonalEvidence, renderRelevantEvidence } from '../evidence/retrieval'
 import { renderFeedbackHints, type FeedbackRow } from '../fit/feedback'
 import { clusterJobs } from '../jobs/dedupe'
 import { isInternshipLike } from '../jobs/filters'
@@ -297,7 +298,7 @@ export async function runJobScout(params: JobScoutParams, deps: JobScoutDeps = {
   progress('plan', 'asking the mission planner')
   const planner = deps.planner ?? runJobMissionPlanner
   const planRes = await planner(
-    { mission: missionText, evidenceSummaries: renderExperienceSummaries(bankRes.bank), skills: renderSkills(bankRes.bank), preferences: renderPreferences(bankRes.bank), watchlist: watchlist.map((w) => w.name), recentFeedback: renderFeedbackHints(feedback) },
+    { mission: missionText, evidenceSummaries: renderRelevantEvidence(getRelevantPersonalEvidence({ bank: bankRes.bank, mission: missionText, target: { kind: 'generic' }, maxExperiences: 8, maxFacts: 16 }), { style: 'compact' }), skills: renderSkills(bankRes.bank), preferences: renderPreferences(bankRes.bank), watchlist: watchlist.map((w) => w.name), recentFeedback: renderFeedbackHints(feedback) },
     ctx
   )
   await traced(planRes, { mission_id: mission.id })

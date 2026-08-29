@@ -99,13 +99,30 @@ export function buildEvidence(input: EvidenceInput): string[] {
 export function buildVerificationPool(
   writerEvidence: string[],
   allBackground: BackgroundItem[],
-  chosenIds: string[]
+  chosenIds: string[],
+  /**
+   * Evidence Bank facts behind the CHOSEN items only. A BackgroundItem's
+   * summary is two facts at most; the draft may honestly cite a third one
+   * from the same experience, and the gate must be able to see it. Facts of
+   * experiences positioning did not choose are never admitted — that would be
+   * the whole bank by another door.
+   */
+  bankFacts?: { id: string; statement: string; experienceId: string }[]
 ): string[] {
   const chosen = new Set(chosenIds)
   const rest = allBackground
     .filter((b) => !chosen.has(b.id))
     .map((b) => `ON RECORD: ${b.title} — ${b.org}${b.period ? ` (${b.period})` : ''}`)
-  return [...writerEvidence, ...rest]
+  const seen = new Set(writerEvidence)
+  const factLines: string[] = []
+  for (const f of bankFacts ?? []) {
+    if (!chosen.has(f.experienceId)) continue
+    const line = `SENDER: ${f.statement}`
+    if (seen.has(line)) continue
+    seen.add(line)
+    factLines.push(line)
+  }
+  return [...writerEvidence, ...factLines, ...rest]
 }
 
 /**

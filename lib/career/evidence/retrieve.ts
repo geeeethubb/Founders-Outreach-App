@@ -127,13 +127,14 @@ export function terms(text: string): string[] {
   return out
 }
 
-function familyOf(term: string): number | null {
+/** Synonym family index for a stemmed term, or null. Shared with retrieval.ts. */
+export function familyOf(term: string): number | null {
   return FAMILY_OF.get(term) ?? null
 }
 
 // ─── Scoring ─────────────────────────────────────────────────────────────────
 
-interface Weighted {
+export interface Weighted {
   term: string
   weight: number
 }
@@ -160,7 +161,7 @@ export function buildQuery(job: RetrievalJob): Weighted[] {
  * family hits at half. Normalized by log length so a long description does
  * not outrank a short, precise fact just by containing more words.
  */
-function scoreText(text: string, query: Weighted[]): { score: number; matched: string[] } {
+export function scoreText(text: string, query: Weighted[]): { score: number; matched: string[] } {
   const present = new Set(terms(text))
   const families = new Set<number>()
   for (const t of present) {

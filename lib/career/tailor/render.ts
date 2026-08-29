@@ -1,21 +1,27 @@
 // Renderers: from an EvidenceBank + a JobEvidenceMap + a job to the inputs the
 // tailor and the verifier take.
 //
-// The tailor sees ALL experiences with their bullets — it must be able to say
-// "nothing changes here" about every one — but facts are capped per experience
-// and the matcher's top experiences come first, so the prompt leads with what
-// matters. Only approved material is rendered: an unapproved fact is not
-// evidence yet, and rendering it would let the tailor cite it.
+// The tailor sees EVERY experience that has master-résumé bullets — it must be
+// able to say "nothing changes here" about every one — but facts per experience
+// are the retrieval-ranked ones (≤ MAX_FACTS_PER_EXPERIENCE), the matcher's top
+// experiences come first, and experiences with no bullets on the résumé appear
+// only when retrieval ranks them in the top TOP_NON_RESUME_EXPERIENCES for this
+// job. Only approved material is rendered: an unapproved fact is not evidence
+// yet, and rendering it would let the tailor cite it.
 
 import { stripMarkdown } from '../documents/docx-read'
 import { bulletsForExperience, factsForExperience, metricsForExperience } from '../evidence/store'
 import { experienceLabel } from '../evidence/render'
+import { getRelevantPersonalEvidence, type RelevantEvidence } from '../evidence/retrieval'
+import { retrievalTargetForTailorJob } from '../evidence/retrieval-targets'
 import { renderRules } from './rules'
 import type { ResumeTailorInput, TailorExperience, TailorJob, TailorEvidenceMap } from '@/lib/agents/resume-tailor/prompt'
 import type { ResumeFactVerifierInput } from '@/lib/agents/resume-fact-verifier/prompt'
 import type { EditLevel, EvidenceBank, JobEvidenceMap, JobOpportunity } from '../types'
 
-export const MAX_FACTS_PER_EXPERIENCE = 12
+export const MAX_FACTS_PER_EXPERIENCE = 8
+/** Experiences without résumé bullets reach the tailor only from this many top retrieval ranks. */
+export const TOP_NON_RESUME_EXPERIENCES = 6
 export const MAX_KEY_REQUIREMENTS = 15
 export const MAX_RESPONSIBILITIES = 8
 export const MAX_DESCRIPTION_CHARS = 2000
@@ -59,17 +65,19 @@ export function jobTermsFor(job: TailorJob): string[] {
   return [...terms]
 }
 
-export function renderTailorExperience(bank: EvidenceBank, experienceId: string): TailorExperience | null {
+export function renderTailorExperience(bank: EvidenceBank, experienceId: string, relevant?: RelevantEvidence): TailorExperience | null {
   const e = bank.experiences.find((x) => x.id === experienceId)
   if (!e) return null
+  // Retrieval-ranked facts for this job when a slice was given; bank order otherwise.
+  const ranked = relevant?.experiences.find((r) => r.experience.id === experienceId)?.facts.map((f) => f.fact)
+  const facts = (ranked ?? factsForExperience(bank, e.id)).filter((f) => f.approved && f.status !== 'merged')
   return {
     id: e.id,
     label: experienceLabel(e),
     bullets: bulletsForExperience(bank, e.id)
       .filter((b) => b.approved)
       .map((b) => ({ id: b.id, text: stripMarkdown(b.text), is_on_master: b.is_on_master, fact_ids: b.evidence_fact_ids })),
-    facts: factsForExperience(bank, e.id)
-      .filter((f) => f.approved)
+    facts: facts
       .slice(0, MAX_FACTS_PER_EXPERIENCE)
       .map((f) => ({ id: f.id, statement: f.statement })),
     metrics: metricsForExperience(bank, e.id)
@@ -79,13 +87,26 @@ export function renderTailorExperience(bank: EvidenceBank, experienceId: string)
 }
 
 export function buildTailorInput(bank: EvidenceBank, job: TailorJob, map: EvidenceMapForTailor): ResumeTailorInput {
-  const top = map.top_experience_ids.filter((id) => bank.experiences.some((e) => e.id === id))
+  // One retrieval over every live experience: the per-experience fact order
+  // comes from it, and its first TOP_NON_RESUME_EXPERIENCES ranks decide which
+  // bullet-less experiences the tailor may still draw a swap or a new line from.
+  const relevant = getRelevantPersonalEvidence({
+    bank,
+    target: retrievalTargetForTailorJob(job),
+    maxExperiences: Math.max(1, bank.experiences.length),
+    maxFacts: Math.max(MAX_FACTS_PER_EXPERIENCE, bank.facts.length),
+  })
+  const rankedIds = relevant.experiences.map((r) => r.experience.id)
+  const topRetrieved = new Set(rankedIds.slice(0, TOP_NON_RESUME_EXPERIENCES))
+  const live = (e: EvidenceBank['experiences'][number]) => e.approved && e.status !== 'merged'
+  const hasResumeBullets = (id: string) => bulletsForExperience(bank, id).some((b) => b.approved && b.is_on_master)
+  const top = map.top_experience_ids.filter((id) => bank.experiences.some((e) => e.id === id && live(e)))
   const rest = bank.experiences
-    .filter((e) => e.approved && !top.includes(e.id))
+    .filter((e) => live(e) && !top.includes(e.id) && (hasResumeBullets(e.id) || topRetrieved.has(e.id)))
     .sort((a, b) => a.display_order - b.display_order)
     .map((e) => e.id)
   const experiences = [...top, ...rest]
-    .map((id) => renderTailorExperience(bank, id))
+    .map((id) => renderTailorExperience(bank, id, relevant))
     .filter((e): e is TailorExperience => e !== null)
   const evidenceMap: TailorEvidenceMap = {
     why_i_fit: map.why_i_fit,

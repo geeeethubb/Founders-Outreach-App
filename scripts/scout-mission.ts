@@ -12,8 +12,6 @@ import path from 'path'
 import fs from 'fs'
 config({ path: path.join(process.cwd(), '.env.local') })
 
-import { RESUME_ITEMS } from '../evals/phase3/user-profile'
-
 function arg(name: string, fallback: number): number {
   const i = process.argv.indexOf(`--${name}`)
   return i >= 0 ? Number(process.argv[i + 1]) : fallback
@@ -24,6 +22,8 @@ async function main() {
   const { createServiceClient } = await import('../lib/supabase/server')
   const { setAnthropicBudget } = await import('../lib/providers/anthropic/client')
   const { setApolloBudget } = await import('../lib/providers/apollo/client')
+  const { loadEvidenceBank } = await import('../lib/career/evidence/store')
+  const { backgroundForOutreach, toScoutItems } = await import('../lib/outreach/background')
 
   setAnthropicBudget(Number(process.env.SCOUT_ANTHROPIC_BUDGET ?? 220))
   setApolloBudget(Number(process.env.SCOUT_APOLLO_BUDGET ?? 60))
@@ -36,22 +36,29 @@ async function main() {
   }
   const userId = profiles[0].id as string
 
-  const items = RESUME_ITEMS.filter((i) => i.credibility !== 'supporting').map((i) => ({
-    id: i.id,
-    summary: `${i.title} — ${i.org} (${i.period}): ${i.summary}`,
-  }))
+  const goal =
+    'Find people who could realistically lead to a strong winter 2026-27 internship or ' +
+    'short-term project at the intersection of industrial AI, manufacturing, and chemical ' +
+    'or process engineering — people who would also matter for summer 2027 recruiting.'
+
+  // The Evidence Bank is the background; the fixture only when the bank is empty.
+  const bankRes = await loadEvidenceBank(userId, { approvedOnly: true })
+  const background = backgroundForOutreach(bankRes.bank, { mission: goal, maxExperiences: 12, maxFacts: 24 })
+  const items = toScoutItems(background.items)
 
   const started = Date.now()
   console.log('\nSCOUTING — one realistic winter-recruiting mission\n')
+  console.log(
+    background.source === 'bank'
+      ? `  background: personalized from Evidence (${items.length} items)`
+      : `  background: fixture (${items.length} items)${bankRes.migrationMissing ? ' — migration 014 not applied' : ' — the Evidence Bank has no approved experiences'}`
+  )
 
   const result = await runScouting({
     userId,
     label: `prototype/${new Date().toISOString().slice(0, 16)}`,
     mission: {
-      goal:
-        'Find people who could realistically lead to a strong winter 2026-27 internship or ' +
-        'short-term project at the intersection of industrial AI, manufacturing, and chemical ' +
-        'or process engineering — people who would also matter for summer 2027 recruiting.',
+      goal,
       timeframe: 'Winter 2026-27, with the same relationships relevant to summer 2027',
       geography: 'United States',
       constraints: [
@@ -131,7 +138,7 @@ async function main() {
   fs.mkdirSync(path.join(process.cwd(), '.eval-runs'), { recursive: true })
   fs.writeFileSync(
     path.join(process.cwd(), '.eval-runs', 'prototype-run.json'),
-    JSON.stringify({ elapsed, funnel: result.funnel, usage: u, ranked: result.ranked }, null, 2)
+    JSON.stringify({ elapsed, backgroundSource: background.source, backgroundItems: items.length, funnel: result.funnel, usage: u, ranked: result.ranked }, null, 2)
   )
   console.log('\nwritten to .eval-runs/prototype-run.json')
 }

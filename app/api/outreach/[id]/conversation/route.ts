@@ -7,6 +7,7 @@ import { stateForClassification } from '@/lib/outreach/states'
 import { checkGrounding } from '@/lib/outreach/grounding'
 import { evidenceForReply } from '@/lib/outreach/evidence'
 import { anthropicUsage, resetAnthropicUsage } from '@/lib/providers/anthropic/client'
+import { resolveSender } from '@/lib/outreach/sender'
 
 export const maxDuration = 120
 
@@ -48,12 +49,13 @@ export async function POST(
       .maybeSingle()
 
     const thread = await threadMessages(row.conversation_id)
+    const sender = await resolveSender(user.id)
 
     resetAnthropicUsage()
     const result = await runConversation(
       {
         mission: { goal: row.mission_goal ?? 'Build relevant professional relationships', timeframe: 'Winter 2026-27' },
-        sender: { name: 'Zuyu Liu' },
+        sender: { name: sender.name },
         person: {
           name: contact?.name ?? 'the recipient',
           firstName: (contact?.name ?? '').split(' ')[0] || 'there',
@@ -88,7 +90,7 @@ export async function POST(
           // Their own words count as evidence — a referral cannot be answered
           // without naming the person they just named.
           evidence: evidenceForReply(row.allowed_claims ?? [], reply.body),
-          safeNames: [contact?.name ?? '', contact?.company ?? '', 'Zuyu Liu'].filter(Boolean),
+          safeNames: [contact?.name ?? '', contact?.company ?? '', sender.name].filter(Boolean),
         })
       : null
 

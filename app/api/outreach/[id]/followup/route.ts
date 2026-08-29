@@ -4,6 +4,7 @@ import { runFollowUp } from '@/lib/agents/followup'
 import { getOutreach, patchOutreach, MigrationMissingError } from '@/lib/outreach/store'
 import { checkGrounding } from '@/lib/outreach/grounding'
 import { anthropicUsage, resetAnthropicUsage } from '@/lib/providers/anthropic/client'
+import { resolveSender } from '@/lib/outreach/sender'
 
 export const maxDuration = 120
 
@@ -59,12 +60,13 @@ export async function POST(
       .maybeSingle()
 
     const positioning = (row.positioning ?? {}) as Record<string, unknown>
+    const sender = await resolveSender(user.id)
 
     resetAnthropicUsage()
     const result = await runFollowUp(
       {
         mission: { goal: row.mission_goal ?? 'Build relevant professional relationships', timeframe: 'Winter 2026-27' },
-        sender: { name: 'Zuyu Liu' },
+        sender: { name: sender.name },
         person: {
           name: contact?.name ?? 'the recipient',
           firstName: (contact?.name ?? '').split(' ')[0] || 'there',
@@ -95,7 +97,7 @@ export async function POST(
           subject: suggestion.subject ?? '',
           body: suggestion.body,
           evidence: row.allowed_claims ?? [],
-          safeNames: [contact?.name ?? '', contact?.company ?? '', 'Zuyu Liu'].filter(Boolean),
+          safeNames: [contact?.name ?? '', contact?.company ?? '', sender.name].filter(Boolean),
         })
       : null
 
