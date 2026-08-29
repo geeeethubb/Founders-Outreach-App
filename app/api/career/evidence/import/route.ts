@@ -3,18 +3,20 @@ import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { loadDocument } from '@/lib/career/documents/store'
 import { seedEvidenceFromDocx, seedEvidenceFromText, summarizeSeed } from '@/lib/career/evidence/seed'
 import { isDynamicUsage } from '@/lib/http/dynamic'
-import type { FactSource, ResumeDocument } from '@/lib/career/types'
+import type { FactSource, ResumeDocument, SourceKind } from '@/lib/career/types'
 
 export const dynamic = 'force-dynamic'
 // One importer run over a full résumé is a long single model turn.
 export const maxDuration = 300
 
 const TEXT_SOURCES: FactSource[] = ['linkedin', 'profile', 'manual', 'alternate_resume', 'project_notes']
+const SOURCE_KINDS: SourceKind[] = ['resume', 'linkedin_profile', 'linkedin_post', 'pasted_context', 'notes', 'profile_field', 'other']
 
 /**
  * `{ mode: 'master', approve?, includeProfile? }` re-imports from the stored
- * master document. `{ mode: 'text', text, source?, approve? }` imports pasted
- * text. Nothing here reads the founder's local Zuyu_Resume.docx — the master
+ * master document. `{ mode: 'text', text, source?, approve?, label?, sourceKind? }`
+ * imports pasted text; `label` names the source record ("LinkedIn export
+ * 2026-08-28") and `sourceKind` overrides the kind derived from `source`. Nothing here reads the founder's local Zuyu_Resume.docx — the master
  * has to have been uploaded (or seeded by `npm run career:seed`) first.
  */
 export async function POST(request: NextRequest) {
@@ -29,6 +31,8 @@ export async function POST(request: NextRequest) {
       source?: string
       approve?: boolean
       includeProfile?: boolean
+      label?: string
+      sourceKind?: string
     }
     const approve = body.approve === true
 
@@ -36,7 +40,9 @@ export async function POST(request: NextRequest) {
       const text = String(body.text ?? '').trim()
       if (text.length < 40) return NextResponse.json({ error: 'Paste at least a few lines of text.' }, { status: 400 })
       const source = TEXT_SOURCES.includes(body.source as FactSource) ? (body.source as FactSource) : 'manual'
-      const result = await seedEvidenceFromText(user.id, text, source, { approve })
+      const label = typeof body.label === 'string' && body.label.trim() ? body.label.trim().slice(0, 120) : undefined
+      const sourceKind = SOURCE_KINDS.includes(body.sourceKind as SourceKind) ? (body.sourceKind as SourceKind) : undefined
+      const result = await seedEvidenceFromText(user.id, text, source, { approve, label, sourceKind })
       if (result.migrationMissing) {
         return NextResponse.json({ error: 'Apply supabase/migrations/014_career_os.sql first.', migrationMissing: true }, { status: 409 })
       }

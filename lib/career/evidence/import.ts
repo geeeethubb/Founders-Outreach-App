@@ -12,9 +12,9 @@
 
 import { readDocx, type DocxFile } from '../documents/docx-read'
 import { buildResumeModel, type ResumeModel } from '../documents/resume-model'
-import { runResumeImporter, RESUME_SOURCE_LABEL, type ResumeImporterInput, type ResumeImporterOutput } from '@/lib/agents/resume-importer'
+import { runResumeImporter, RESUME_SOURCE_LABEL, type ImporterExperienceInput, type ResumeImporterInput, type ResumeImporterOutput } from '@/lib/agents/resume-importer'
 import type { AgentTrace, ToolContext } from '@/lib/agents/runtime/types'
-import type { FactCategory, FactSource, SkillCategory } from '../types'
+import type { EvidenceExperience, FactCategory, FactSource, SkillCategory } from '../types'
 import {
   deriveBullets,
   deriveExperiences,
@@ -64,6 +64,17 @@ export interface ProposedDeliverable {
   fact_refs: number[]
 }
 
+export interface ProposedProject {
+  experience_key: string
+  name: string
+  description: string | null
+  /** Indexes into ImportProposal.facts. */
+  fact_refs: number[]
+}
+
+/** The slice of a bank row the importer is shown in text mode. */
+export type ExistingExperienceInput = Pick<EvidenceExperience, 'id' | 'kind' | 'organization' | 'title' | 'start_date' | 'end_date'> & { location?: string | null }
+
 export interface ImportProposal {
   experiences: ProposedExperience[]
   bullets: ProposedBullet[]
@@ -71,12 +82,15 @@ export interface ImportProposal {
   metrics: ProposedMetric[]
   skills: ProposedSkill[]
   deliverables: ProposedDeliverable[]
+  /** Named work the text names (validated); persisted into evidence_projects when 015 exists. */
+  projects: ProposedProject[]
   dropped: {
     unverifiable: number
     metrics: number
     skills: number
     misfiled: number
     experiences: number
+    projects: number
   }
   trace: AgentTrace | null
   /** Set when the agent failed; the deterministic parts (experiences, bullets) are still filled. */
@@ -86,16 +100,43 @@ export interface ImportProposal {
 
 // ─── Folding agent output onto proposals ─────────────────────────────────────
 
-function foldOutput(
+export function foldOutput(
   proposal: ImportProposal,
   output: ResumeImporterOutput,
-  opts: { filename: string; extra: ExtraSourceText[]; textSource: FactSource | null }
+  opts: { filename: string; extra: ExtraSourceText[]; textSource: FactSource | null; existing?: ExistingExperienceInput[] }
 ): void {
   const sourceFor = new Map<string, FactSource>(opts.extra.map((s) => [s.label, s.source]))
   const known = new Map(proposal.experiences.map((e) => [e.key, e]))
+  const existing = new Map((opts.existing ?? []).map((e) => [e.id, e]))
+  const baseOf = new Map<string, number>()
 
   for (const x of output.experiences) {
     let exp = known.get(x.experience_key)
+    const row = exp ? undefined : existing.get(x.experience_key)
+    if (!exp && row) {
+      // Filed under a bank row. The block carries the role as THIS text
+      // states it (or the row's own values when the text gave none) plus the
+      // id as a hint; planPersist verifies the hint before reusing the row.
+      const w = x.new_experience
+      exp = {
+        key: x.experience_key,
+        kind: w?.kind && w.kind !== 'other' ? w.kind : row.kind,
+        organization: w?.organization ?? row.organization,
+        title: w?.title ?? row.title,
+        location: w?.location ?? row.location ?? null,
+        start_date: w?.start_date ?? row.start_date,
+        end_date: w?.end_date ?? row.end_date,
+        description: null,
+        display_order: proposal.experiences.length,
+        source: opts.textSource ?? 'manual',
+        bulletParagraphIndexes: [],
+        identityParagraphIndex: null,
+        summary: null,
+        existingId: row.id,
+      }
+      proposal.experiences.push(exp)
+      known.set(exp.key, exp)
+    }
     if (!exp) {
       // Text mode: the agent proposed the block. validate() already required
       // an organization and a title.
@@ -121,6 +162,7 @@ function foldOutput(
     exp.summary = x.summary || exp.summary
 
     const base = proposal.facts.length
+    baseOf.set(exp.key, base)
     for (const f of x.facts) {
       const fromResume = f.source_label === RESUME_SOURCE_LABEL
       proposal.facts.push({
@@ -155,12 +197,20 @@ function foldOutput(
     }
   }
 
+  for (const p of output.projects ?? []) {
+    const exp = known.get(p.experience_key)
+    const base = baseOf.get(p.experience_key)
+    if (!exp || base === undefined) continue
+    proposal.projects.push({ experience_key: exp.key, name: p.name, description: p.description, fact_refs: p.fact_refs.map((i) => base + i) })
+  }
+
   proposal.dropped = {
     unverifiable: output.dropped_unverifiable,
     metrics: output.dropped_metrics,
     skills: output.dropped_skills,
     misfiled: output.dropped_misfiled,
     experiences: output.dropped_experiences,
+    projects: output.dropped_projects ?? 0,
   }
 }
 
@@ -172,7 +222,8 @@ function emptyProposal(model: ResumeModel | null): ImportProposal {
     metrics: [],
     skills: [],
     deliverables: [],
-    dropped: { unverifiable: 0, metrics: 0, skills: 0, misfiled: 0, experiences: 0 },
+    projects: [],
+    dropped: { unverifiable: 0, metrics: 0, skills: 0, misfiled: 0, experiences: 0, projects: 0 },
     trace: null,
     agentError: null,
     model,
@@ -229,22 +280,40 @@ export async function importFromResume(
   return proposal
 }
 
+/** The bank's active experiences as the importer sees them: key = row id, no paragraphs. */
+export function existingExperienceInputs(existing: ExistingExperienceInput[]): ImporterExperienceInput[] {
+  return existing.map((e) => ({
+    key: e.id,
+    title: e.title,
+    organization: e.organization,
+    location: e.location ?? null,
+    start_date: e.start_date,
+    end_date: e.end_date,
+    section: e.kind,
+    bullets: [],
+    existing_id: e.id,
+  }))
+}
+
 /**
- * Pasted text → proposal. No paragraph map, so each line is a paragraph and
- * the agent proposes the experience blocks (validated to carry organization
- * and title). `source` is what lands in `evidence_facts.source`.
+ * Pasted text → proposal. No paragraph map, so each line is a paragraph. The
+ * agent is shown the bank's existing experiences (`opts.existing`, loaded by
+ * the caller — this module never reads the database) and files facts under
+ * them, proposing a new block only when none fits. `source` is what lands in
+ * `evidence_facts.source`.
  */
 export async function importFromText(
   userId: string,
   text: string,
   source: FactSource,
-  opts: Omit<ImportOptions, 'skipAgent'> & { label?: string } = {}
+  opts: Omit<ImportOptions, 'skipAgent'> & { label?: string; existing?: ExistingExperienceInput[] } = {}
 ): Promise<ImportProposal> {
   const proposal = emptyProposal(null)
   const label = opts.label ?? `pasted.${source}`
   const extra: ExtraSourceText[] = [{ label, source, text }, ...(opts.extraSources ?? [])]
+  const existing = opts.existing ?? []
   const input: ResumeImporterInput = {
-    experiences: [],
+    experiences: existingExperienceInputs(existing),
     extra_sources: toExtraSources(extra),
     allow_new_experiences: true,
   }
@@ -258,6 +327,6 @@ export async function importFromText(
     proposal.agentError = result.error ?? `importer ${result.status}`
     return proposal
   }
-  foldOutput(proposal, result.output, { filename: label, extra, textSource: source })
+  foldOutput(proposal, result.output, { filename: label, extra, textSource: source, existing })
   return proposal
 }

@@ -28,6 +28,12 @@ export interface ProposedExperience {
   identityParagraphIndex: number | null
   /** One sentence from the importer, or null when the agent never saw it. */
   summary: string | null
+  /**
+   * Text mode: the bank row the importer filed this block under. A signal
+   * for the persist plan, which still verifies org, title and dates before
+   * reusing the row (docs/KNOWLEDGE_BASE_DEDUP_PLAN.md, "Agent context").
+   */
+  existingId?: string | null
 }
 
 export interface ProposedBullet {

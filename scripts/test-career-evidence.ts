@@ -24,10 +24,11 @@ import {
   normalizeOrg,
   normalizeStatement,
   normalizeTitle,
+  orgQualifier,
   parseResumeDate,
   titleSimilarity,
 } from '../lib/career/evidence/normalize'
-import { SIMILAR_TITLE_THRESHOLD, findExperienceMatch, findFactMatch, planPersist } from '../lib/career/evidence/plan'
+import { SIMILAR_TITLE_THRESHOLD, checkFilingHint, findExperienceMatch, findFactMatch, planPersist, qualifiersConflict } from '../lib/career/evidence/plan'
 import type { ImportProposal, ProposedExperience, ProposedFact, ProposedMetric } from '../lib/career/evidence/import'
 
 let passed = 0
@@ -313,6 +314,20 @@ check('normalizeOrg: unrelated orgs stay apart', normalizeOrg('Argonne National 
 check('normalizeTitle: drops org qualifier', normalizeTitle('President, Founders') === 'president')
 check('normalizeTitle: drops previous role', normalizeTitle('Project Manager, prev. Senior Consultant') === 'project manager')
 check('normalizeTitle: semicolon clause', normalizeTitle('President; Formerly Head of Events') === 'president')
+check('normalizeTitle: parenthetical history', normalizeTitle('President (previously Head of Events, Events Team Member)') === 'president')
+check('normalizeTitle: parenthetical previous roles', normalizeTitle('Project Manager (previously Senior Consultant, Consultant)') === 'project manager')
+check('normalizeTitle: slash is not a separator (CEO vs CTO)', normalizeTitle('Co-Founder / CEO') !== normalizeTitle('Co-Founder / CTO'))
+check('qualifiersConflict: two labs', qualifiersConflict("University of Illinois (Professor Mironenko's lab)", "University of Illinois (Professor Flaherty's lab)"))
+check('qualifiersConflict: one side unqualified is not a conflict', !qualifiersConflict('University of Illinois', "University of Illinois (Professor Flaherty's lab)"))
+check('qualifiersConflict: acronym is not a qualifier', !qualifiersConflict('Founders: Illinois Entrepreneurs (UIUC)', 'Founders: Illinois Entrepreneurs'))
+check('normalizeOrg: Founders dash / colon / (UIUC) meet', new Set([normalizeOrg('Founders - Illinois Entrepreneurs'), normalizeOrg('Founders: Illinois Entrepreneurs'), normalizeOrg('Founders: Illinois Entrepreneurs (UIUC)')]).size === 1)
+check('normalizeOrg: P&G three spellings meet', new Set([normalizeOrg('Procter & Gamble, Tabler Station'), normalizeOrg('Procter & Gamble'), normalizeOrg('P&G')]).size === 1)
+check('normalizeOrg: PG Solutions is not P&G', normalizeOrg('PG Solutions') !== normalizeOrg('P&G'))
+check('normalizeOrg: Pacific Gas is not P&G', normalizeOrg('Pacific Gas') !== normalizeOrg('Procter & Gamble'))
+check('orgQualifier: lab in parentheses', orgQualifier("University of Illinois (Professor Alex Mironenko's lab)") === "Professor Alex Mironenko's lab")
+check('orgQualifier: acronym is not a qualifier', orgQualifier('Founders: Illinois Entrepreneurs (UIUC)') === '')
+check('orgQualifier: site after comma', orgQualifier('Procter & Gamble, Tabler Station') === 'Tabler Station')
+check('orgQualifier: two labs differ', orgQualifier('UIUC (Mironenko lab)') !== orgQualifier('UIUC (Flaherty lab)'))
 check('experienceKey: aliases meet', experienceKey('P&G', 'Quality Assurance Intern') === experienceKey('Procter & Gamble', 'Quality Assurance Intern'))
 
 check('titleSimilarity: identical', titleSimilarity('President', 'President') === 1)
@@ -364,7 +379,7 @@ function planBank(): EvidenceBank {
 }
 
 function proposalWith(experiences: ProposedExperience[], facts: ProposedFact[] = [], metrics: ProposedMetric[] = []): ImportProposal {
-  return { experiences, bullets: [], facts, metrics, skills: [], deliverables: [], dropped: { unverifiable: 0, metrics: 0, skills: 0, misfiled: 0, experiences: 0 }, trace: null, agentError: null, model: null }
+  return { experiences, bullets: [], facts, metrics, skills: [], deliverables: [], projects: [], dropped: { unverifiable: 0, metrics: 0, skills: 0, misfiled: 0, experiences: 0, projects: 0 }, trace: null, agentError: null, model: null }
 }
 function pexp(key: string, organization: string, title: string, start_date: string | null = null, end_date: string | null = null): ProposedExperience {
   return { key, kind: 'experience', organization, title, location: null, start_date, end_date, description: null, display_order: 0, source: 'linkedin', bulletParagraphIndexes: [], identityParagraphIndex: null, summary: null }
@@ -413,6 +428,34 @@ check('plan: fact under a new experience never matches an orphan bank fact', pla
   { ...pb, facts: [{ ...pb.facts[0], id: 'orphan', experience_id: null }] },
   proposalWith([pexp('n', 'Nowhere Labs', 'Intern')], [pfact('n', 'Organized Forge 2026')])
 ).facts[0].action === 'insert')
+
+// Two P&G summers pasted TOGETHER: same key, disjoint dates → two inserts, never a collapse.
+const pTwoSummers = planPersist(emptyBank(), proposalWith([
+  pexp('png-2025', 'P&G', 'Quality Assurance Intern', '5/2025', '8/2025'),
+  pexp('png-2026', 'Procter & Gamble', 'Quality Assurance Intern', '5/2026', '8/2026'),
+]))
+check('plan: two summers in one paste stay two rows', pTwoSummers.experiences.every((d) => d.action === 'insert'), JSON.stringify(pTwoSummers.experiences))
+// Bank holds 2025; the paste lists 2026 first, then 2025 → 2026 inserts, 2025 reuses the bank row.
+const pOrder = planPersist(pb, proposalWith([
+  pexp('k1', 'P&G', 'Quality Assurance Intern', '5/2026', '8/2026'),
+  pexp('k2', 'P&G', 'Quality Assurance Intern', '5/2025', '8/2025'),
+], [pfact('k2', 'Wrote the line SOP')]))
+check('plan: later block reaches the bank row past an incompatible earlier block', pOrder.experiences[0].action === 'insert' && pOrder.experiences[1].action === 'reuse' && pOrder.experiences[1].existingId === 'exp-png-2025', JSON.stringify(pOrder.experiences))
+// Two labs at one university, same title, overlapping dates → two rows + a near miss; the filing hint is rejected too.
+const labBank: EvidenceBank = { ...pb, experiences: [...pb.experiences, { ...pb.experiences[2], id: 'lab-m', organization: "University of Illinois (Professor Mironenko's lab)" }] }
+const flaherty = pexp('lab-f', "University of Illinois (Professor Flaherty's lab)", 'Undergraduate Researcher', '1/2026', 'Present')
+const pLabs = planPersist({ ...labBank, experiences: labBank.experiences.filter((e) => e.id !== 'exp-uiuc') }, proposalWith([flaherty]))
+check('plan: a second lab at the same university is inserted', pLabs.experiences[0].action === 'insert' && pLabs.matched.length === 0, JSON.stringify(pLabs.experiences))
+check('plan: the second lab is reported as a near miss of the first', pLabs.nearMisses.length === 1 && pLabs.nearMisses[0].candidateId === 'lab-m', JSON.stringify(pLabs.nearMisses))
+check('plan: filing hint at the other lab is rejected', checkFilingHint(labBank.experiences, { ...flaherty, existingId: 'lab-m' }).match === null)
+check('plan: unqualified university row still matches a lab-qualified block', checkFilingHint(labBank.experiences, { ...flaherty, existingId: 'exp-uiuc' }).match?.id === 'exp-uiuc')
+check('plan: two labs in one paste do not collapse', planPersist(emptyBank(), proposalWith([
+  pexp('m', "UIUC (Professor Mironenko's lab)", 'Undergraduate Researcher', '9/2024', 'Present'), flaherty,
+])).experiences.every((d) => d.action === 'insert'))
+// Co-Founder / CEO and Co-Founder / CTO at one org are two people’s jobs, not one.
+check('plan: CEO and CTO co-founders do not collapse', planPersist(emptyBank(), proposalWith([
+  pexp('ceo', 'Acme', 'Co-Founder / CEO'), pexp('cto', 'Acme', 'Co-Founder / CTO'),
+])).experiences.every((d) => d.action === 'insert'))
 
 // Fact dedupe with corroboration.
 const p7 = planPersist(pb, proposalWith([pexp('li-founders', 'Founders', 'President')], [

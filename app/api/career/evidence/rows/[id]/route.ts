@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { deleteRow, updateRow } from '@/lib/career/evidence/store'
+import { deleteRow, isMissingSchema, updateRow } from '@/lib/career/evidence/store'
 import { isDynamicUsage } from '@/lib/http/dynamic'
 import { EDITABLE_TABLES, sanitizeRow, type EditableTable } from '../shared'
 
@@ -24,7 +24,13 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     if ('error' in patch) return NextResponse.json({ error: patch.error }, { status: 400 })
     if (Object.keys(patch.row).length === 0) return NextResponse.json({ error: 'nothing to update' }, { status: 400 })
 
-    const res = await updateRow(table, user.id, params.id, patch.row)
+    // A human's edit is never overwritten by a re-import (015 edited_by_user).
+    // On a 014-only database the column does not exist; retry without it.
+    const marksEdit = table === 'evidence_experiences' || table === 'evidence_facts'
+    let res = await updateRow(table, user.id, params.id, marksEdit ? { ...patch.row, edited_by_user: true } : patch.row)
+    if (!res.ok && marksEdit && res.error && isMissingSchema(res.error)) {
+      res = await updateRow(table, user.id, params.id, patch.row)
+    }
     if (!res.ok) return NextResponse.json({ error: res.error }, { status: 500 })
     return NextResponse.json({ ok: true })
   } catch (error) {

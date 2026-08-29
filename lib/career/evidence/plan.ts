@@ -12,8 +12,11 @@
 //   2. same normalized org, title similarity ≥ 0.6, dates compatible → reuse
 //   3. same normalized org, similarity in [0.3, 0.6)                 → INSERT,
 //      and report it as a near-miss. Never guess; the founder merges by hand.
-// A second proposal block with the key of one already queued folds into it,
-// so one import cannot create two rows of one job.
+// A second proposal block with the key of one already queued folds into it
+// ONLY when their dates are compatible, so one import cannot create two rows
+// of one job — and two P&G summers pasted together stay two rows.
+// A qualifier the org normalizer strips ("(Professor X's lab)") that differs
+// on both sides blocks every rule: two labs at one university are two rows.
 
 import type { EvidenceBank } from '../types'
 import type { ImportProposal } from './import'
@@ -23,18 +26,24 @@ import {
   normalizeMetricValue,
   normalizeOrg,
   normalizeStatement,
+  orgQualifier,
   titleSimilarity,
 } from './normalize'
 
 export const SIMILAR_TITLE_THRESHOLD = 0.6
 export const NEAR_MISS_THRESHOLD = 0.3
 
-export type MatchRule = 'exact' | 'alias' | 'similar_title'
+/**
+ * 'agent_filed': the importer filed the block under an existing id and the
+ * rules (same org, similar title, compatible dates) agreed. The agent's
+ * choice is a signal, never the decider.
+ */
+export type MatchRule = 'exact' | 'alias' | 'similar_title' | 'agent_filed'
 
 export interface MatchedExperience {
   proposed: string
   existingId: string
-  rule: 'alias' | 'similar_title'
+  rule: Exclude<MatchRule, 'exact'>
 }
 
 export interface NearMiss {
@@ -89,6 +98,51 @@ export interface ProposedExperienceLike {
   title: string
   start_date: string | null
   end_date: string | null
+  /** The bank row the importer filed this under, when it was shown the bank. */
+  existingId?: string | null
+}
+
+/**
+ * The importer's filing decision, checked. Reuse only when the hinted row is
+ * the same org, the title is the same or closely related (≥ the similar-title
+ * threshold — "President (previously Head of Events)" is "President"; "Head of
+ * Events" and "Vice President" are not) and the dates do not contradict.
+ * Anything else is a near miss: inserted, reported, decided by a human.
+ */
+/**
+ * True when both org strings carry a qualifier and the qualifiers differ:
+ * "University of Illinois (Mironenko lab)" vs "University of Illinois
+ * (Flaherty lab)". One side unqualified is not a contradiction.
+ */
+export function qualifiersConflict(a: string, b: string): boolean {
+  const qa = orgQualifier(a).toLowerCase()
+  const qb = orgQualifier(b).toLowerCase()
+  return qa !== '' && qb !== '' && qa !== qb
+}
+
+export function checkFilingHint(
+  rows: ExperienceLike[],
+  proposed: ProposedExperienceLike
+): { match: { id: string; rule: 'agent_filed' } | null; nearMiss: NearMiss | null } {
+  if (!proposed.existingId) return { match: null, nearMiss: null }
+  const row = rows.find((r) => r.id === proposed.existingId)
+  if (!row) return { match: null, nearMiss: null }
+  const sameOrg =
+    normalizeOrg(row.organization) === normalizeOrg(proposed.organization) &&
+    !qualifiersConflict(row.organization, proposed.organization)
+  const similarity = titleSimilarity(row.title, proposed.title)
+  if (sameOrg && similarity >= SIMILAR_TITLE_THRESHOLD && datesCompatible(row, proposed)) {
+    return { match: { id: row.id, rule: 'agent_filed' }, nearMiss: null }
+  }
+  return {
+    match: null,
+    nearMiss: {
+      proposed: `${proposed.organization} / ${proposed.title}`,
+      candidateId: row.id,
+      candidate: `${row.organization} / ${row.title}`,
+      similarity: Number(similarity.toFixed(2)),
+    },
+  }
 }
 
 /**
@@ -107,6 +161,7 @@ export function findExperienceMatch(
   // with the same intern title are two rows, not one.
   for (const r of rows) {
     if (experienceKey(r.organization, r.title) !== key || !datesCompatible(r, proposed)) continue
+    if (qualifiersConflict(r.organization, proposed.organization)) continue
     const rawSame = `${r.organization.trim().toLowerCase()}::${r.title.trim().toLowerCase()}` === rawKey
     return { match: { id: r.id, rule: rawSame ? 'exact' : 'alias' }, nearMiss: null }
   }
@@ -120,6 +175,19 @@ export function findExperienceMatch(
     if (!best || similarity > best.similarity) best = { row: r, similarity }
   }
   if (!best) return { match: null, nearMiss: null }
+  // Same org, same-ish title, but a different sub-unit named on both sides:
+  // insert, and say which row it nearly was.
+  if (best.similarity >= NEAR_MISS_THRESHOLD && qualifiersConflict(best.row.organization, proposed.organization)) {
+    return {
+      match: null,
+      nearMiss: {
+        proposed: `${proposed.organization} / ${proposed.title}`,
+        candidateId: best.row.id,
+        candidate: `${best.row.organization} / ${best.row.title}`,
+        similarity: Number(best.similarity.toFixed(2)),
+      },
+    }
+  }
   if (best.similarity >= SIMILAR_TITLE_THRESHOLD && datesCompatible(best.row, proposed)) {
     return { match: { id: best.row.id, rule: 'similar_title' }, nearMiss: null }
   }
@@ -154,17 +222,32 @@ export function planPersist(bank: EvidenceBank, proposal: ImportProposal): Persi
   // 1. Experiences. `slotOf` maps a proposal key to something stable enough to
   //    dedupe children on before ids exist: the bank id when reused, or the
   //    canonical key when the row is yet to be inserted.
-  const queued = new Map<string, string>() // experienceKey → proposal key it resolved to
+  // Tombstones (015 status = 'merged') are never match targets; the loader
+  // filters them, and an in-memory bank may not have.
+  const activeExperiences = bank.experiences.filter((r) => r.status !== 'merged')
+  const activeFacts = bank.facts.filter((f) => f.status !== 'merged')
+  // experienceKey → earlier blocks of this proposal with that key. A later
+  // block folds into the first one whose dates do not contradict it and whose
+  // org qualifier does not name a different sub-unit; otherwise it is matched
+  // against the bank on its own, like any block.
+  const queued = new Map<string, ImportProposal['experiences'][number][]>()
   const slotOf = new Map<string, string>()
   for (const e of proposal.experiences) {
     const key = experienceKey(e.organization, e.title)
-    const earlier = queued.get(key)
-    if (earlier !== undefined) {
-      plan.experiences.push({ action: 'collapse', key: e.key, intoKey: earlier })
-      slotOf.set(e.key, slotOf.get(earlier) ?? `new:${key}`)
+    const earlierBlocks = queued.get(key) ?? []
+    const earlier = earlierBlocks.find((b) => datesCompatible(b, e) && !qualifiersConflict(b.organization, e.organization))
+    if (earlier) {
+      plan.experiences.push({ action: 'collapse', key: e.key, intoKey: earlier.key })
+      slotOf.set(e.key, slotOf.get(earlier.key) ?? `new:${key}`)
       continue
     }
-    const { match, nearMiss } = findExperienceMatch(bank.experiences, e)
+    // The importer's hint first, verified; then the rules on their own. A
+    // rejected hint is reported even when the rules find nothing, because
+    // the agent thought these were one job and a human should hear that.
+    const hinted = checkFilingHint(activeExperiences, e)
+    const found = hinted.match ? hinted : findExperienceMatch(activeExperiences, e)
+    const match = found.match
+    const nearMiss = found.nearMiss ?? hinted.nearMiss
     if (match) {
       plan.experiences.push({ action: 'reuse', key: e.key, existingId: match.id, rule: match.rule })
       if (match.rule !== 'exact') plan.matched.push({ proposed: `${e.organization} / ${e.title}`, existingId: match.id, rule: match.rule })
@@ -174,7 +257,7 @@ export function planPersist(bank: EvidenceBank, proposal: ImportProposal): Persi
       plan.experiences.push({ action: 'insert', key: e.key })
       slotOf.set(e.key, `new:${key}`)
     }
-    queued.set(key, e.key)
+    queued.set(key, [...earlierBlocks, e])
   }
   const slot = (proposalKey: string) => slotOf.get(proposalKey) ?? 'none'
   const bankIdOf = (proposalKey: string): string | null => {
@@ -185,7 +268,7 @@ export function planPersist(bank: EvidenceBank, proposal: ImportProposal): Persi
   // 2. Facts — (experience, normalized statement), bank first, then what this
   //    proposal already queued. A reused fact whose source differs is a second
   //    source for the same claim; say so rather than drop it.
-  const bankFactKey = new Map(bank.facts.map((f) => [`${f.experience_id}::${normalizeStatement(f.statement)}`, f]))
+  const bankFactKey = new Map(activeFacts.map((f) => [`${f.experience_id}::${normalizeStatement(f.statement)}`, f]))
   const queuedFacts = new Map<string, number>()
   proposal.facts.forEach((f, i) => {
     const norm = normalizeStatement(f.statement)

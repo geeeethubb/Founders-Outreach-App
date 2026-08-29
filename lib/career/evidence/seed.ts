@@ -20,11 +20,12 @@ import {
 } from './import'
 import { persistProposal, emptyCounts, type PersistOptions, type SeedCounts } from './persist'
 import { seedDefaultPreferences } from './preferences'
-import { isMissingSchema } from './store'
+import { defaultSourceLabel, sourceKindFor } from './sources'
+import { isMissingSchema, loadEvidenceBank } from './store'
 
 export { persistProposal }
 export type { PersistOptions, SeedCounts }
-import type { EvidenceBank, FactSource, ResumeDocument } from '../types'
+import type { EvidenceBank, FactSource, ResumeDocument, SourceKind } from '../types'
 
 export interface SeedResult {
   ok: boolean
@@ -62,22 +63,34 @@ export async function migrationApplied(): Promise<{ applied: boolean; error: str
   return { applied: !isMissingSchema(error.message), error: error.message }
 }
 
+// 015 first: conflicts and merge suggestions point at 014 rows without an
+// FK, and a project survives its experience (on delete set null) — none of
+// them would go with the 014 tables. Each is absent on a 014 database and
+// is then reported as skipped, not as an error.
+const RESET_TABLES_015 = [
+  'evidence_conflicts', 'evidence_merge_suggestions', 'evidence_snapshots', 'evidence_projects',
+  'evidence_fact_sources', 'evidence_experience_sources', 'evidence_sources', 'evidence_organizations',
+] as const
 const RESET_TABLES = [
   'resume_bullets', 'evidence_stories', 'evidence_deliverables', 'evidence_metrics',
   'evidence_skills', 'evidence_facts', 'evidence_experiences', 'resume_documents', 'evidence_preferences',
 ] as const
 
 /** Deletes the user's bank, child tables first. Returns what was deleted, per table. */
-export async function resetEvidence(userId: string): Promise<{ deleted: Record<string, number>; errors: string[] }> {
+export async function resetEvidence(
+  userId: string
+): Promise<{ deleted: Record<string, number>; errors: string[]; skipped: string[] }> {
   const supabase = createServiceClient()
   const deleted: Record<string, number> = {}
   const errors: string[] = []
-  for (const table of RESET_TABLES) {
+  const skipped: string[] = []
+  for (const table of [...RESET_TABLES_015, ...RESET_TABLES]) {
     const { data, error } = await supabase.from(table).delete().eq('user_id', userId).select('id')
-    if (error) errors.push(`${table}: ${error.message}`)
-    else deleted[table] = data?.length ?? 0
+    if (!error) deleted[table] = data?.length ?? 0
+    else if (isMissingSchema(error.message) && (RESET_TABLES_015 as readonly string[]).includes(table)) skipped.push(table)
+    else errors.push(`${table}: ${error.message}`)
   }
-  return { deleted, errors }
+  return { deleted, errors, skipped }
 }
 
 /**
@@ -247,7 +260,16 @@ export async function seedEvidenceFromDocx(userId: string, buffer: Buffer, opts:
   counts.documentReused = doc.reused
 
   progress('persist', 'writing experiences, bullets, facts, metrics, skills')
-  const persisted = await persistProposal(userId, proposal, { approve: Boolean(opts.approve), documentId: doc.document.id, counts })
+  const persisted = await persistProposal(userId, proposal, {
+    approve: Boolean(opts.approve),
+    documentId: doc.document.id,
+    counts,
+    sourceKind: 'resume',
+    sourceLabel: filename,
+    sourceSha256: sha256(buffer),
+    resumeDocumentId: doc.document.id,
+    rawText: proposal.model ? proposal.model.map.map((p) => p.text).join('\n') : null,
+  })
   errors.push(...persisted.errors)
 
   progress('preferences', 'seeding default preferences')
@@ -263,20 +285,28 @@ export async function seedEvidenceFromDocx(userId: string, buffer: Buffer, opts:
   return { ok: persisted.errors.length === 0 && !proposal.agentError, migrationMissing: false, errors, counts, dropped: proposal.dropped, costUsd, agentError: proposal.agentError, proposal, runId: run?.runId ?? null }
 }
 
-/** Pasted résumé / LinkedIn text → facts under agent-proposed experiences. */
+/**
+ * Pasted résumé / LinkedIn text → facts filed under the bank's existing
+ * experiences, or under new blocks when none fits. The importer is shown the
+ * active experiences; planPersist verifies its filing before any reuse.
+ */
 export async function seedEvidenceFromText(
   userId: string,
   text: string,
   source: FactSource,
-  opts: Pick<SeedOptions, 'approve' | 'dry' | 'onProgress'> & { label?: string } = {}
+  opts: Pick<SeedOptions, 'approve' | 'dry' | 'onProgress'> & { label?: string; sourceKind?: SourceKind } = {}
 ): Promise<SeedResult> {
   const counts = emptyCounts()
   const gate = await migrationApplied()
   if (!gate.applied) {
     return { ok: false, migrationMissing: true, errors: [gate.error ?? 'migration missing'], counts, dropped: zeroDropped(), costUsd: 0, agentError: null, proposal: null, runId: null }
   }
-  const run = opts.dry ? null : await startCareerRun({ userId, kind: 'evidence_import', label: `evidence-import/text:${source}`, mission: { source } })
-  const proposal = await importFromText(userId, text, source, { label: opts.label })
+  const { bank } = await loadEvidenceBank(userId, { approvedOnly: false })
+  const existing = bank.experiences.map((e) => ({ id: e.id, kind: e.kind, organization: e.organization, title: e.title, start_date: e.start_date, end_date: e.end_date, location: e.location }))
+  const sourceKind = opts.sourceKind ?? sourceKindFor(source)
+  const sourceLabel = opts.label ?? defaultSourceLabel(sourceKind)
+  const run = opts.dry ? null : await startCareerRun({ userId, kind: 'evidence_import', label: `evidence-import/text:${source}`, mission: { source, sourceLabel } })
+  const proposal = await importFromText(userId, text, source, { existing })
   const errors: string[] = []
   if (proposal.agentError) errors.push(`importer: ${proposal.agentError}`)
   const costUsd = proposal.trace?.cost_usd ?? 0
@@ -287,14 +317,16 @@ export async function seedEvidenceFromText(
     await run?.finish(proposal.agentError ? 'failed' : 'succeeded', { dry: true }, proposal.agentError)
     return { ok: !proposal.agentError, migrationMissing: false, errors, counts, dropped: proposal.dropped, costUsd, agentError: proposal.agentError, proposal, runId: run?.runId ?? null }
   }
-  const persisted = await persistProposal(userId, proposal, { approve: Boolean(opts.approve), documentId: null, counts })
+  const persisted = await persistProposal(userId, proposal, {
+    approve: Boolean(opts.approve), documentId: null, counts, sourceKind, sourceLabel, rawText: text,
+  })
   errors.push(...persisted.errors)
   await run?.finish(persisted.errors.length ? 'failed' : 'succeeded', { ...counts, dropped: proposal.dropped })
   return { ok: persisted.errors.length === 0, migrationMissing: persisted.migrationMissing, errors, counts, dropped: proposal.dropped, costUsd, agentError: null, proposal, runId: run?.runId ?? null }
 }
 
 function zeroDropped(): ImportProposal['dropped'] {
-  return { unverifiable: 0, metrics: 0, skills: 0, misfiled: 0, experiences: 0 }
+  return { unverifiable: 0, metrics: 0, skills: 0, misfiled: 0, experiences: 0, projects: 0 }
 }
 
 /** Printable summary for scripts and API responses. */
@@ -306,9 +338,14 @@ export function summarizeSeed(result: SeedResult): string[] {
     `bullets: ${c.bullets}`,
     `facts: ${c.facts}   metrics: ${c.metrics}   skills: ${c.skills}   deliverables: ${c.deliverables}`,
     `preferences: ${c.preferences} seeded   mission: ${c.missionCreated ? 'created' : 'existing'}`,
-    `dropped — unverifiable numbers: ${result.dropped.unverifiable}, metrics: ${result.dropped.metrics}, skills: ${result.dropped.skills}, misfiled: ${result.dropped.misfiled}, experiences: ${result.dropped.experiences}`,
+    `dropped — unverifiable numbers: ${result.dropped.unverifiable}, metrics: ${result.dropped.metrics}, skills: ${result.dropped.skills}, misfiled: ${result.dropped.misfiled}, experiences: ${result.dropped.experiences}, projects: ${result.dropped.projects}`,
     `cost: $${result.costUsd.toFixed(4)}`,
   ]
+  if (c.provenanceSkipped > 0) {
+    lines.push(`provenance: ${c.provenanceSkipped} write(s) skipped — migration 015_evidence_canonical.sql is not applied; facts keep their single source column`)
+  } else {
+    lines.push(`provenance: sources ${c.sources.created} new / ${c.sources.reused} reused · fact links ${c.factSources} · experience links ${c.experienceSources} · projects ${c.projects} · conflicts ${c.conflicts}`)
+  }
   if (c.matched.length) {
     lines.push(`matched ${c.matched.length} experience(s) to existing rows by alias/similar title:`)
     for (const m of c.matched) lines.push(`  ${m.proposed} → ${m.existingId} (${m.rule})`)
@@ -317,7 +354,8 @@ export function summarizeSeed(result: SeedResult): string[] {
     lines.push(`near-miss ${c.nearMisses.length} experience(s) inserted, not merged — same org, title too different; merge by hand if they are one job:`)
     for (const n of c.nearMisses) lines.push(`  ${n.proposed} ~ ${n.candidate} (${n.similarity})`)
   }
-  if (c.corroborated.length) lines.push(`${c.corroborated.length} fact(s) corroborated by a second source (source not stored — see docs/KNOWLEDGE_BASE_DEDUP_PLAN.md)`)
+  if (c.corroborated.length) lines.push(`${c.corroborated.length} fact(s) corroborated by a second source${c.provenanceSkipped ? ' (not stored until migration 015 is applied)' : ''}`)
+  if (c.conflicts) lines.push(`${c.conflicts} conflict(s) recorded — this source states a different title or date; the résumé's value stays until you resolve it`)
   if (result.agentError) lines.push(`importer error: ${result.agentError}`)
   return lines
 }

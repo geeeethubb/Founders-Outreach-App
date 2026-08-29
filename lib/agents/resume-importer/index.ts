@@ -17,6 +17,8 @@
 import crypto from 'crypto'
 import { runAgent } from '../runtime/loop'
 import { numberTokens, numbersSupported, skillSupported } from './checks'
+import { validateProjects, type ImportedProject } from './projects'
+import { EXPERIENCE_KINDS, FACT_CATEGORIES, OUTPUT_SCHEMA, SKILL_CATEGORIES } from './schema'
 import { normalizeModelText } from '../runtime/text'
 import type { AgentResult, ToolContext } from '../runtime/types'
 import type { FactCategory, SkillCategory, ExperienceKind } from '@/lib/career/types'
@@ -80,8 +82,12 @@ export interface ImportedExperience {
   deliverables: ImportedDeliverable[]
 }
 
+export type { ImportedProject }
+
 export interface ResumeImporterOutput {
   experiences: ImportedExperience[]
+  /** Named work the text itself names; validation drops any name absent from the text. */
+  projects: ImportedProject[]
   /** Facts whose numbers the cited paragraph does not contain. */
   dropped_unverifiable: number
   dropped_metrics: number
@@ -89,92 +95,11 @@ export interface ResumeImporterOutput {
   /** Facts filed under an unknown experience or a paragraph outside it. */
   dropped_misfiled: number
   dropped_experiences: number
+  /** Projects whose name the source text does not contain, or whose experience is unknown. */
+  dropped_projects: number
 }
 
-const FACT_CATEGORIES: FactCategory[] = [
-  'responsibility', 'achievement', 'metric', 'skill', 'tool', 'context', 'award', 'education', 'scope', 'other',
-]
-const SKILL_CATEGORIES: SkillCategory[] = ['technical', 'tool', 'domain', 'business', 'language', 'other']
-const EXPERIENCE_KINDS: ExperienceKind[] = ['experience', 'project', 'leadership', 'research', 'education', 'award', 'other']
-
-const FACT_REFS = { type: 'array', items: { type: 'integer' }, description: 'Indexes into this experience\'s facts array.' }
-
-export const OUTPUT_SCHEMA = {
-  properties: {
-    experiences: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          experience_key: { type: 'string', description: 'A supplied key, copied exactly.' },
-          summary: { type: 'string', description: 'One sentence.' },
-          new_experience: {
-            type: ['object', 'null'],
-            description: 'Only when no experiences were supplied. Otherwise null.',
-            properties: {
-              title: { type: 'string' },
-              organization: { type: 'string' },
-              location: { type: ['string', 'null'] },
-              start_date: { type: ['string', 'null'] },
-              end_date: { type: ['string', 'null'] },
-              kind: { type: 'string', enum: EXPERIENCE_KINDS },
-            },
-            required: ['title', 'organization', 'location', 'start_date', 'end_date', 'kind'],
-          },
-          facts: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: {
-                statement: { type: 'string', description: 'ONE atomic claim, numbers verbatim.' },
-                category: { type: 'string', enum: FACT_CATEGORIES },
-                source_label: { type: 'string', description: `"${RESUME_SOURCE_LABEL}" or an additional source label.` },
-                paragraph_index: { type: 'integer', description: 'The ¶ or L index shown next to the paragraph.' },
-                confidence: { type: 'number', description: '0 to 1.' },
-              },
-              required: ['statement', 'category', 'source_label', 'paragraph_index', 'confidence'],
-            },
-          },
-          metrics: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: {
-                value: { type: 'string', description: 'Exactly as written: "$4M+", "30%", "1,600+".' },
-                unit: { type: ['string', 'null'] },
-                context: { type: ['string', 'null'] },
-                fact_refs: FACT_REFS,
-              },
-              required: ['value', 'unit', 'context', 'fact_refs'],
-            },
-          },
-          skills: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: {
-                name: { type: 'string' },
-                category: { type: 'string', enum: SKILL_CATEGORIES },
-                fact_refs: FACT_REFS,
-              },
-              required: ['name', 'category', 'fact_refs'],
-            },
-          },
-          deliverables: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: { description: { type: 'string' }, fact_refs: FACT_REFS },
-              required: ['description', 'fact_refs'],
-            },
-          },
-        },
-        required: ['experience_key', 'summary', 'new_experience', 'facts', 'metrics', 'skills', 'deliverables'],
-      },
-    },
-  },
-  required: ['experiences'],
-}
+export { OUTPUT_SCHEMA }
 
 // ─── Validation ──────────────────────────────────────────────────────────────
 
@@ -210,6 +135,23 @@ function buildSourceIndex(input: ResumeImporterInput): {
   return { byExperience, extra, headerOf }
 }
 
+function asWritten(ne: unknown): ImportedNewExperience | null {
+  if (!ne || typeof ne !== 'object') return null
+  const n = ne as Record<string, unknown>
+  const title = normalizeModelText(n.title)
+  const organization = normalizeModelText(n.organization)
+  if (!title || !organization) return null
+  const kind = String(n.kind ?? '') as ExperienceKind
+  return {
+    title,
+    organization,
+    location: normalizeModelText(n.location) || null,
+    start_date: normalizeModelText(n.start_date) || null,
+    end_date: normalizeModelText(n.end_date) || null,
+    kind: EXPERIENCE_KINDS.includes(kind) ? kind : 'other',
+  }
+}
+
 /**
  * Pure. Exported so the deterministic test can feed it a fake model output
  * with an invented experience key and an invented metric and watch both fall.
@@ -230,8 +172,12 @@ export function validateImporterOutput(raw: unknown, input: ResumeImporterInput)
   let droppedExperiences = 0
 
   const experiences: ImportedExperience[] = []
+  // For projects: the model's experience positions → surviving keys, and each
+  // key's fact index map (model position → surviving position).
+  const keyOfRawIndex = new Map<number, string>()
+  const factMapOfKey = new Map<string, { map: Map<number, number>; rawCount: number }>()
 
-  for (const entry of r.experiences) {
+  for (const [rawIndex, entry] of r.experiences.entries()) {
     if (!entry || typeof entry !== 'object') continue
     const x = entry as Record<string, unknown>
     const key = normalizeModelText(x.experience_key)
@@ -241,6 +187,12 @@ export function validateImporterOutput(raw: unknown, input: ResumeImporterInput)
     }
 
     let newExperience: ImportedNewExperience | null = null
+    if (supplied.has(key) && input.allow_new_experiences) {
+      // Filed under an existing row: new_experience, when present, is the
+      // role AS THIS TEXT STATES IT, so a differing title or date is recorded
+      // as a conflict rather than lost. Needs a title and an organization.
+      newExperience = asWritten(x.new_experience)
+    }
     if (!supplied.has(key)) {
       // An unknown key is a hallucinated experience — unless this is text mode,
       // where proposing blocks is the job, and the block must at least name
@@ -368,6 +320,8 @@ export function validateImporterOutput(raw: unknown, input: ResumeImporterInput)
       deliverables.push({ description, fact_refs: remap(d.fact_refs) })
     }
 
+    keyOfRawIndex.set(rawIndex, key)
+    factMapOfKey.set(key, { map: factIndexMap, rawCount: rawFacts.length })
     experiences.push({
       experience_key: key,
       summary: normalizeModelText(x.summary),
@@ -384,13 +338,20 @@ export function validateImporterOutput(raw: unknown, input: ResumeImporterInput)
   // the same failure.
   if (experiences.length === 0) return null
 
+  // Projects: the name must be IN the text or the project is a guess — ./projects.
+  const { projects, dropped: droppedProjects } = validateProjects(r.projects, input, {
+    keyOfRawIndex, factMapOfKey, seenKeys, headerOf: src.headerOf, refs,
+  })
+
   return {
     experiences,
+    projects,
     dropped_unverifiable: droppedUnverifiable,
     dropped_metrics: droppedMetrics,
     dropped_skills: droppedSkills,
     dropped_misfiled: droppedMisfiled,
     dropped_experiences: droppedExperiences,
+    dropped_projects: droppedProjects,
   }
 }
 
@@ -428,7 +389,7 @@ export async function runResumeImporter(
       // validate() post-processes and the cache replays its output, so a fix
       // to the number check must invalidate cached results. Bump on any change
       // to numberTokens, numbersSupported or skillSupported.
-      validate_logic: 1,
+      validate_logic: 2,
     },
   })
 }

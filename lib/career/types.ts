@@ -146,6 +146,8 @@ export interface EvidenceDeliverable {
   fact_ids: string[]
   approved: boolean
   created_at: string
+  status?: RowStatus
+  merged_into?: string | null
 }
 
 export type SkillCategory = 'technical' | 'tool' | 'domain' | 'business' | 'language' | 'other'
@@ -246,6 +248,8 @@ export interface EvidenceBank {
   sources: EvidenceSource[]
   factSources: EvidenceFactSource[]
   projects: EvidenceProject[]
+  /** Experience ↔ source provenance (015). Optional so in-memory fixtures need not supply it. */
+  experienceSources?: EvidenceExperienceSource[]
   masterDocument: ResumeDocument | null
 }
 

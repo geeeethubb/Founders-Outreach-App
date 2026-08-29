@@ -6,7 +6,8 @@
 
 import crypto from 'crypto'
 import { createServiceClient } from '@/lib/supabase/server'
-import type { EvidenceSource, SourceKind, FactSource } from '@/lib/career/types'
+import type { ConflictCandidate, EvidenceProject, EvidenceSource, SourceKind, FactSource } from '@/lib/career/types'
+import { normalizeStatement } from './normalize'
 import { isMissingSchema } from './store'
 
 export interface SourceInput {
@@ -44,6 +45,15 @@ export function sourceKindFor(source: FactSource | string): SourceKind {
     case 'story':
     default: return 'other'
   }
+}
+
+/** "LinkedIn profile pasted 2026-08-28" — the label a pasted text gets when the caller gives none. */
+export function defaultSourceLabel(kind: SourceKind, when: Date = new Date()): string {
+  const names: Record<SourceKind, string> = {
+    resume: 'Résumé', linkedin_profile: 'LinkedIn profile', linkedin_post: 'LinkedIn post',
+    pasted_context: 'Pasted text', notes: 'Notes', profile_field: 'Profile field', other: 'Text',
+  }
+  return `${names[kind]} pasted ${when.toISOString().slice(0, 10)}`
 }
 
 /**
@@ -186,4 +196,196 @@ export async function loadSources(userId: string): Promise<{ sources: EvidenceSo
     .order('imported_at', { ascending: true })
   if (error) return { sources: [], migrationMissing: isMissingSchema(error.message) }
   return { sources: (data ?? []) as EvidenceSource[], migrationMissing: false }
+}
+
+// ─── Support counts, conflicts, projects (015 writes; all tolerate 014) ──────
+
+export interface SupportRefresh {
+  updated: number
+  migrationMissing: boolean
+  error: string | null
+}
+
+/** Distinct source ids per entity, from provenance rows. */
+function distinctSources<K extends string>(rows: Record<K, string>[] | null, key: K): Map<string, number> {
+  const sets = new Map<string, Set<string>>()
+  for (const r of rows ?? []) {
+    const set = sets.get(r[key]) ?? new Set<string>()
+    set.add((r as Record<string, string>).source_id)
+    sets.set(r[key], set)
+  }
+  return new Map([...sets].map(([id, set]) => [id, set.size]))
+}
+
+/**
+ * support_count = distinct sources per fact; fact_status becomes
+ * CORROBORATED at ≥2 sources when it was VERIFIED. Anything the user or the
+ * consolidation engine set (CONFLICTING, NEEDS_REVIEW) is left alone.
+ */
+export async function refreshFactSupport(userId: string, factIds: string[]): Promise<SupportRefresh> {
+  if (factIds.length === 0) return { updated: 0, migrationMissing: false, error: null }
+  const supabase = createServiceClient()
+  const { data: prov, error: provErr } = await supabase
+    .from('evidence_fact_sources').select('fact_id, source_id').eq('user_id', userId).in('fact_id', factIds)
+  if (provErr) return { updated: 0, migrationMissing: isMissingSchema(provErr.message), error: provErr.message }
+  const { data: facts, error: factErr } = await supabase
+    .from('evidence_facts').select('id, support_count, fact_status').eq('user_id', userId).in('id', factIds)
+  if (factErr) return { updated: 0, migrationMissing: isMissingSchema(factErr.message), error: factErr.message }
+
+  const counts = distinctSources(prov as { fact_id: string; source_id: string }[] | null, 'fact_id')
+  let updated = 0
+  for (const f of (facts ?? []) as { id: string; support_count: number | null; fact_status: string | null }[]) {
+    const count = Math.max(1, counts.get(f.id) ?? 0)
+    const current = f.fact_status ?? 'VERIFIED'
+    const status = count >= 2 && current === 'VERIFIED' ? 'CORROBORATED' : current
+    if (count === f.support_count && status === f.fact_status) continue
+    const { error } = await supabase.from('evidence_facts').update({ support_count: count, fact_status: status } as never).eq('id', f.id)
+    if (error) return { updated, migrationMissing: isMissingSchema(error.message), error: error.message }
+    updated++
+  }
+  return { updated, migrationMissing: false, error: null }
+}
+
+/**
+ * source_count and merge_status for experiences. Ids in `conflicting` (an
+ * OPEN conflict this import raised or re-raised) become CONFLICTING — unless
+ * the user has edited the row by hand: a manual edit is a decision, and a
+ * re-import never overrides it (docs/KNOWLEDGE_BASE_DEDUP_PLAN.md, manual
+ * edits are never overwritten by re-import).
+ */
+export async function refreshExperienceSupport(
+  userId: string,
+  experienceIds: string[],
+  conflicting: Set<string> = new Set()
+): Promise<SupportRefresh> {
+  if (experienceIds.length === 0) return { updated: 0, migrationMissing: false, error: null }
+  const supabase = createServiceClient()
+  const { data: prov, error: provErr } = await supabase
+    .from('evidence_experience_sources').select('experience_id, source_id').eq('user_id', userId).in('experience_id', experienceIds)
+  if (provErr) return { updated: 0, migrationMissing: isMissingSchema(provErr.message), error: provErr.message }
+  const { data: rows, error: rowErr } = await supabase
+    .from('evidence_experiences').select('id, source_count, merge_status, edited_by_user').eq('user_id', userId).in('id', experienceIds)
+  if (rowErr) return { updated: 0, migrationMissing: isMissingSchema(rowErr.message), error: rowErr.message }
+
+  const counts = distinctSources(prov as { experience_id: string; source_id: string }[] | null, 'experience_id')
+  let updated = 0
+  for (const e of (rows ?? []) as { id: string; source_count: number | null; merge_status: string | null; edited_by_user: boolean | null }[]) {
+    const count = Math.max(1, counts.get(e.id) ?? 0)
+    const current = e.merge_status ?? 'VERIFIED'
+    let status = current
+    if (e.edited_by_user) status = current
+    else if (conflicting.has(e.id)) status = 'CONFLICTING'
+    else if (count >= 2 && current === 'VERIFIED') status = 'CORROBORATED'
+    if (count === e.source_count && status === e.merge_status) continue
+    const { error } = await supabase.from('evidence_experiences').update({ source_count: count, merge_status: status } as never).eq('id', e.id)
+    if (error) return { updated, migrationMissing: isMissingSchema(error.message), error: error.message }
+    updated++
+  }
+  return { updated, migrationMissing: false, error: null }
+}
+
+export interface ConflictInput {
+  entity_type: 'experience' | 'fact' | 'metric'
+  entity_id: string
+  field: string
+  candidates: ConflictCandidate[]
+}
+
+export type ConflictOutcome =
+  /** No row existed; one is now open. */
+  | 'created'
+  /** An open row existed; it may have learned a new candidate. */
+  | 'open'
+  /** The user already resolved this (entity, field) — nothing re-raised, nothing touched. */
+  | 'resolved'
+
+/**
+ * One conflict per (entity, field). A later import stating a third value
+ * adds a candidate to an OPEN row; a value already listed is not repeated.
+ * A RESOLVED row is a decision the user made, and re-pasting the same text
+ * does not reopen it. The canonical row is never touched here — the
+ * résumé's value stays.
+ */
+export async function upsertConflict(
+  userId: string,
+  input: ConflictInput
+): Promise<{ created: boolean; status: ConflictOutcome | null; migrationMissing: boolean; error: string | null }> {
+  const supabase = createServiceClient()
+  const { data, error } = await supabase
+    .from('evidence_conflicts')
+    .select('id, candidates, status')
+    .eq('user_id', userId)
+    .eq('entity_type', input.entity_type)
+    .eq('entity_id', input.entity_id)
+    .eq('field', input.field)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (error) return { created: false, status: null, migrationMissing: isMissingSchema(error.message), error: error.message }
+  if (data) {
+    if (data.status === 'resolved') return { created: false, status: 'resolved', migrationMissing: false, error: null }
+    const existing = (Array.isArray(data.candidates) ? data.candidates : []) as ConflictCandidate[]
+    const merged = [...existing]
+    for (const c of input.candidates) if (!merged.some((m) => m.value === c.value)) merged.push(c)
+    if (merged.length === existing.length) return { created: false, status: 'open', migrationMissing: false, error: null }
+    const { error: upErr } = await supabase.from('evidence_conflicts').update({ candidates: merged } as never).eq('id', data.id)
+    return { created: false, status: 'open', migrationMissing: false, error: upErr?.message ?? null }
+  }
+  const { error: insErr } = await supabase.from('evidence_conflicts').insert({
+    user_id: userId,
+    entity_type: input.entity_type,
+    entity_id: input.entity_id,
+    field: input.field,
+    candidates: input.candidates,
+  })
+  if (insErr) return { created: false, status: null, migrationMissing: isMissingSchema(insErr.message), error: insErr.message }
+  return { created: true, status: 'created', migrationMissing: false, error: null }
+}
+
+export interface ProjectInput {
+  experience_id: string | null
+  name: string
+  description: string | null
+  fact_ids: string[]
+  approved: boolean
+}
+
+/**
+ * Projects deduped by (experience, normalized name). An existing project
+ * learns the new fact ids; nothing is overwritten.
+ */
+export async function persistProjects(
+  userId: string,
+  existing: EvidenceProject[],
+  inputs: ProjectInput[]
+): Promise<{ created: number; reused: number; migrationMissing: boolean; error: string | null }> {
+  if (inputs.length === 0) return { created: 0, reused: 0, migrationMissing: false, error: null }
+  const supabase = createServiceClient()
+  const key = (experienceId: string | null, nameNorm: string) => `${experienceId ?? 'none'}::${nameNorm}`
+  const seen = new Map(existing.filter((p) => p.status !== 'merged').map((p) => [key(p.experience_id, p.name_norm), p]))
+  let created = 0
+  let reused = 0
+  for (const p of inputs) {
+    const nameNorm = normalizeStatement(p.name)
+    const had = seen.get(key(p.experience_id, nameNorm))
+    if (had) {
+      reused++
+      const merged = [...new Set([...had.fact_ids, ...p.fact_ids])]
+      if (merged.length !== had.fact_ids.length) {
+        const { error } = await supabase.from('evidence_projects').update({ fact_ids: merged } as never).eq('id', had.id)
+        if (error) return { created, reused, migrationMissing: isMissingSchema(error.message), error: error.message }
+        had.fact_ids = merged
+      }
+      continue
+    }
+    const { data, error } = await supabase
+      .from('evidence_projects')
+      .insert({ user_id: userId, experience_id: p.experience_id, name: p.name, name_norm: nameNorm, description: p.description, fact_ids: p.fact_ids, approved: p.approved })
+      .select('*')
+      .single()
+    if (error) return { created, reused, migrationMissing: isMissingSchema(error.message), error: error.message }
+    created++
+    seen.set(key(p.experience_id, nameNorm), data as EvidenceProject)
+  }
+  return { created, reused, migrationMissing: false, error: null }
 }

@@ -18,6 +18,12 @@ export interface ImporterExperienceInput {
   section: string | null
   /** Bullet paragraphs (plain text, `**` stripped) — or the single identity line for education / awards. */
   bullets: ImporterParagraph[]
+  /**
+   * Set when this block is a row already in the bank (text mode). The key is
+   * the row id; the agent files facts from the pasted text under it when the
+   * text describes the same role.
+   */
+  existing_id?: string | null
 }
 
 /**
@@ -36,7 +42,8 @@ export interface ResumeImporterInput {
   /**
    * True only for pasted text with no résumé structure. The agent may then
    * propose experience blocks of its own; validation requires an organization
-   * and a title on each.
+   * and a title on each. When `experiences` are also supplied they are the
+   * bank's existing rows, and a new block is allowed only when none fits.
    */
   allow_new_experiences: boolean
 }
@@ -44,9 +51,10 @@ export interface ResumeImporterInput {
 export const RESUME_SOURCE_LABEL = 'master_resume'
 
 export const resumeImporterPrompt: VersionedPrompt<ResumeImporterInput> = {
-  version: '1.0.0',
+  version: '1.1.0',
 
   build(input) {
+    const existing = input.allow_new_experiences && input.experiences.length > 0
     const system = `You turn résumé text into an Evidence Bank: atomic facts, metrics, skills and deliverables, each tied to the
 experience it belongs to and the exact paragraph that asserts it.
 
@@ -76,10 +84,25 @@ tool, domain, business, language, other.
 
 DELIVERABLES are concrete artifacts: a whitepaper, a report, an SOP, a platform, a system.
 
+PROJECTS are named pieces of work under an experience — a hackathon the text calls "Forge 2026", a product
+called "Keywords", a summit with a name. Propose a project ONLY when the text names it; the name must appear
+in the text verbatim. A project points at the experience it happened under (experience_ref = the index of
+that experience in your output, or an existing experience id) and at the facts about it (fact_refs, within
+that experience's facts). Never propose a project for unnamed work.
+
 SUMMARY — one sentence per experience, in plain English, that a person skimming the bank would recognize.
 
 ${
-  input.allow_new_experiences
+  existing
+    ? `EXISTING EXPERIENCES — the bank already holds the rows listed below, each with its id as the key. When the
+pasted text describes one of those same roles — the same organization and the same or a closely related
+title — file its facts under that key. "President" and "President (previously Head of Events)" are the same
+role; "Head of Events" and "President" are NOT; "Vice President" and "President" are NOT. In that case also
+fill new_experience with the title, organization and dates AS THIS TEXT STATES THEM (that is how a
+disagreement between sources gets recorded); leave it null only when the text gives none. Propose a NEW
+block (a fresh slug key, e.g. "acme__engineering-intern", with new_experience filled) only when no existing
+row fits. Facts cite the source label and line index they came from.`
+    : input.allow_new_experiences
     ? `EXPERIENCE BLOCKS — no structure was supplied, so infer them from the text. Each block needs an organization
 and a title exactly as the text states them; dates and location when present. Use a short slug as the key
 ("acme__engineering-intern"). Facts cite the source label and line index they came from.`
@@ -91,7 +114,7 @@ CONFIDENCE — 1.0 when the paragraph states it outright; lower only when the wo
 
     const lines: string[] = []
     if (input.experiences.length) {
-      lines.push('EXPERIENCES (cite paragraph indexes exactly as shown):')
+      lines.push(existing ? 'EXISTING EXPERIENCES IN THE BANK (key = row id; file matching facts here):' : 'EXPERIENCES (cite paragraph indexes exactly as shown):')
       for (const e of input.experiences) {
         const dates = [e.start_date, e.end_date].filter(Boolean).join(' – ')
         lines.push('')
@@ -101,7 +124,7 @@ CONFIDENCE — 1.0 when the paragraph states it outright; lower only when the wo
     }
     if (input.extra_sources.length) {
       lines.push('')
-      lines.push('ADDITIONAL SOURCES (cite by source_label and line index):')
+      lines.push(existing ? 'TEXT TO IMPORT (cite by source_label and line index):' : 'ADDITIONAL SOURCES (cite by source_label and line index):')
       for (const s of input.extra_sources) {
         lines.push('')
         lines.push(`[source_label: ${s.label}]`)
@@ -114,7 +137,8 @@ CONFIDENCE — 1.0 when the paragraph states it outright; lower only when the wo
 TASK
 For every experience, list the atomic facts the text asserts, the metrics, the skills it names, and the
 deliverables it describes. Then one summary sentence. Cite the paragraph (source_label "${RESUME_SOURCE_LABEL}"
-for résumé paragraphs, or the additional source's label with its line index) on every fact.
+for résumé paragraphs, or the additional source's label with its line index) on every fact. List named
+projects, if any, in the top-level "projects" array.
 
 Submit with the ${'`submit_result`'} tool.`
 

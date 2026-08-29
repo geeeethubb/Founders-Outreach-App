@@ -53,6 +53,11 @@ function words(s: string): string[] {
     .filter(Boolean)
 }
 
+/**
+ * Alias table or exact normalized equality only — never substring. "PG
+ * Solutions" and "Pacific Gas" normalize to their own keys and stay there;
+ * only the exact key "pg" is Procter & Gamble.
+ */
 export function normalizeOrg(raw: string): string {
   // "(UIUC)", "(formerly X)" — a qualifier, not the name.
   const withoutParens = raw.replace(/\([^)]*\)/g, ' ')
@@ -63,6 +68,30 @@ export function normalizeOrg(raw: string): string {
   return ORG_ALIASES[joined] ?? joined
 }
 
+/**
+ * The part of an organization string that normalizeOrg throws away: the
+ * parentheticals and what follows the first comma. "University of Illinois
+ * (Professor Alex Mironenko's lab)" → "Professor Alex Mironenko's lab";
+ * "Procter & Gamble, Tabler Station" → "Tabler Station". Two rows with the
+ * same normalized org and different qualifiers may be two labs, not one —
+ * the consolidation engine reads this before proposing a merge.
+ */
+export function orgQualifier(raw: string): string {
+  const parts: string[] = []
+  for (const m of raw.matchAll(/\(([^)]*)\)/g)) {
+    const inner = m[1].trim()
+    // A bare acronym in parentheses ("(UIUC)") names the org, not a sub-unit.
+    if (inner && !/^[A-Z&.]{2,8}$/.test(inner)) parts.push(inner)
+  }
+  const head = raw.replace(/\([^)]*\)/g, ' ')
+  const comma = head.indexOf(',')
+  if (comma >= 0) {
+    const tail = head.slice(comma + 1).replace(/\s+/g, ' ').trim()
+    if (tail) parts.push(tail)
+  }
+  return parts.join('; ')
+}
+
 // ─── Titles ──────────────────────────────────────────────────────────────────
 
 const TITLE_NOISE = new Set(['former', 'formerly', 'prev', 'previously', 'previous', 'ex'])
@@ -70,11 +99,17 @@ const TITLE_NOISE = new Set(['former', 'formerly', 'prev', 'previously', 'previo
 /**
  * "President, Founders" → "president"; "Project Manager, prev. Senior
  * Consultant" → "project manager". What follows a comma, dash, semicolon or
- * slash is a qualifier (the org again, an earlier role), and the résumé's
- * own title is what came first.
+ * pipe is a qualifier (the org again, an earlier role), and the résumé's
+ * own title is what came first. A slash is NOT a separator: "Co-Founder /
+ * CEO" and "Co-Founder / CTO" are two jobs, and splitting there would make
+ * them one.
  */
 export function normalizeTitle(raw: string): string {
-  const head = stripDiacritics(raw).split(/[,;|/]|\s[-–—]\s|[–—]/)[0]
+  // "President (previously Head of Events, Events Team Member)" — the
+  // parenthetical is history, and it must go before the comma split or the
+  // head would be "President (previously Head of Events".
+  const withoutParens = stripDiacritics(raw).replace(/\([^)]*\)/g, ' ')
+  const head = withoutParens.split(/[,;|]|\s[-–—]\s|[–—]/)[0]
   return words(head).filter((t) => !TITLE_NOISE.has(t)).join(' ')
 }
 

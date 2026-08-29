@@ -11,17 +11,28 @@
 //
 // The decisions are made by planPersist, a pure function; this file executes
 // them in dependency order (experiences → facts → bullets → metrics,
-// deliverables → skills) because fact ids are needed before anything can
-// cite them.
+// deliverables → skills → provenance) because fact ids are needed before
+// anything can cite them.
+//
+// Every import is also a SOURCE RECORD (015): facts inserted or reused point
+// at it through evidence_fact_sources, experiences through
+// evidence_experience_sources, and a reused experience whose title or dates
+// this source states differently becomes a conflict — the résumé's value is
+// never overwritten. On a 014-only database every one of those writes is
+// skipped and counted in `provenanceSkipped`, never thrown.
 //
 // What the résumé itself asserts (experiences, bullets) lands approved: those
 // are the document's own identity lines. What the agent DERIVED lands with
 // the caller's `approve` flag, false by default (docs/CAREER_OS.md §10).
 
 import { createServiceClient } from '@/lib/supabase/server'
+import type { SourceKind } from '../types'
 import type { ImportProposal } from './import'
+import { normalizeMetricValue, normalizeOrg, normalizeStatement, normalizeTitle } from './normalize'
 import { planPersist, type Corroboration, type MatchedExperience, type NearMiss } from './plan'
-import { insertRows, loadEvidenceBank } from './store'
+import { recordProvenance } from './provenance'
+import { persistProjects } from './sources'
+import { insertRows, insertRowsTolerant, loadEvidenceBank } from './store'
 
 export interface SeedCounts {
   documents: number
@@ -41,6 +52,14 @@ export interface SeedCounts {
   nearMisses: NearMiss[]
   /** Facts already in the bank that a second source also states. */
   corroborated: Corroboration[]
+  // 015 provenance. Zero on a 014-only database, with provenanceSkipped saying why.
+  sources: { created: number; reused: number }
+  factSources: number
+  experienceSources: number
+  conflicts: number
+  projects: number
+  /** 015 writes skipped because the schema is not there yet. */
+  provenanceSkipped: number
 }
 
 export function emptyCounts(): SeedCounts {
@@ -48,6 +67,7 @@ export function emptyCounts(): SeedCounts {
     documents: 0, documentReused: false, experiences: 0, experiencesReused: 0, bullets: 0,
     facts: 0, metrics: 0, skills: 0, deliverables: 0, preferences: 0, missionCreated: false,
     matched: [], nearMisses: [], corroborated: [],
+    sources: { created: 0, reused: 0 }, factSources: 0, experienceSources: 0, conflicts: 0, projects: 0, provenanceSkipped: 0,
   }
 }
 
@@ -60,6 +80,15 @@ export interface PersistOptions {
   sourceResume?: string
   isOnMaster?: boolean
   counts?: SeedCounts
+  // The source record this import becomes (015).
+  sourceKind?: SourceKind
+  /** Résumé: the filename. Text: caller-supplied, else "<Kind> pasted <date>". */
+  sourceLabel?: string
+  /** Raw text as imported. Résumé imports default to the extracted paragraph text. */
+  rawText?: string | null
+  /** Hash of the file/text; computed from rawText when absent. */
+  sourceSha256?: string | null
+  resumeDocumentId?: string | null
 }
 
 /**
@@ -80,6 +109,7 @@ export async function persistProposal(
   counts.matched.push(...plan.matched)
   counts.nearMisses.push(...plan.nearMisses)
   counts.corroborated.push(...plan.corroborated)
+  const stripped = (s: boolean) => { if (s) counts.provenanceSkipped++ }
 
   // 1. Experiences.
   const experienceId = new Map<string, string>()
@@ -93,7 +123,7 @@ export async function persistProposal(
     return d.action === 'insert'
   })
   if (toInsert.length) {
-    const res = await insertRows('evidence_experiences', toInsert.map((e) => ({
+    const res = await insertRowsTolerant('evidence_experiences', toInsert.map((e) => ({
       user_id: userId,
       kind: e.kind,
       organization: e.organization,
@@ -106,8 +136,11 @@ export async function persistProposal(
       source: e.source,
       // The résumé's own identity lines. Not a model's claim.
       approved: e.source === 'master_resume' ? true : opts.approve,
-    })))
+      organization_norm: normalizeOrg(e.organization),
+      title_norm: normalizeTitle(e.title),
+    })), ['organization_norm', 'title_norm'])
     if (res.error) return { counts, errors: [`experiences: ${res.error}`], migrationMissing: res.migrationMissing }
+    stripped(res.stripped)
     toInsert.forEach((e, i) => experienceId.set(e.key, res.ids[i]))
     counts.experiences += res.ids.length
   }
@@ -140,12 +173,14 @@ export async function persistProposal(
       source_location: f.source_location,
       confidence: f.confidence,
       approved: opts.approve,
+      statement_norm: normalizeStatement(f.statement),
     })
   })
   if (factRows.length) {
-    const res = await insertRows('evidence_facts', factRows)
+    const res = await insertRowsTolerant('evidence_facts', factRows, ['statement_norm'])
     if (res.error) errors.push(`facts: ${res.error}`)
     else {
+      stripped(res.stripped)
       res.ids.forEach((id, j) => { factId[factRowIndex[j]] = id })
       counts.facts += res.ids.length
     }
@@ -215,11 +250,12 @@ export async function persistProposal(
       fact_ids: resolve(m.fact_refs),
       source: m.source,
       approved: opts.approve,
+      value_norm: normalizeMetricValue(m.value),
     }))
   if (metricRows.length) {
-    const res = await insertRows('evidence_metrics', metricRows)
+    const res = await insertRowsTolerant('evidence_metrics', metricRows, ['value_norm'])
     if (res.error) errors.push(`metrics: ${res.error}`)
-    else counts.metrics += res.ids.length
+    else { stripped(res.stripped); counts.metrics += res.ids.length }
   }
   const deliverableRows = proposal.deliverables
     .filter((_, i) => plan.deliverables[i])
@@ -256,6 +292,23 @@ export async function persistProposal(
     if (res.error) errors.push(`skills: ${res.error}`)
     else counts.skills += res.ids.length
   }
+
+  // 6. Projects (015) — deduped by (experience, name); tolerated on 014.
+  if (proposal.projects.length) {
+    const res = await persistProjects(userId, bank.projects, proposal.projects.map((p) => ({
+      experience_id: experienceId.get(p.experience_key) ?? null,
+      name: p.name,
+      description: p.description,
+      fact_ids: resolve(p.fact_refs),
+      approved: opts.approve,
+    })))
+    if (res.migrationMissing) counts.provenanceSkipped++
+    else if (res.error) errors.push(`projects: ${res.error}`)
+    counts.projects += res.created
+  }
+
+  // 7. Provenance (015) — ./provenance.
+  errors.push(...await recordProvenance(userId, bank, proposal, plan, { experienceId, factId }, opts, counts))
 
   return { counts, errors, migrationMissing: false }
 }
