@@ -10,9 +10,10 @@
 // with — see refreshExperienceSupport and upsertConflict in ./sources.
 
 import type { ConflictCandidate, EvidenceBank, SourceKind } from '../types'
+import { confidenceFor } from './corroborate'
 import type { ImportProposal } from './import'
 import { normalizeTitle, parseResumeDate, type ParsedDate } from './normalize'
-import type { PersistPlan } from './plan'
+import { resolveFactDecision, type PersistPlan } from './plan'
 import type { PersistOptions, SeedCounts } from './persist'
 import {
   defaultSourceLabel, findOrCreateSource, recordExperienceSources, recordFactSources,
@@ -80,14 +81,23 @@ export async function recordProvenance(
     return h.id
   }
 
-  // (b) fact ↔ source, inserted and reused alike — a reused fact is corroborated.
+  // (b) fact ↔ source, inserted and reused alike. A reused fact's row quotes
+  // the incoming wording at the support level the numbers justify: 1.0 when
+  // this source carries the fact's numbers, 0.5 when it only restates the
+  // event — visible as provenance, never counted as support for the metric.
   const factRows: FactSourceRow[] = []
   for (const [i, f] of proposal.facts.entries()) {
     const id = ids.factId[i]
     if (!id) continue
     const sourceId = await sourceIdFor(f)
     if (!sourceId) continue
-    factRows.push({ fact_id: id, source_id: sourceId, location: splitSourceLocation(f.source, f.source_location).location, quote: f.statement, confidence: f.confidence })
+    const decision = resolveFactDecision(plan, i)
+    // A freshly inserted fact is fully stated by its own source (the importer's
+    // number check guarantees it), so its provenance row is 1.0; the agent's
+    // per-fact confidence stays on evidence_facts.confidence. Reused facts
+    // encode the support level: 1.0 full, 0.5 event-only.
+    const confidence = decision.action === 'reuse' ? confidenceFor(decision.support) : 1.0
+    factRows.push({ fact_id: id, source_id: sourceId, location: splitSourceLocation(f.source, f.source_location).location, quote: f.statement, confidence })
   }
   const fs = await recordFactSources(userId, factRows)
   if (fs.migrationMissing) return skip()

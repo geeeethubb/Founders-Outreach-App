@@ -69,7 +69,7 @@ async function main() {
   const result = await applyConsolidation(userId, plan, { only, allowPossible: flag('possible'), reason: pair ? `cli pair ${pair}` : 'cli apply HIGH' })
   console.log('\nAPPLY RESULT')
   console.log(`  snapshot ${result.snapshot_id ?? '(none)'}`)
-  console.log(`  organizations created ${result.organizations_created} · sources ${result.sources_created} · fact_sources ${result.fact_sources_created} · experience_sources ${result.experience_sources_created}`)
+  console.log(`  organizations created ${result.organizations_created} / updated ${result.organizations_updated} · statement_norm backfilled ${result.statement_norms_backfilled} · sources ${result.sources_created} · fact_sources ${result.fact_sources_created} · experience_sources ${result.experience_sources_created}`)
   console.log(`  merged ${result.merged.length} · suggestions ${result.suggestions_written} · conflicts ${result.conflicts_written} · summaries ${result.summaries_refreshed}`)
   for (const m of result.merged) console.log(`    merged ${m.entity_type} ${m.merge_id} → ${m.keep_id} (${m.repointed} children re-pointed)`)
   for (const s of result.skipped) console.log(`    skipped ${s.entity_type} ${s.merge_id} → ${s.keep_id}: ${s.reason}`)

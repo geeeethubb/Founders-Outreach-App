@@ -18,8 +18,17 @@ function experienceLabelShort(e: EvidenceExperience): string {
 
 // ─── Organizations, provenance, summaries ────────────────────────────────────
 
-export function organizationKindFor(name: string): OrganizationKind {
-  const s = name.toLowerCase()
+/**
+ * A heuristic kind for an organization name, refined by the rows under it:
+ * an organization that only ever issued awards ("National Merit") is not a
+ * company, the pseudo-org "Self" a personal post is filed under is nothing
+ * at all, and "Startup School" is a program even though it says "school".
+ */
+export function organizationKindFor(name: string, experiences: Pick<EvidenceExperience, 'kind'>[] = []): OrganizationKind {
+  if (experiences.length > 0 && experiences.every((e) => e.kind === 'award')) return 'other'
+  const s = name.toLowerCase().trim()
+  if (/^self(\s*\(.*\))?$/.test(s)) return 'other'
+  if (/\bstartup school\b/.test(s)) return 'program'
   if (/\b(university|college|academy|school)\b/.test(s) && !/school of/.test(s)) return 'university'
   if (/\b(lab|laboratory|national laboratory)\b/.test(s)) return 'lab'
   if (/\b(consulting|entrepreneurs|club|council|society|association)\b/.test(s)) return 'student_org'
@@ -46,6 +55,7 @@ export function planOrganizations(bank: EvidenceBank): OrganizationProposal[] {
     return {
       canonical_name: canonical,
       normalized_name: key,
+      kind: organizationKindFor(canonical, rows),
       aliases: [...new Set(rows.map((r) => r.organization.trim()))].sort(),
       experience_ids: rows.map((r) => r.id),
       existing_id: existing.get(key) ?? existing.get(normalizeOrg(canonical)) ?? null,

@@ -118,6 +118,15 @@ export function experienceKey(organization: string, title: string): string {
 }
 
 /**
+ * Title-similarity bands shared by the persist plan (./plan) and the
+ * consolidation rules (./consolidate-rules). They live here, below both, so
+ * neither has to import the other: ≥ 0.6 is the same job, [0.3, 0.6) is a
+ * near miss a human decides.
+ */
+export const SIMILAR_TITLE_THRESHOLD = 0.6
+export const NEAR_MISS_THRESHOLD = 0.3
+
+/**
  * Words that grade a title without changing what the job is. Only these may
  * be ignored when one title contains the other: "Senior Project Manager" IS
  * a project manager, but "Vice President" is not the president and a

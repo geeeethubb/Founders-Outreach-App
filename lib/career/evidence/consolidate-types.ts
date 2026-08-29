@@ -5,7 +5,7 @@
 // memory (no DB); apply steps take a plan and write. A plan is what the dry
 // run prints and what the review tab shows, so the two can never disagree.
 
-import type { MergeConfidence, MergeEntityType, MergeStatus } from '@/lib/career/types'
+import type { MergeConfidence, MergeEntityType, MergeStatus, OrganizationKind } from '@/lib/career/types'
 
 /** One proposed merge: `merge_id` folds into `keep_id`. Never a delete. */
 export interface MergeProposal {
@@ -38,6 +38,8 @@ export interface ConflictProposal {
 export interface OrganizationProposal {
   canonical_name: string
   normalized_name: string
+  /** Heuristic from the name and the kinds of the rows under it (consolidate-groups organizationKindFor). */
+  kind: OrganizationKind
   aliases: string[]
   experience_ids: string[]
   /** Existing evidence_organizations row when one already matches. */
@@ -85,6 +87,10 @@ export interface ConsolidationPlan {
 export interface ConsolidationResult {
   snapshot_id: string | null
   organizations_created: number
+  /** Existing organizations whose kind or aliases the heuristic now states differently. */
+  organizations_updated: number
+  /** Facts whose `statement_norm` was null and is now filled (apply's canonical-key step). */
+  statement_norms_backfilled: number
   sources_created: number
   fact_sources_created: number
   experience_sources_created: number

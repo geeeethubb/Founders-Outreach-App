@@ -49,6 +49,35 @@ export function numbersSupported(statement: string, sourceText: string): { ok: b
   return { ok: missing.length === 0, missing }
 }
 
+const CONTENT_STOPWORDS = new Set([
+  'a', 'an', 'the', 'of', 'in', 'at', 'to', 'for', 'and', 'or', 'on', 'by', 'with', 'all', 'across',
+  'as', 'from', 'into', 'is', 'was', 'were', 'be', 'been', 'that', 'this', 'its', 'it', 'over', 'per',
+  'new', 'our', 'we', 'my', 'i', 'their', 'his', 'her', 'has', 'have', 'had', 'are', 'not', 'via',
+])
+
+/** Lowercase alphabetic words carrying meaning: no stopwords, no numbers, no one-letter tokens. */
+export function contentWords(text: string): Set<string> {
+  return new Set(
+    text
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, ' ')
+      .split(' ')
+      .filter((w) => w.length > 1 && !CONTENT_STOPWORDS.has(w) && !/\d/.test(w))
+  )
+}
+
+/**
+ * How many content words two texts share. The bar a `corroborates` claim
+ * must clear: a line that names none of the existing fact's words cannot be
+ * a restatement of it, whatever the model says.
+ */
+export function sharedContentWords(a: string, b: string): number {
+  const wb = contentWords(b)
+  let n = 0
+  contentWords(a).forEach((w) => { if (wb.has(w)) n++ })
+  return n
+}
+
 /**
  * A skill is supported when its name appears in the text (case-insensitive),
  * or every word of it does — "techno-economic analysis" against "techno-economic

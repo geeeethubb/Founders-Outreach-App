@@ -10,6 +10,7 @@
 // migration, because the bank is still usable.
 
 import { createServiceClient } from '@/lib/supabase/server'
+import { isFullSupport } from './corroborate'
 import type {
   EvidenceBank,
   EvidenceDeliverable,
@@ -189,18 +190,24 @@ function sourceById(bank: EvidenceBank, id: string): EvidenceSource | null {
   return bank.sources.find((s) => s.id === id) ?? null
 }
 
+/** The suffix an event-only provenance row (confidence 0.5) carries in a label. */
+export const EVENT_ONLY_LABEL = '(event only)'
+
 /**
  * "Zuyu_Resume.docx ¶6", "LinkedIn export L350" — one label per provenance
- * row, joined to its source record. Falls back to the legacy single-source
- * columns when no provenance rows exist (pre-015, or a fact imported before
- * provenance was recorded), so a fact always has at least one label.
+ * row, joined to its source record; a row that corroborates the event but not
+ * the numbers reads "LinkedIn post L2 (event only)". Falls back to the legacy
+ * single-source columns when no provenance rows exist (pre-015, or a fact
+ * imported before provenance was recorded), so a fact always has at least
+ * one label.
  */
 export function sourceLabelsForFact(bank: EvidenceBank, fact: EvidenceFact): string[] {
   const labels: string[] = []
   for (const fs of bank.factSources) {
     if (fs.fact_id !== fact.id) continue
     const src = sourceById(bank, fs.source_id)
-    const label = src ? `${src.label}${fs.location ? ` ${fs.location}` : ''}` : fs.location ?? ''
+    const base = src ? `${src.label}${fs.location ? ` ${fs.location}` : ''}` : fs.location ?? ''
+    const label = base && !isFullSupport(fs) ? `${base} ${EVENT_ONLY_LABEL}` : base
     if (label && !labels.includes(label)) labels.push(label)
   }
   if (labels.length === 0) labels.push(fact.source_location ?? fact.source)

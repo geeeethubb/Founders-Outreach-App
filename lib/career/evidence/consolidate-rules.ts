@@ -13,14 +13,15 @@
 import type { EvidenceExperience, EvidenceFact, ExperienceKind } from '../types'
 import {
   datesCompatible,
+  NEAR_MISS_THRESHOLD,
   normalizeOrg,
   normalizeStatement,
   normalizeTitle,
   parseResumeDate,
+  SIMILAR_TITLE_THRESHOLD,
   titleSimilarity,
   type ParsedDate,
 } from './normalize'
-import { NEAR_MISS_THRESHOLD, SIMILAR_TITLE_THRESHOLD } from './plan'
 
 // ─── Organizations and their qualifiers ──────────────────────────────────────
 
@@ -183,10 +184,13 @@ export interface StatementTokens {
   words: Set<string>  // non-numeric, stopwords removed
 }
 
-/** "$4M+", "400+", "#1", "20%" → "4m", "400", "1", "20%". */
+/**
+ * "$4M+", "400+", "#1", "20%" → "4m", "400", "1", "20%". A suffix must end
+ * the word: "5 members" is "5", not "5m".
+ */
 export function numericTokens(text: string): string[] {
   const out: string[] = []
-  const re = /\$?(\d[\d,]*(?:\.\d+)?)\s*(%|percent|k|m|b|mm|million|billion|thousand|x)?/gi
+  const re = /\$?(\d[\d,]*(?:\.\d+)?)\s*(%|percent|k|m|b|mm|million|billion|thousand|x)?(?![a-z])/gi
   let m: RegExpExecArray | null
   while ((m = re.exec(text)) !== null) {
     const num = m[1].replace(/,/g, '')
@@ -226,14 +230,26 @@ function isSubset(a: Set<string>, b: Set<string>): boolean {
   return ok
 }
 
+/** |A ∩ B| / |A| — how much of A the other statement covers. 0 when A is empty. */
+export function containment(a: Set<string>, b: Set<string>): number {
+  if (a.size === 0) return 0
+  let common = 0
+  a.forEach((t) => { if (b.has(t)) common++ })
+  return common / a.size
+}
+
 export type FactVerdict =
   | { class: 'HIGH'; rule: 'statement_norm'; jaccard: number }
   | { class: 'POSSIBLE'; rule: 'near_duplicate_statement' | 'similar_statement'; jaccard: number }
+  /** One side has no numbers and restates the other's event: `numbered` names the side that carries them. */
+  | { class: 'POSSIBLE'; rule: 'weaker_restatement'; jaccard: number; containment: number; numbered: 'a' | 'b' }
   | { class: 'CONFLICT'; rule: 'same_claim_different_numbers'; jaccard: number; numbers: [string[], string[]] }
   | null
 
 export const FACT_HIGH_JACCARD = 0.8
 export const FACT_POSSIBLE_JACCARD = 0.6
+/** A number-less statement whose content words are this contained in a numbered one restates it. */
+export const WEAKER_RESTATEMENT_CONTAINMENT = 0.8
 
 export function compareFacts(a: EvidenceFact, b: EvidenceFact): FactVerdict {
   if (normalizeStatement(a.statement) === normalizeStatement(b.statement)) {
@@ -244,6 +260,20 @@ export function compareFacts(a: EvidenceFact, b: EvidenceFact): FactVerdict {
   const j = jaccard(ta.words, tb.words)
   const sameNumbers = ta.numeric.join('|') === tb.numeric.join('|')
   if (!sameNumbers) {
+    // "Designed a new SOP extending shelf life for a body wash ingredient"
+    // beside the résumé's "… reducing scrap costs by $300K+ annually" is not
+    // a disagreement about the number — it never mentions one. It restates
+    // the event and corroborates that, not the metric. CONFLICT is reserved
+    // for two statements that BOTH carry numbers and differ on them.
+    const aBare = ta.numeric[0] === 'none'
+    const bBare = tb.numeric[0] === 'none'
+    if (aBare !== bBare) {
+      const c = aBare ? containment(ta.words, tb.words) : containment(tb.words, ta.words)
+      if (c >= WEAKER_RESTATEMENT_CONTAINMENT) {
+        return { class: 'POSSIBLE', rule: 'weaker_restatement', jaccard: j, containment: c, numbered: aBare ? 'b' : 'a' }
+      }
+      return null
+    }
     if (j >= FACT_POSSIBLE_JACCARD) {
       return { class: 'CONFLICT', rule: 'same_claim_different_numbers', jaccard: j, numbers: [ta.numeric, tb.numeric] }
     }

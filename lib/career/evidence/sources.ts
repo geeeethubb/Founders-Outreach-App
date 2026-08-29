@@ -7,6 +7,7 @@
 import crypto from 'crypto'
 import { createServiceClient } from '@/lib/supabase/server'
 import type { ConflictCandidate, EvidenceProject, EvidenceSource, SourceKind, FactSource } from '@/lib/career/types'
+import { isFullSupport } from './corroborate'
 import { normalizeStatement } from './normalize'
 import { isMissingSchema } from './store'
 
@@ -218,21 +219,27 @@ function distinctSources<K extends string>(rows: Record<K, string>[] | null, key
 }
 
 /**
- * support_count = distinct sources per fact; fact_status becomes
- * CORROBORATED at ≥2 sources when it was VERIFIED. Anything the user or the
- * consolidation engine set (CONFLICTING, NEEDS_REVIEW) is left alone.
+ * support_count = distinct sources per fact whose provenance row is FULL
+ * support (confidence ≥ 0.9 — the source carries the fact's numbers, or the
+ * fact has none); fact_status becomes CORROBORATED at ≥2 such sources when
+ * it was VERIFIED. An event-only row (0.5: the source restates the event
+ * without its numbers) stays visible as provenance but never counts — that
+ * is the founder's "corroboration of an event ≠ support for its metric".
+ * Anything the user or the consolidation engine set (CONFLICTING,
+ * NEEDS_REVIEW) is left alone.
  */
 export async function refreshFactSupport(userId: string, factIds: string[]): Promise<SupportRefresh> {
   if (factIds.length === 0) return { updated: 0, migrationMissing: false, error: null }
   const supabase = createServiceClient()
   const { data: prov, error: provErr } = await supabase
-    .from('evidence_fact_sources').select('fact_id, source_id').eq('user_id', userId).in('fact_id', factIds)
+    .from('evidence_fact_sources').select('fact_id, source_id, confidence').eq('user_id', userId).in('fact_id', factIds)
   if (provErr) return { updated: 0, migrationMissing: isMissingSchema(provErr.message), error: provErr.message }
   const { data: facts, error: factErr } = await supabase
     .from('evidence_facts').select('id, support_count, fact_status').eq('user_id', userId).in('id', factIds)
   if (factErr) return { updated: 0, migrationMissing: isMissingSchema(factErr.message), error: factErr.message }
 
-  const counts = distinctSources(prov as { fact_id: string; source_id: string }[] | null, 'fact_id')
+  const full = ((prov ?? []) as { fact_id: string; source_id: string; confidence: number | null }[]).filter(isFullSupport)
+  const counts = distinctSources(full, 'fact_id')
   let updated = 0
   for (const f of (facts ?? []) as { id: string; support_count: number | null; fact_status: string | null }[]) {
     const count = Math.max(1, counts.get(f.id) ?? 0)

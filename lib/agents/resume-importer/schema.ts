@@ -45,8 +45,12 @@ export const OUTPUT_SCHEMA = {
                 source_label: { type: 'string', description: `"${RESUME_SOURCE_LABEL}" or an additional source label.` },
                 paragraph_index: { type: 'integer', description: 'The ¶ or L index shown next to the paragraph.' },
                 confidence: { type: 'number', description: '0 to 1.' },
+                corroborates: {
+                  type: ['string', 'null'],
+                  description: 'The [fact: id] of an EXISTING fact this sentence restates (same event, same claim), else null.',
+                },
               },
-              required: ['statement', 'category', 'source_label', 'paragraph_index', 'confidence'],
+              required: ['statement', 'category', 'source_label', 'paragraph_index', 'confidence', 'corroborates'],
             },
           },
           metrics: {

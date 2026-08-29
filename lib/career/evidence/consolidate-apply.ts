@@ -22,19 +22,23 @@
 
 import { createServiceClient } from '@/lib/supabase/server'
 import type { EvidenceBank, MergeEntityType } from '../types'
-import { buildConsolidationPlan, organizationKindFor, type PairRef } from './consolidate'
+import { buildConsolidationPlan, type PairRef } from './consolidate'
 import { planMutations, type Mutation } from './consolidate-mutations'
 import type { ApplyOptions, ConsolidationPlan, ConsolidationResult, MergeProposal } from './consolidate-types'
-import { normalizeOrg, normalizeTitle } from './normalize'
+import { normalizeOrg, normalizeStatement, normalizeTitle } from './normalize'
 import { findOrCreateSource, recordExperienceSources, recordFactSources, sourceKindFor, upsertConflict } from './sources'
 import { insertRows, isMissingSchema, loadEvidenceBank, updateRow } from './store'
 import { buildCanonicalSummary } from './summary'
 
 type Pair = { entity_type: MergeEntityType; keep_id: string; merge_id: string }
 
+/** Concurrent statement_norm updates per batch in the canonical-key step. */
+const NORM_BATCH = 20
+
 function emptyResult(): ConsolidationResult {
   return {
-    snapshot_id: null, organizations_created: 0, sources_created: 0, fact_sources_created: 0,
+    snapshot_id: null, organizations_created: 0, organizations_updated: 0, statement_norms_backfilled: 0,
+    sources_created: 0, fact_sources_created: 0,
     experience_sources_created: 0, merged: [], suggestions_written: 0, conflicts_written: 0,
     summaries_refreshed: 0, skipped: [], errors: [],
   }
@@ -161,15 +165,27 @@ export async function applyConsolidation(userId: string, plan: ConsolidationPlan
     if (!id) {
       const ins = await insertRows('evidence_organizations', [{
         user_id: userId, canonical_name: o.canonical_name, normalized_name: o.normalized_name,
-        aliases: o.aliases, kind: organizationKindFor(o.canonical_name),
+        aliases: o.aliases, kind: o.kind,
       }])
       if (ins.error) { result.errors.push(`organization ${o.canonical_name}: ${ins.error}`); continue }
       id = ins.ids[0]
       result.organizations_created++
     } else {
+      // An existing organization learns new aliases and follows the kind
+      // heuristic when it now says something else (an award-only org is
+      // 'other', "Startup School" is a program). Nothing else is touched.
       const existing = bank.organizations.find((x) => x.id === id)
-      const aliases = [...new Set([...(existing?.aliases ?? []), ...o.aliases])].sort()
-      if (existing && aliases.length !== existing.aliases.length) await updateRow('evidence_organizations', userId, id, { aliases })
+      if (existing) {
+        const aliases = [...new Set([...(existing.aliases ?? []), ...o.aliases])].sort()
+        const patch: Record<string, unknown> = {}
+        if (aliases.length !== (existing.aliases ?? []).length) patch.aliases = aliases
+        if (existing.kind !== o.kind) patch.kind = o.kind
+        if (Object.keys(patch).length) {
+          const r = await updateRow('evidence_organizations', userId, id, patch)
+          if (r.ok) result.organizations_updated++
+          else result.errors.push(`organization ${o.canonical_name}: ${r.error}`)
+        }
+      }
     }
     orgIdByKey.set(o.normalized_name, id)
     for (const eid of o.experience_ids) {
@@ -182,6 +198,18 @@ export async function applyConsolidation(userId: string, plan: ConsolidationPlan
       if (e.title_norm !== tn) patch.title_norm = tn
       if (Object.keys(patch).length) await updateRow('evidence_experiences', userId, eid, patch)
     }
+  }
+  // Facts get the same canonical-key treatment: statement_norm where it is
+  // still null (rows written before 015, or through a 014-tolerant insert).
+  // Only null rows, in small concurrent batches; never a rewrite.
+  const missingNorm = bank.facts.filter((f) => f.statement_norm === null || f.statement_norm === undefined)
+  for (let i = 0; i < missingNorm.length; i += NORM_BATCH) {
+    const batch = missingNorm.slice(i, i + NORM_BATCH)
+    const results = await Promise.all(batch.map((f) => updateRow('evidence_facts', userId, f.id, { statement_norm: normalizeStatement(f.statement) })))
+    results.forEach((r, j) => {
+      if (r.ok) result.statement_norms_backfilled++
+      else result.errors.push(`statement_norm ${batch[j].id}: ${r.error}`)
+    })
   }
 
   // 3. Provenance backfill.

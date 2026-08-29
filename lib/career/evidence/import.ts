@@ -14,7 +14,7 @@ import { readDocx, type DocxFile } from '../documents/docx-read'
 import { buildResumeModel, type ResumeModel } from '../documents/resume-model'
 import { runResumeImporter, RESUME_SOURCE_LABEL, type ImporterExperienceInput, type ResumeImporterInput, type ResumeImporterOutput } from '@/lib/agents/resume-importer'
 import type { AgentTrace, ToolContext } from '@/lib/agents/runtime/types'
-import type { EvidenceExperience, FactCategory, FactSource, SkillCategory } from '../types'
+import type { EvidenceBank, EvidenceExperience, FactCategory, FactSource, SkillCategory } from '../types'
 import {
   deriveBullets,
   deriveExperiences,
@@ -30,6 +30,25 @@ import {
 export { deriveBullets, deriveExperiences, extraSourcesFromProfile, linesOf }
 export type { ExtraSourceText, ProposedBullet, ProposedExperience }
 
+/**
+ * Text mode: the bank's active rows with their active facts, shaped for
+ * `importFromText({ existing })`. Pure; the caller loads the bank.
+ */
+export function existingFromBank(bank: Pick<EvidenceBank, 'experiences' | 'facts'>): ExistingExperienceInput[] {
+  const active = <T extends { status?: string | null }>(rows: T[]) => rows.filter((r) => r.status !== 'merged')
+  const facts = active(bank.facts)
+  return active(bank.experiences).map((e) => ({
+    id: e.id,
+    kind: e.kind,
+    organization: e.organization,
+    title: e.title,
+    start_date: e.start_date,
+    end_date: e.end_date,
+    location: e.location,
+    facts: facts.filter((f) => f.experience_id === e.id).map((f) => ({ id: f.id, statement: f.statement, support_count: f.support_count ?? 1 })),
+  }))
+}
+
 // ─── Proposed rows ───────────────────────────────────────────────────────────
 
 export interface ProposedFact {
@@ -40,6 +59,12 @@ export interface ProposedFact {
   source_location: string
   paragraph_index: number | null
   confidence: number
+  /**
+   * The bank fact the importer says this sentence restates (validated
+   * against the input by the agent's checks). planPersist verifies it again
+   * against the bank before turning it into a reuse.
+   */
+  corroborates?: string | null
 }
 
 export interface ProposedMetric {
@@ -72,8 +97,22 @@ export interface ProposedProject {
   fact_refs: number[]
 }
 
+/** An active bank fact the importer is shown under its experience (text mode). */
+export interface ExistingFactInput {
+  id: string
+  statement: string
+  support_count?: number | null
+}
+
 /** The slice of a bank row the importer is shown in text mode. */
-export type ExistingExperienceInput = Pick<EvidenceExperience, 'id' | 'kind' | 'organization' | 'title' | 'start_date' | 'end_date'> & { location?: string | null }
+export type ExistingExperienceInput = Pick<EvidenceExperience, 'id' | 'kind' | 'organization' | 'title' | 'start_date' | 'end_date'> & {
+  location?: string | null
+  /** The row's active facts; existingExperienceInputs caps and orders them. */
+  facts?: ExistingFactInput[]
+}
+
+/** How many of a row's facts the importer sees, most-supported first. */
+export const EXISTING_FACTS_PER_EXPERIENCE = 20
 
 export interface ImportProposal {
   experiences: ProposedExperience[]
@@ -91,7 +130,11 @@ export interface ImportProposal {
     misfiled: number
     experiences: number
     projects: number
+    /** `corroborates` claims the checks rejected (the facts were kept). */
+    corroborations?: number
   }
+  /** One line per rejected `corroborates` claim, from the agent's validator. */
+  corroborationNotes?: string[]
   trace: AgentTrace | null
   /** Set when the agent failed; the deterministic parts (experiences, bullets) are still filled. */
   agentError: string | null
@@ -173,6 +216,7 @@ export function foldOutput(
         source_location: fromResume ? `${opts.filename} ¶${f.paragraph_index}` : `${f.source_label} L${f.paragraph_index}`,
         paragraph_index: fromResume ? f.paragraph_index : null,
         confidence: f.confidence,
+        corroborates: f.corroborates ?? null,
       })
     }
     const lift = (r: number[]) => r.map((i) => base + i)
@@ -211,7 +255,9 @@ export function foldOutput(
     misfiled: output.dropped_misfiled,
     experiences: output.dropped_experiences,
     projects: output.dropped_projects ?? 0,
+    corroborations: output.dropped_corroborations ?? 0,
   }
+  proposal.corroborationNotes = output.corroboration_notes ?? []
 }
 
 function emptyProposal(model: ResumeModel | null): ImportProposal {
@@ -280,19 +326,32 @@ export async function importFromResume(
   return proposal
 }
 
-/** The bank's active experiences as the importer sees them: key = row id, no paragraphs. */
+/**
+ * The bank's active experiences as the importer sees them: key = row id, no
+ * paragraphs, and up to EXISTING_FACTS_PER_EXPERIENCE of the row's facts
+ * (most-supported first, then the bank's order) so a sentence that restates
+ * one can say so instead of becoming a second wording.
+ */
 export function existingExperienceInputs(existing: ExistingExperienceInput[]): ImporterExperienceInput[] {
-  return existing.map((e) => ({
-    key: e.id,
-    title: e.title,
-    organization: e.organization,
-    location: e.location ?? null,
-    start_date: e.start_date,
-    end_date: e.end_date,
-    section: e.kind,
-    bullets: [],
-    existing_id: e.id,
-  }))
+  return existing.map((e) => {
+    const facts = [...(e.facts ?? [])]
+      .map((f, i) => ({ f, i }))
+      .sort((a, b) => (b.f.support_count ?? 1) - (a.f.support_count ?? 1) || a.i - b.i)
+      .slice(0, EXISTING_FACTS_PER_EXPERIENCE)
+      .map(({ f }) => ({ id: f.id, statement: f.statement }))
+    return {
+      key: e.id,
+      title: e.title,
+      organization: e.organization,
+      location: e.location ?? null,
+      start_date: e.start_date,
+      end_date: e.end_date,
+      section: e.kind,
+      bullets: [],
+      existing_id: e.id,
+      ...(facts.length ? { existing_facts: facts } : {}),
+    }
+  })
 }
 
 /**

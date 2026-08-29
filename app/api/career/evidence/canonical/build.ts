@@ -12,7 +12,9 @@ import type {
 } from '@/lib/career/types'
 import { normalizeOrg } from '@/lib/career/evidence/normalize'
 import { organizationKindFor } from '@/lib/career/evidence/consolidate-groups'
+import { isFullSupport } from '@/lib/career/evidence/corroborate'
 import { splitSourceLocation } from '@/lib/career/evidence/sources'
+import { EVENT_ONLY_LABEL } from '@/lib/career/evidence/store'
 
 export interface CanonicalFact {
   id: string
@@ -83,13 +85,18 @@ function sourceById(bank: EvidenceBank, id: string): EvidenceSource | null {
   return bank.sources.find((s) => s.id === id) ?? null
 }
 
-/** Same fallback as store.sourceLabelsForFact, computed locally so the view has no store dependency. */
+/**
+ * Same fallback as store.sourceLabelsForFact, computed locally so the view has
+ * no store dependency. An event-only row (confidence 0.5 — the source restates
+ * the event without its numbers) is labelled as such.
+ */
 export function factSourceLabels(bank: EvidenceBank, fact: EvidenceFact): string[] {
   const labels: string[] = []
   for (const fs of bank.factSources) {
     if (fs.fact_id !== fact.id) continue
     const src = sourceById(bank, fs.source_id)
-    const label = src ? `${src.label}${fs.location ? ` ${fs.location}` : ''}` : fs.location ?? ''
+    const base = src ? `${src.label}${fs.location ? ` ${fs.location}` : ''}` : fs.location ?? ''
+    const label = base && !isFullSupport(fs) ? `${base} ${EVENT_ONLY_LABEL}` : base
     if (label && !labels.includes(label)) labels.push(label)
   }
   if (labels.length === 0) labels.push(legacyLabel(fact.source, fact.source_location))
@@ -174,6 +181,7 @@ function buildRole(bank: EvidenceBank, e: EvidenceExperience, created: Map<strin
 export function buildCanonicalView(bank: EvidenceBank): CanonicalView {
   const created = new Map(bank.facts.map((f) => [f.id, f.created_at]))
   const groups = new Map<string, CanonicalOrganization>()
+  const members = new Map<string, EvidenceExperience[]>()
   const experiences = bank.experiences.filter(isActive).sort((a, b) => a.display_order - b.display_order)
 
   for (const e of experiences) {
@@ -184,14 +192,20 @@ export function buildCanonicalView(bank: EvidenceBank): CanonicalView {
       g = {
         id: org?.id ?? null,
         canonical_name: org?.canonical_name ?? e.organization,
-        kind: org?.kind ?? organizationKindFor(e.organization),
+        kind: org?.kind ?? 'company',
         aliases: org?.aliases ?? [],
         roles: [],
       }
       groups.set(key, g)
     }
     if (!org && e.organization !== g.canonical_name && !g.aliases.includes(e.organization)) g.aliases.push(e.organization)
+    members.set(key, [...(members.get(key) ?? []), e])
     g.roles.push(buildRole(bank, e, created))
+  }
+  // A group without an organization row takes the heuristic kind, which
+  // reads the kinds of every row under it (award-only → 'other').
+  for (const [key, g] of groups) {
+    if (g.id === null) g.kind = organizationKindFor(g.canonical_name, members.get(key) ?? [])
   }
 
   const unattachedFacts = bank.facts

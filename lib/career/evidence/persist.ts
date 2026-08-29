@@ -29,7 +29,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import type { SourceKind } from '../types'
 import type { ImportProposal } from './import'
 import { normalizeMetricValue, normalizeOrg, normalizeStatement, normalizeTitle } from './normalize'
-import { planPersist, type Corroboration, type MatchedExperience, type NearMiss } from './plan'
+import { planPersist, resolveFactDecision, type Corroboration, type MatchedExperience, type NearMiss } from './plan'
 import { recordProvenance } from './provenance'
 import { persistProjects } from './sources'
 import { insertRows, insertRowsTolerant, loadEvidenceBank } from './store'
@@ -189,7 +189,17 @@ export async function persistProposal(
     const d = plan.facts[i]
     if (d.action !== 'collapse') return
     factId[i] = factId[d.intoIndex]
-    if (d.corroborates && factId[i]) counts.corroborated.push({ factId: factId[i] as string, source: f.source, source_location: f.source_location })
+    if (d.corroborates && factId[i]) {
+      // The same normalized statement from a second source in one paste: full
+      // support (identical numbers), at whatever the first copy resolved to.
+      const resolved = resolveFactDecision(plan, i)
+      counts.corroborated.push({
+        factId: factId[i] as string, source: f.source, source_location: f.source_location,
+        support: resolved.action === 'reuse' ? resolved.support : 'full',
+        rule: resolved.action === 'reuse' ? resolved.rule : 'exact',
+        quote: f.statement,
+      })
+    }
   })
   const resolve = (refs: number[]) => [...new Set(refs.map((i) => factId[i]).filter((id): id is string => Boolean(id)))]
 

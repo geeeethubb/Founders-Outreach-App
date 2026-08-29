@@ -9,7 +9,8 @@ import { emptyBank } from '../lib/career/evidence/store'
 import { buildConsolidationPlan } from '../lib/career/evidence/consolidate'
 import { planMutations } from '../lib/career/evidence/consolidate-mutations'
 import { renderPlanReport, planToJson } from '../lib/career/evidence/consolidate-report'
-import { compareQualifiers, isLocationLike, orgKey, qualifierOf, safestWording, statementTokens } from '../lib/career/evidence/consolidate-rules'
+import { organizationKindFor, planOrganizations } from '../lib/career/evidence/consolidate-groups'
+import { compareFacts, compareQualifiers, containment, isLocationLike, numericTokens, orgKey, qualifierOf, safestWording, statementTokens } from '../lib/career/evidence/consolidate-rules'
 import { buildCanonicalSummary } from '../lib/career/evidence/summary'
 import type { ConsolidationPlan, MergeProposal } from '../lib/career/evidence/consolidate-types'
 import type { EvidenceBank, EvidenceExperience, EvidenceFact, EvidenceMetric, ExperienceKind, FactCategory, FactSource } from '../lib/career/types'
@@ -75,6 +76,8 @@ check('location-like site', isLocationLike('Tabler Station') && !isLocationLike(
 check('qualifiers: two labs differ', compareQualifiers("UIUC (Professor A's lab)", "UIUC (Professor B's lab)") === 'different')
 check('qualifiers: one missing', compareQualifiers('Procter & Gamble, Tabler Station', 'Procter & Gamble') === 'one_missing')
 check('numeric tokens', statementTokens('Organized Keywords, 400+ participants, $4M+ savings, #1').numeric.join(',') === '1,400,4m')
+check('numeric tokens: a suffix must end the word ("5 members" is 5, not 5m)', numericTokens('Led a team of 5 members').join(',') === '5' && numericTokens('$300K+ annually').join(',') === '300k' && numericTokens('3x faster, 10mm').join(',') === '10m,3x')
+check('containment: |A∩B|/|A|', containment(new Set(['a', 'b', 'c', 'd']), new Set(['a', 'b', 'c', 'x'])) === 0.75 && containment(new Set(), new Set(['a'])) === 0)
 
 // ─── Real pairs ──────────────────────────────────────────────────────────────
 
@@ -119,6 +122,14 @@ check('umbrella award never pairs', !rp.experiences.some((p) => p.keep_id === 'a
 check('IMSA rows stay separate', !rp.experiences.some((p) => p.keep_id.startsWith('imsa') || p.merge_id.startsWith('imsa')))
 check('no HIGH proposal beyond the three expected', rp.experiences.filter((p) => p.confidence === 'HIGH').length === 3, String(rp.experiences.filter((p) => p.confidence === 'HIGH').map((p) => p.keep_id)))
 check('organizations grouped', rp.organizations.some((o) => o.normalized_name === 'procter and gamble' && o.aliases.length === 2 && o.canonical_name === 'Procter & Gamble'))
+
+// Organization kinds read the rows under the group, not just the name.
+check('organizationKindFor: award-only group → other', organizationKindFor('National Merit', [{ kind: 'award' }]) === 'other' && organizationKindFor('Illinois', [{ kind: 'award' }, { kind: 'award' }]) === 'other')
+check('organizationKindFor: a group with any non-award row keeps the name heuristic', organizationKindFor('University of Illinois', [{ kind: 'award' }, { kind: 'education' }]) === 'university')
+check('organizationKindFor: Self / Self (public profile) → other', organizationKindFor('Self') === 'other' && organizationKindFor('Self (public profile)') === 'other' && organizationKindFor('self') === 'other')
+check('organizationKindFor: Startup School → program, not university', organizationKindFor('Y Combinator Startup School') === 'program' && organizationKindFor('Startup School') === 'program')
+check('organizationKindFor: the rest unchanged', organizationKindFor('University of Illinois') === 'university' && organizationKindFor('Argonne National Laboratory') === 'lab' && organizationKindFor('Illinois Business Consulting') === 'student_org' && organizationKindFor('School of Chemical Sciences') === 'program' && organizationKindFor('Procter & Gamble') === 'company' && organizationKindFor('Self Storage Inc') === 'company')
+check('planOrganizations: kind on the proposal', planOrganizations(real).find((o) => o.canonical_name === 'National Merit')?.kind === 'other' && planOrganizations(real).find((o) => o.normalized_name === 'procter and gamble')?.kind === 'company' && rp.organizations.every((o) => typeof o.kind === 'string'))
 check('would_tombstone counts HIGH experiences', rp.summary.would_tombstone === 3)
 
 // ─── Adversarial ─────────────────────────────────────────────────────────────
@@ -190,6 +201,52 @@ check('hackathon 200+ vs 400+ → CONFLICT', cls(pairOf(fp.facts, 'f-hack-400', 
 check('conflict carries the numbers', JSON.stringify(pairOf(fp.facts, 'f-hack-400', 'f-hack-200')?.signals).includes('400'))
 check('two IBC engagements → none', !pairOf(fp.facts, 'f-ibc-1', 'f-ibc-2'))
 check('no fact proposal crosses unrelated experiences', !fp.facts.some((p) => [p.keep_id, p.merge_id].includes('f-hack-400') && [p.keep_id, p.merge_id].includes('f-ibc-1')))
+// A number-less restatement of a numbered fact corroborates the event, not
+// the metric — the live case: a LinkedIn post repeating the résumé's SOP line,
+// atomized by the importer into a half without the "$300K+".
+const SOP_RESUME = 'Designed a new SOP extending shelf life for a body wash ingredient, reducing scrap costs by $300K+ annually.'
+const wb = bank({
+  experiences: [exp({ id: 'pg', org: 'Procter & Gamble', title: 'QA Intern', start: '5/2026', end: '8/2026' })],
+  facts: [
+    fact({ id: 'sop-r', exp: 'pg', text: SOP_RESUME }),
+    fact({ id: 'sop-l', exp: 'pg', text: 'Designed a new SOP extending shelf life for a body wash ingredient', source: 'manual' }),
+    fact({ id: 'sop-500', exp: 'pg', text: 'Designed a new SOP extending shelf life for a body wash ingredient, reducing scrap costs by $500K+ annually', source: 'manual' }),
+    fact({ id: 'sop-far', exp: 'pg', text: 'Designed a new SOP for the packing line', source: 'manual' }),
+    fact({ id: 'sop-l-edited', exp: 'pg', text: 'Designed the new SOP extending shelf life for the body wash ingredient', source: 'manual', edited: true }),
+  ],
+  factSources: [{ id: 'fs-l', user_id: 'u', fact_id: 'sop-l', source_id: 'src-post', location: 'L1', quote: null, confidence: 1, created_at: NOW }],
+})
+const wp = plan(wb)
+const weaker = pairOf(wp.facts, 'sop-r', 'sop-l')
+check('weaker_restatement: number-less half vs résumé fact → POSSIBLE, never CONFLICT', cls(weaker) === 'POSSIBLE' && weaker?.rule === 'weaker_restatement', `${cls(weaker)} ${weaker?.rule}`)
+check('weaker_restatement: the numbered statement is the keep and the safest wording', weaker?.keep_id === 'sop-r' && weaker.merge_id === 'sop-l' && weaker.signals.safest === SOP_RESUME && weaker.signals.support === 'event_only', JSON.stringify(weaker?.signals))
+check('weaker_restatement: why says event, not metric', /corroborates the event, not the metric/.test(weaker?.why ?? ''))
+check('weaker_restatement: compareFacts direct', compareFacts(wb.facts[0], wb.facts[1])?.rule === 'weaker_restatement' && compareFacts(wb.facts[1], wb.facts[0])?.rule === 'weaker_restatement')
+check('two numbered statements with different numbers still CONFLICT', cls(pairOf(wp.facts, 'sop-r', 'sop-500')) === 'CONFLICT' && pairOf(wp.facts, 'sop-r', 'sop-500')?.rule === 'same_claim_different_numbers', cls(pairOf(wp.facts, 'sop-r', 'sop-500')))
+check('number-less statement with low containment → no proposal, no conflict', !pairOf(wp.facts, 'sop-r', 'sop-far') && !pairOf(wp.facts, 'sop-500', 'sop-far'))
+check('weaker_restatement: an edited number-less wording is still merged INTO the numbered fact, flagged', pairOf(wp.facts, 'sop-r', 'sop-l-edited')?.keep_id === 'sop-r' && /edited by hand/.test(pairOf(wp.facts, 'sop-r', 'sop-l-edited')?.risk ?? ''))
+check('weaker_restatement is never HIGH and never in plan conflicts', !wp.facts.some((p) => p.rule === 'weaker_restatement' && p.confidence !== 'POSSIBLE') && !wp.conflicts.some((c) => c.entity_id === 'sop-l'))
+const wm = planMutations(wp, wb, [{ entity_type: 'fact', keep_id: 'sop-r', merge_id: 'sop-l' }])
+const wfs = wm.find((x) => x.table === 'evidence_fact_sources' && x.child_id === 'fs-l')
+check('weaker_restatement merge: provenance re-pointed as a 0.5 quote of the bare wording', wfs?.values.fact_id === 'sop-r' && wfs.values.confidence === 0.5 && wfs.values.quote === 'Designed a new SOP extending shelf life for a body wash ingredient', JSON.stringify(wfs?.values))
+const wfill = wm.find((x) => x.table === 'evidence_facts' && x.kind === 'fill' && x.id === 'sop-r')
+check('weaker_restatement merge: support_count not raised, status not CORROBORATED, numbered statement kept', wfill?.values.support_count === 1 && wfill.values.fact_status === 'VERIFIED' && !('statement' in wfill.values), JSON.stringify(wfill?.values))
+check('weaker_restatement merge: bare row tombstoned into the numbered one', wm.some((x) => x.kind === 'tombstone' && x.id === 'sop-l' && x.values.merged_into === 'sop-r'))
+// A full merge still counts the merged fact's full-support sources; an event-only row never counts.
+const cb2 = bank({
+  experiences: [exp({ id: 'e', org: 'IBC', title: 'PM' })],
+  facts: [fact({ id: 'a', exp: 'e', text: 'Led audits' }), fact({ id: 'b', exp: 'e', text: 'Led audits.', source: 'manual' })],
+  factSources: [
+    { id: 'fs-a', user_id: 'u', fact_id: 'a', source_id: 'src-resume', location: '¶3', quote: null, confidence: 1, created_at: NOW },
+    { id: 'fs-b', user_id: 'u', fact_id: 'b', source_id: 'src-li', location: 'L4', quote: null, confidence: 1, created_at: NOW },
+    { id: 'fs-b-eo', user_id: 'u', fact_id: 'b', source_id: 'src-post', location: 'L9', quote: null, confidence: 0.5, created_at: NOW },
+  ],
+})
+const cp2 = plan(cb2)
+const cm2 = planMutations(cp2, cb2, cp2.facts)
+const cfill = cm2.find((x) => x.table === 'evidence_facts' && x.kind === 'fill')
+check('support_count counts only full-support sources (2, not 3)', cfill?.values.support_count === 2 && cfill.values.fact_status === 'CORROBORATED', JSON.stringify(cfill?.values))
+
 const safe = pairOf(fp.facts, 'f-safe-long', 'f-safe-short')
 check('safest wording = subset statement', safe?.keep_id === 'f-safe-short' && safe.signals.safest === 'Built a financial model projecting $4M in savings' && safe.signals.other_wording === 'Built a financial model projecting $4M in annual savings for the client', cls(safe))
 check('safestWording direct', safestWording(fb.facts[8], fb.facts[9]).keep.id === 'f-safe-short')

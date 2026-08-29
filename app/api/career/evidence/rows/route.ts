@@ -67,7 +67,9 @@ async function findExisting(
     let q = supabase.from('evidence_facts').select('id, experience_id, statement')
     q = experienceId === null ? q.is('experience_id', null) : q.eq('experience_id', experienceId)
     const { data } = await q
-    const hit = findFactMatch((data ?? []) as { id: string; experience_id: string | null; statement: string }[], experienceId, statement)
+    // Exact statement only. The near-duplicate rule is for the importer; a
+    // human typing a distinct wording means it.
+    const hit = findFactMatch((data ?? []) as { id: string; experience_id: string | null; statement: string }[], experienceId, statement, { nearDuplicate: false })
     return hit ? { id: hit.id, rule: 'same_statement' } : null
   }
   if (table === 'evidence_skills') {

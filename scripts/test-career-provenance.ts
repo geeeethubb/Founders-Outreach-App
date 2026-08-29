@@ -5,11 +5,12 @@
 //
 //   npx tsx scripts/test-career-provenance.ts
 
-import { validateImporterOutput, type ResumeImporterInput } from '../lib/agents/resume-importer'
+import { sharedContentWords, validateImporterOutput, type ResumeImporterInput } from '../lib/agents/resume-importer'
 import { resumeImporterPrompt } from '../lib/agents/resume-importer/prompt'
-import { existingExperienceInputs, foldOutput, type ImportProposal } from '../lib/career/evidence/import'
+import { confidenceFor, introducesNumbers, isFullSupport, supportLevel } from '../lib/career/evidence/corroborate'
+import { EXISTING_FACTS_PER_EXPERIENCE, existingExperienceInputs, existingFromBank, foldOutput, type ImportProposal, type ProposedFact } from '../lib/career/evidence/import'
 import { normalizeOrg, normalizeTitle } from '../lib/career/evidence/normalize'
-import { checkFilingHint, planPersist } from '../lib/career/evidence/plan'
+import { checkFilingHint, findFactMatch, planPersist, resolveFactDecision } from '../lib/career/evidence/plan'
 import { defaultSourceLabel, sourceKindFor, splitSourceLocation } from '../lib/career/evidence/sources'
 import { emptyBank, projectsForExperience, sourceLabelsForFact, sourcesForExperience } from '../lib/career/evidence/store'
 import type { EvidenceBank, EvidenceExperience, EvidenceFact } from '../lib/career/types'
@@ -192,6 +193,141 @@ check('plan: tombstoned row is never a match target', planPersist(pb, hinted('Ac
 // Conflict detection inputs: the same normalizers persist.ts uses.
 check('conflict: "President" vs "President (previously Head of Events)" is not a title conflict', normalizeTitle('President') === normalizeTitle('President (previously Head of Events)'))
 check('conflict: "Procter & Gamble, Tabler Station" vs "P&G" is not an org conflict', normalizeOrg('Procter & Gamble, Tabler Station') === normalizeOrg('P&G'))
+
+// ─── Corroboration: the importer sees existing facts, the code grades support ──
+//
+// The live failure this guards: a LinkedIn post repeating a résumé fact word
+// for word was atomized into two facts, neither matched the exact-statement
+// rule, 8 rows were inserted and 0 corroborated. Now the importer is shown
+// the facts and says "restates fact X"; the code decides whether the
+// restatement carries the numbers (full, 1.0) or only the event (0.5).
+
+const SOP_RESUME = 'Designed a new SOP extending shelf life for a body wash ingredient, reducing scrap costs by $300K+ annually.'
+const SOP_EVENT = 'Designed a new SOP extending shelf life for a body wash ingredient'
+const SOP_METRIC = 'The new SOP reduced scrap costs by $300K+ annually'
+const MODEL_LONG = 'Built a financial model projecting $4M in annual savings for the client'
+
+function corroborationBank(): EvidenceBank {
+  const b = bankWithProvenance()
+  b.facts.push(
+    fact('fact-sop', 'exp-png', SOP_RESUME, { source_location: 'Zuyu_Resume.docx ¶9', support_count: 1 }),
+    fact('fact-model', 'exp-png', MODEL_LONG, { source_location: 'Zuyu_Resume.docx ¶10', support_count: 1 }),
+    fact('fact-merged', 'exp-png', 'Tombstoned wording', { status: 'merged', merged_into: 'fact-sop' })
+  )
+  return b
+}
+const cb = corroborationBank()
+
+// Support level is arithmetic over numeric tokens, never a judgment call.
+check('supportLevel: restatement with the numbers → full', supportLevel(SOP_RESUME, SOP_RESUME) === 'full')
+check('supportLevel: restatement without the numbers → event_only', supportLevel(SOP_RESUME, SOP_EVENT) === 'event_only')
+check('supportLevel: the numbered half alone carries the metric → full', supportLevel(SOP_RESUME, SOP_METRIC) === 'full')
+check('supportLevel: existing fact with no numbers → full', supportLevel('Organized Forge 2026', 'organized forge') === 'event_only' && supportLevel('Led the line audit program', 'Led the audit program') === 'full')
+check('introducesNumbers: a new number is a disagreement', introducesNumbers(SOP_RESUME, 'Designed a new SOP reducing scrap costs by $500K+ annually') && !introducesNumbers(SOP_RESUME, SOP_EVENT))
+check('confidenceFor: full 1.0, event-only 0.5', confidenceFor('full') === 1 && confidenceFor('event_only') === 0.5)
+check('isFullSupport: 0.5 is not support', !isFullSupport({ confidence: 0.5 }) && isFullSupport({ confidence: 1 }) && isFullSupport({ confidence: 0.9 }) && isFullSupport({}))
+check('sharedContentWords: SOP line vs résumé fact', sharedContentWords(SOP_EVENT, SOP_RESUME) >= 3 && sharedContentWords('Ranked #1 QA intern in North America', SOP_RESUME) < 3)
+
+// The importer input carries the facts, capped and ordered.
+const manyFacts = Array.from({ length: 25 }, (_, i) => ({ id: `f${i}`, statement: `Fact number ${i}`, support_count: i === 7 ? 4 : i === 3 ? 2 : 1 }))
+const capped = existingExperienceInputs([{ id: 'e1', kind: 'experience', organization: 'X', title: 'Y', start_date: null, end_date: null, facts: manyFacts }])
+check('existingExperienceInputs: facts capped and most-supported first', (capped[0].existing_facts?.length ?? 0) === EXISTING_FACTS_PER_EXPERIENCE && capped[0].existing_facts?.[0].id === 'f7' && capped[0].existing_facts?.[1].id === 'f3' && capped[0].existing_facts?.[2].id === 'f0')
+check('existingExperienceInputs: no facts → no existing_facts key', !('existing_facts' in existingExperienceInputs([{ id: 'e1', kind: 'experience', organization: 'X', title: 'Y', start_date: null, end_date: null }])[0]))
+const fromBank = existingFromBank(cb)
+check('existingFromBank: active rows with their active facts only', fromBank.length === 2 && fromBank.find((e) => e.id === 'exp-png')?.facts?.map((f) => f.id).join(',') === 'fact-legacy,fact-sop,fact-model')
+
+const POST_LINES = [
+  'Quality Assurance Intern, P&G · May 2026 – Aug 2026',
+  SOP_RESUME,
+  'Built a financial model projecting $4M in annual savings',
+  'Ranked #1 QA intern in North America',
+]
+const corrInput: ResumeImporterInput = {
+  allow_new_experiences: true,
+  experiences: existingExperienceInputs(fromBank),
+  extra_sources: [{ label: 'pasted.linkedin', lines: POST_LINES.map((text, i) => ({ paragraph_index: i, text })) }],
+}
+const corrPrompt = resumeImporterPrompt.build(corrInput)
+check('prompt: version 1.2.0', resumeImporterPrompt.version === '1.2.0')
+check('prompt: existing facts listed by id under their row', corrPrompt.user.includes('[fact: fact-sop] Designed a new SOP') && corrPrompt.system.includes('EXISTING FACTS'))
+check('prompt: no facts → corroborates always null', resumeImporterPrompt.build({ ...corrInput, experiences: corrInput.experiences.map((e) => ({ ...e, existing_facts: [] })) }).system.includes('always null'))
+
+const corrOut = validateImporterOutput({
+  experiences: [{
+    experience_key: 'exp-png',
+    summary: 'QA intern.',
+    new_experience: null,
+    facts: [
+      // valid: the line restates fact-sop
+      { statement: SOP_EVENT, category: 'achievement', source_label: 'pasted.linkedin', paragraph_index: 1, confidence: 1, corroborates: 'fact-sop' },
+      // unknown id → field dropped, fact kept
+      { statement: SOP_METRIC, category: 'metric', source_label: 'pasted.linkedin', paragraph_index: 1, confidence: 1, corroborates: 'nope' },
+      // another experience's fact → dropped
+      { statement: 'Built a financial model projecting $4M in annual savings', category: 'achievement', source_label: 'pasted.linkedin', paragraph_index: 2, confidence: 1, corroborates: 'fact-forge' },
+      // line shares < 3 content words with the claimed fact → dropped
+      { statement: 'Ranked #1 QA intern in North America', category: 'award', source_label: 'pasted.linkedin', paragraph_index: 3, confidence: 1, corroborates: 'fact-sop' },
+      // null is fine
+      { statement: 'Ranked #1 QA intern', category: 'award', source_label: 'pasted.linkedin', paragraph_index: 3, confidence: 1, corroborates: null },
+    ],
+    metrics: [], skills: [], deliverables: [],
+  }],
+  projects: [],
+}, corrInput)
+check('validate: corroboration output accepted', corrOut !== null && corrOut.experiences[0].facts.length === 5)
+if (corrOut) {
+  const f = corrOut.experiences[0].facts
+  check('validate: valid corroborates kept', f[0].corroborates === 'fact-sop')
+  check('validate: unknown id dropped, fact kept', f[1].corroborates === null && f[1].statement === SOP_METRIC)
+  check('validate: another experience\'s fact dropped', f[2].corroborates === null)
+  check('validate: too few shared words dropped', f[3].corroborates === null && f[4].corroborates === null)
+  check('validate: drops counted with reasons', corrOut.dropped_corroborations === 3 && corrOut.corroboration_notes.length === 3 && corrOut.corroboration_notes.some((n) => /not an existing fact id/.test(n)) && corrOut.corroboration_notes.some((n) => /another experience/.test(n)) && corrOut.corroboration_notes.some((n) => /content word/.test(n)), JSON.stringify(corrOut.corroboration_notes))
+
+  const p: ImportProposal = { experiences: [], bullets: [], facts: [], metrics: [], skills: [], deliverables: [], projects: [], dropped: { unverifiable: 0, metrics: 0, skills: 0, misfiled: 0, experiences: 0, projects: 0 }, trace: null, agentError: null, model: null }
+  foldOutput(p, corrOut, { filename: 'pasted.linkedin', extra: [{ label: 'pasted.linkedin', source: 'linkedin', text: POST_LINES.join('\n') }], textSource: 'linkedin', existing: fromBank })
+  check('fold: corroborates carried onto the proposed fact', p.facts[0].corroborates === 'fact-sop' && p.facts[1].corroborates === null && p.dropped.corroborations === 3 && (p.corroborationNotes?.length ?? 0) === 3)
+}
+
+// planPersist: a verified corroboration is a reuse at the support the numbers justify.
+function pngProposal(facts: Partial<ProposedFact>[]): ImportProposal {
+  return {
+    experiences: [{ key: 'exp-png', kind: 'experience', organization: 'P&G', title: 'Quality Assurance Intern', location: null, start_date: 'May 2026', end_date: 'Aug 2026', description: null, display_order: 0, source: 'linkedin', bulletParagraphIndexes: [], identityParagraphIndex: null, summary: null, existingId: 'exp-png' }],
+    bullets: [], metrics: [], skills: [], deliverables: [], projects: [],
+    facts: facts.map((f, i) => ({ experience_key: 'exp-png', statement: '', category: 'achievement', source: 'linkedin', source_location: `pasted.linkedin L${i + 1}`, paragraph_index: null, confidence: 1, ...f })),
+    dropped: { unverifiable: 0, metrics: 0, skills: 0, misfiled: 0, experiences: 0, projects: 0 }, trace: null, agentError: null, model: null,
+  }
+}
+const pEvent = planPersist(cb, pngProposal([{ statement: SOP_EVENT, corroborates: 'fact-sop' }]))
+check('plan: event-only restatement → reuse, no insert', pEvent.facts[0].action === 'reuse' && pEvent.facts[0].existingId === 'fact-sop' && pEvent.facts[0].rule === 'agent_corroborates' && pEvent.facts[0].support === 'event_only' && pEvent.facts[0].quote === SOP_EVENT, JSON.stringify(pEvent.facts))
+check('plan: event-only corroboration recorded with its quote', pEvent.corroborated.length === 1 && pEvent.corroborated[0].support === 'event_only' && pEvent.corroborated[0].quote === SOP_EVENT && pEvent.corroborated[0].rule === 'agent_corroborates')
+const pFull = planPersist(cb, pngProposal([{ statement: SOP_RESUME, corroborates: 'fact-sop' }]))
+check('plan: word-for-word restatement → reuse at full support', pFull.facts[0].action === 'reuse' && pFull.facts[0].support === 'full')
+const pAtomized = planPersist(cb, pngProposal([{ statement: SOP_EVENT, corroborates: 'fact-sop' }, { statement: SOP_METRIC, corroborates: 'fact-sop' }]))
+check('plan: two halves of one line → one reuse, upgraded to full, second collapses', pAtomized.facts[0].action === 'reuse' && pAtomized.facts[0].support === 'full' && pAtomized.facts[0].quote === SOP_METRIC && pAtomized.facts[1].action === 'collapse' && pAtomized.corroborated.length === 1 && pAtomized.corroborated[0].support === 'full', JSON.stringify(pAtomized.facts))
+check('plan: resolveFactDecision follows the collapse to the reuse', resolveFactDecision(pAtomized, 1).action === 'reuse')
+const pNewNumber = planPersist(cb, pngProposal([{ statement: 'Designed a new SOP reducing scrap costs by $500K+ annually', corroborates: 'fact-sop' }]))
+check('plan: a restatement that introduces a different number is never a corroboration', pNewNumber.facts[0].action === 'insert' && pNewNumber.corroborated.length === 0, JSON.stringify(pNewNumber.facts))
+const pWrongExp = planPersist(cb, pngProposal([{ statement: 'Organized Forge 2026 with the team', corroborates: 'fact-forge' }]))
+check('plan: corroborates pointing at another experience\'s fact is ignored', pWrongExp.facts[0].action === 'insert')
+check('plan: corroborates naming a tombstone is ignored', planPersist(cb, pngProposal([{ statement: SOP_EVENT, corroborates: 'fact-merged' }])).facts[0].action === 'insert')
+check('plan: same source and line is not a second corroboration', planPersist(cb, pngProposal([{ statement: SOP_EVENT, corroborates: 'fact-sop', source: 'master_resume', source_location: 'Zuyu_Resume.docx ¶9' }])).corroborated.length === 0)
+
+// The deterministic second check: identical numbers + Jaccard ≥ 0.8, with no hint from the agent.
+const NEAR = 'Built a financial model projecting $4M in annual savings'          // 6/7 words → 0.86
+const FAR = 'Built a financial model projecting $4M in savings'                  // 5/7 → 0.71
+const OTHER_NUMBER = 'Built a financial model projecting $5M in annual savings for the client'
+check('findFactMatch: near duplicate at ≥ 0.8 with identical numbers', findFactMatch(cb.facts, 'exp-png', NEAR)?.rule === 'near_duplicate' && findFactMatch(cb.facts, 'exp-png', NEAR)?.id === 'fact-model')
+check('findFactMatch: 0.7 overlap is not a match', findFactMatch(cb.facts, 'exp-png', FAR) === null)
+check('findFactMatch: different numbers never match', findFactMatch(cb.facts, 'exp-png', OTHER_NUMBER) === null)
+check('findFactMatch: exact still reports exact', findFactMatch(cb.facts, 'exp-png', MODEL_LONG.toUpperCase())?.rule === 'exact')
+check('findFactMatch: manual-add mode is exact only', findFactMatch(cb.facts, 'exp-png', NEAR, { nearDuplicate: false }) === null)
+const pNear = planPersist(cb, pngProposal([{ statement: NEAR }, { statement: FAR }, { statement: OTHER_NUMBER }]))
+check('plan: near duplicate reused as a full corroboration with the incoming wording', pNear.facts[0].action === 'reuse' && pNear.facts[0].rule === 'near_duplicate' && pNear.facts[0].support === 'full' && pNear.facts[0].quote === NEAR && pNear.corroborated.some((c) => c.factId === 'fact-model' && c.rule === 'near_duplicate' && c.support === 'full'), JSON.stringify(pNear.facts))
+check('plan: 0.7 overlap inserts (the engine\'s POSSIBLE band covers it)', pNear.facts[1].action === 'insert')
+check('plan: different numbers insert (the engine\'s CONFLICT covers it)', pNear.facts[2].action === 'insert')
+
+// Provenance labels: an event-only row is visible, and says so.
+const eventOnlyBank: EvidenceBank = { ...cb, factSources: [...cb.factSources, { id: 'fs-eo', user_id: 'u', fact_id: 'fact-sop', source_id: 'src-li', location: 'L1', quote: SOP_EVENT, confidence: 0.5, created_at: now }, { id: 'fs-r', user_id: 'u', fact_id: 'fact-sop', source_id: 'src-resume', location: '¶9', quote: SOP_RESUME, confidence: 1, created_at: now }] }
+check('sourceLabelsForFact: event-only row labelled', JSON.stringify(sourceLabelsForFact(eventOnlyBank, cb.facts.find((f) => f.id === 'fact-sop') as EvidenceFact)) === JSON.stringify(['LinkedIn export L1 (event only)', 'Zuyu_Resume.docx ¶9']), JSON.stringify(sourceLabelsForFact(eventOnlyBank, cb.facts.find((f) => f.id === 'fact-sop') as EvidenceFact)))
 
 // ─── Report ──────────────────────────────────────────────────────────────────
 

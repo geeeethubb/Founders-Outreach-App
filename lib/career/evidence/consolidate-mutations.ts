@@ -7,6 +7,7 @@
 
 import type { EvidenceBank, EvidenceExperience, EvidenceFact, EvidenceMetric } from '../types'
 import type { MergeProposal } from './consolidate-types'
+import { EVENT_ONLY_CONFIDENCE, isFullSupport } from './corroborate'
 import { splitSourceLocation } from './sources'
 
 export type MutationKind = 'repoint' | 'fill' | 'tombstone' | 'conflict' | 'suggestion' | 'link'
@@ -81,11 +82,16 @@ function experienceMerge(bank: EvidenceBank, p: MergeProposal, out: Mutation[]):
 
 // ─── Fact merge ──────────────────────────────────────────────────────────────
 
+/**
+ * Distinct sources that FULLY support these facts: provenance rows at
+ * confidence ≥ 0.9 (an event-only row never counts), or the legacy source
+ * column when a fact has no provenance rows yet.
+ */
 function distinctSources(bank: EvidenceBank, facts: EvidenceFact[]): number {
   const labels = new Set<string>()
   for (const f of facts) {
     const rows = bank.factSources.filter((fs) => fs.fact_id === f.id)
-    if (rows.length) rows.forEach((r) => labels.add(`src:${r.source_id}`))
+    if (rows.length) rows.filter(isFullSupport).forEach((r) => labels.add(`src:${r.source_id}`))
     else labels.add(`legacy:${splitSourceLocation(f.source, f.source_location).label}`)
   }
   return labels.size
@@ -96,6 +102,10 @@ function factMerge(bank: EvidenceBank, p: MergeProposal, out: Mutation[]): void 
   const merge = bank.facts.find((f) => f.id === p.merge_id)
   if (!keep || !merge) return
   const userId = keep.user_id
+  // A weaker_restatement merge folds a number-less wording into the numbered
+  // fact: its sources corroborate the event only, so their rows are
+  // re-pointed at 0.5 and do not raise support_count.
+  const eventOnly = p.rule === 'weaker_restatement' || p.signals.support === 'event_only'
   const repointArray = (table: Mutation['table'], rows: { id: string }[], field: string, get: (r: never) => string[]) => {
     for (const r of rows) {
       const ids = get(r as never)
@@ -111,12 +121,15 @@ function factMerge(bank: EvidenceBank, p: MergeProposal, out: Mutation[]): void 
   repointArray('evidence_projects', bank.projects, 'fact_ids', (r: { fact_ids: string[] }) => r.fact_ids)
   for (const fs of bank.factSources) {
     if (fs.fact_id !== merge.id) continue
-    out.push({ table: 'evidence_fact_sources', op: 'update', kind: 'repoint', id: fs.id, child_id: fs.id, values: { fact_id: keep.id, quote: fs.quote ?? merge.statement } })
+    const values: Record<string, unknown> = { fact_id: keep.id, quote: fs.quote ?? merge.statement }
+    if (eventOnly && isFullSupport(fs)) values.confidence = EVENT_ONLY_CONFIDENCE
+    out.push({ table: 'evidence_fact_sources', op: 'update', kind: 'repoint', id: fs.id, child_id: fs.id, values })
   }
 
+  const supportCount = distinctSources(bank, eventOnly ? [keep] : [keep, merge])
   const fill: Record<string, unknown> = {
-    support_count: distinctSources(bank, [keep, merge]),
-    fact_status: p.conflicts.length ? 'CONFLICTING' : 'CORROBORATED',
+    support_count: supportCount,
+    fact_status: p.conflicts.length ? 'CONFLICTING' : supportCount >= 2 ? 'CORROBORATED' : keep.fact_status ?? 'VERIFIED',
   }
   const safest = typeof p.signals.safest === 'string' ? p.signals.safest : null
   if (safest && safest !== keep.statement && !(keep.edited_by_user ?? false)) fill.statement = safest

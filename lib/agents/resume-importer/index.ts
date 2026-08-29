@@ -16,15 +16,17 @@
 
 import crypto from 'crypto'
 import { runAgent } from '../runtime/loop'
-import { numberTokens, numbersSupported, skillSupported } from './checks'
+import { numberTokens, numbersSupported, sharedContentWords, skillSupported } from './checks'
 import { validateProjects, type ImportedProject } from './projects'
 import { EXPERIENCE_KINDS, FACT_CATEGORIES, OUTPUT_SCHEMA, SKILL_CATEGORIES } from './schema'
+import { asWritten, buildSourceIndex, checkCorroborates, clamp01, MIN_SHARED_CONTENT_WORDS, refs } from './validate-helpers'
 import { normalizeModelText } from '../runtime/text'
 import type { AgentResult, ToolContext } from '../runtime/types'
 import type { FactCategory, SkillCategory, ExperienceKind } from '@/lib/career/types'
 import {
   resumeImporterPrompt,
   RESUME_SOURCE_LABEL,
+  type ImporterExistingFact,
   type ImporterExperienceInput,
   type ImporterExtraSource,
   type ImporterParagraph,
@@ -32,8 +34,10 @@ import {
 } from './prompt'
 
 export { resumeImporterPrompt, RESUME_SOURCE_LABEL }
-export { numberTokens, numbersSupported, skillSupported }
-export type { ResumeImporterInput, ImporterExperienceInput, ImporterExtraSource, ImporterParagraph }
+export { numberTokens, numbersSupported, sharedContentWords, skillSupported }
+export type { ResumeImporterInput, ImporterExperienceInput, ImporterExistingFact, ImporterExtraSource, ImporterParagraph }
+
+export { MIN_SHARED_CONTENT_WORDS }
 
 export interface ImportedFact {
   statement: string
@@ -41,6 +45,12 @@ export interface ImportedFact {
   source_label: string
   paragraph_index: number
   confidence: number
+  /**
+   * The existing fact (id from the input) this sentence restates — the same
+   * event, with or without its numbers. Verified against the input; the
+   * support level is computed by code (lib/career/evidence/corroborate).
+   */
+  corroborates: string | null
 }
 
 export interface ImportedMetric {
@@ -97,60 +107,17 @@ export interface ResumeImporterOutput {
   dropped_experiences: number
   /** Projects whose name the source text does not contain, or whose experience is unknown. */
   dropped_projects: number
+  /** `corroborates` claims dropped (the fact kept): unknown id, another experience's fact, or too few shared words. */
+  dropped_corroborations: number
+  /** One line per dropped claim, for the trace and the seed summary. */
+  corroboration_notes: string[]
 }
 
 export { OUTPUT_SCHEMA }
 
 // ─── Validation ──────────────────────────────────────────────────────────────
-
-function clamp01(n: unknown): number {
-  const v = typeof n === 'number' && Number.isFinite(n) ? n : 1
-  return Math.min(1, Math.max(0, v))
-}
-
-function refs(v: unknown, max: number): number[] {
-  if (!Array.isArray(v)) return []
-  const out: number[] = []
-  for (const x of v) {
-    const n = typeof x === 'number' ? x : Number(x)
-    if (Number.isInteger(n) && n >= 0 && n < max && !out.includes(n)) out.push(n)
-  }
-  return out
-}
-
-/** Every line the code supplied, addressable by (label, index). */
-function buildSourceIndex(input: ResumeImporterInput): {
-  byExperience: Map<string, Map<number, string>>
-  extra: Map<string, Map<number, string>>
-  headerOf: Map<string, string>
-} {
-  const byExperience = new Map<string, Map<number, string>>()
-  const headerOf = new Map<string, string>()
-  for (const e of input.experiences) {
-    byExperience.set(e.key, new Map(e.bullets.map((b) => [b.paragraph_index, b.text])))
-    headerOf.set(e.key, [e.title, e.organization, e.location, e.start_date, e.end_date].filter(Boolean).join(' '))
-  }
-  const extra = new Map<string, Map<number, string>>()
-  for (const s of input.extra_sources) extra.set(s.label, new Map(s.lines.map((l) => [l.paragraph_index, l.text])))
-  return { byExperience, extra, headerOf }
-}
-
-function asWritten(ne: unknown): ImportedNewExperience | null {
-  if (!ne || typeof ne !== 'object') return null
-  const n = ne as Record<string, unknown>
-  const title = normalizeModelText(n.title)
-  const organization = normalizeModelText(n.organization)
-  if (!title || !organization) return null
-  const kind = String(n.kind ?? '') as ExperienceKind
-  return {
-    title,
-    organization,
-    location: normalizeModelText(n.location) || null,
-    start_date: normalizeModelText(n.start_date) || null,
-    end_date: normalizeModelText(n.end_date) || null,
-    kind: EXPERIENCE_KINDS.includes(kind) ? kind : 'other',
-  }
-}
+// Coercions, the source index and the `corroborates` check live in
+// ./validate-helpers; this file is the walk over the model's output.
 
 /**
  * Pure. Exported so the deterministic test can feed it a fake model output
@@ -170,6 +137,8 @@ export function validateImporterOutput(raw: unknown, input: ResumeImporterInput)
   let droppedSkills = 0
   let droppedMisfiled = 0
   let droppedExperiences = 0
+  let droppedCorroborations = 0
+  const corroborationNotes: string[] = []
 
   const experiences: ImportedExperience[] = []
   // For projects: the model's experience positions → surviving keys, and each
@@ -241,13 +210,16 @@ export function validateImporterOutput(raw: unknown, input: ResumeImporterInput)
       const idx = typeof f.paragraph_index === 'number' ? f.paragraph_index : Number(f.paragraph_index)
 
       let sourceText: string | null = null
+      let lineText = ''
       if (label === RESUME_SOURCE_LABEL) {
         // (b) the paragraph must belong to THIS experience.
         const p = paragraphs.get(idx)
         sourceText = p === undefined ? null : `${header}\n${p}`
+        lineText = p ?? ''
       } else {
         const p = src.extra.get(label)?.get(idx)
         sourceText = p === undefined ? null : p
+        lineText = p ?? ''
       }
       if (sourceText === null) {
         droppedMisfiled++
@@ -258,6 +230,13 @@ export function validateImporterOutput(raw: unknown, input: ResumeImporterInput)
         droppedUnverifiable++
         return
       }
+      // (f) a restatement claim must name a listed fact of this experience
+      // that the cited line actually shares words with.
+      const corr = checkCorroborates(f.corroborates, key, lineText, src.existingFacts)
+      if (corr.note) {
+        droppedCorroborations++
+        corroborationNotes.push(corr.note)
+      }
       const cat = String(f.category ?? '') as FactCategory
       factIndexMap.set(i, facts.length)
       facts.push({
@@ -266,6 +245,7 @@ export function validateImporterOutput(raw: unknown, input: ResumeImporterInput)
         source_label: label,
         paragraph_index: idx,
         confidence: clamp01(f.confidence),
+        corroborates: corr.id,
       })
     })
 
@@ -352,6 +332,8 @@ export function validateImporterOutput(raw: unknown, input: ResumeImporterInput)
     dropped_misfiled: droppedMisfiled,
     dropped_experiences: droppedExperiences,
     dropped_projects: droppedProjects,
+    dropped_corroborations: droppedCorroborations,
+    corroboration_notes: corroborationNotes,
   }
 }
 
@@ -388,8 +370,8 @@ export async function runResumeImporter(
       input_hash: importerInputHash(input),
       // validate() post-processes and the cache replays its output, so a fix
       // to the number check must invalidate cached results. Bump on any change
-      // to numberTokens, numbersSupported or skillSupported.
-      validate_logic: 2,
+      // to numberTokens, numbersSupported, skillSupported or checkCorroborates.
+      validate_logic: 3,
     },
   })
 }

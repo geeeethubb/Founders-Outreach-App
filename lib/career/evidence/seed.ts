@@ -12,6 +12,7 @@ import { ensureDefaultMission } from '../missions/store'
 import { startCareerRun } from '../runs'
 import { createServiceClient } from '@/lib/supabase/server'
 import {
+  existingFromBank,
   extraSourcesFromProfile,
   importFromResume,
   importFromText,
@@ -302,7 +303,9 @@ export async function seedEvidenceFromText(
     return { ok: false, migrationMissing: true, errors: [gate.error ?? 'migration missing'], counts, dropped: zeroDropped(), costUsd: 0, agentError: null, proposal: null, runId: null }
   }
   const { bank } = await loadEvidenceBank(userId, { approvedOnly: false })
-  const existing = bank.experiences.map((e) => ({ id: e.id, kind: e.kind, organization: e.organization, title: e.title, start_date: e.start_date, end_date: e.end_date, location: e.location }))
+  // The rows AND their facts: a sentence that restates a bank fact is filed
+  // as a corroboration of it, not as a second wording (importer 1.2.0).
+  const existing = existingFromBank(bank)
   const sourceKind = opts.sourceKind ?? sourceKindFor(source)
   const sourceLabel = opts.label ?? defaultSourceLabel(sourceKind)
   const run = opts.dry ? null : await startCareerRun({ userId, kind: 'evidence_import', label: `evidence-import/text:${source}`, mission: { source, sourceLabel } })
@@ -338,9 +341,10 @@ export function summarizeSeed(result: SeedResult): string[] {
     `bullets: ${c.bullets}`,
     `facts: ${c.facts}   metrics: ${c.metrics}   skills: ${c.skills}   deliverables: ${c.deliverables}`,
     `preferences: ${c.preferences} seeded   mission: ${c.missionCreated ? 'created' : 'existing'}`,
-    `dropped — unverifiable numbers: ${result.dropped.unverifiable}, metrics: ${result.dropped.metrics}, skills: ${result.dropped.skills}, misfiled: ${result.dropped.misfiled}, experiences: ${result.dropped.experiences}, projects: ${result.dropped.projects}`,
+    `dropped — unverifiable numbers: ${result.dropped.unverifiable}, metrics: ${result.dropped.metrics}, skills: ${result.dropped.skills}, misfiled: ${result.dropped.misfiled}, experiences: ${result.dropped.experiences}, projects: ${result.dropped.projects}${result.dropped.corroborations ? `, corroboration claims: ${result.dropped.corroborations}` : ''}`,
     `cost: $${result.costUsd.toFixed(4)}`,
   ]
+  for (const note of result.proposal?.corroborationNotes ?? []) lines.push(`  ${note}`)
   if (c.provenanceSkipped > 0) {
     lines.push(`provenance: ${c.provenanceSkipped} write(s) skipped — migration 015_evidence_canonical.sql is not applied; facts keep their single source column`)
   } else {
@@ -354,7 +358,14 @@ export function summarizeSeed(result: SeedResult): string[] {
     lines.push(`near-miss ${c.nearMisses.length} experience(s) inserted, not merged — same org, title too different; merge by hand if they are one job:`)
     for (const n of c.nearMisses) lines.push(`  ${n.proposed} ~ ${n.candidate} (${n.similarity})`)
   }
-  if (c.corroborated.length) lines.push(`${c.corroborated.length} fact(s) corroborated by a second source${c.provenanceSkipped ? ' (not stored until migration 015 is applied)' : ''}`)
+  if (c.corroborated.length) {
+    const full = c.corroborated.filter((x) => x.support === 'full').length
+    const eventOnly = c.corroborated.length - full
+    lines.push(`corroborated: ${full} full, ${eventOnly} event-only${c.provenanceSkipped ? ' (not stored until migration 015 is applied)' : ''}`)
+    for (const x of c.corroborated) {
+      if (x.support === 'event_only') lines.push(`  event-only (metric not supported by this source): ${x.factId} ← "${x.quote}"`)
+    }
+  }
   if (c.conflicts) lines.push(`${c.conflicts} conflict(s) recorded — this source states a different title or date; the résumé's value stays until you resolve it`)
   if (result.agentError) lines.push(`importer error: ${result.agentError}`)
   return lines

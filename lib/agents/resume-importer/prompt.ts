@@ -1,4 +1,9 @@
 // Resume Importer prompt. Bump `version` on ANY semantic change (ADR-009).
+//
+// 1.2.0 — the agent is shown each existing experience's facts and marks a
+// sentence that RESTATES one with `corroborates: <fact id>` instead of
+// inventing a new wording. It judges "same event"; the code decides whether
+// the restatement supports the fact's numbers (lib/career/evidence/corroborate).
 
 import type { VersionedPrompt } from '../runtime/types'
 
@@ -6,6 +11,12 @@ import type { VersionedPrompt } from '../runtime/types'
 export interface ImporterParagraph {
   paragraph_index: number
   text: string
+}
+
+/** A fact already in the bank under an existing experience, as the agent sees it. */
+export interface ImporterExistingFact {
+  id: string
+  statement: string
 }
 
 export interface ImporterExperienceInput {
@@ -24,6 +35,12 @@ export interface ImporterExperienceInput {
    * text describes the same role.
    */
   existing_id?: string | null
+  /**
+   * The bank's active facts under this row (text mode; capped by the caller,
+   * most-supported first). A sentence restating one is filed with
+   * `corroborates` = its id rather than as a new fact.
+   */
+  existing_facts?: ImporterExistingFact[]
 }
 
 /**
@@ -51,10 +68,11 @@ export interface ResumeImporterInput {
 export const RESUME_SOURCE_LABEL = 'master_resume'
 
 export const resumeImporterPrompt: VersionedPrompt<ResumeImporterInput> = {
-  version: '1.1.0',
+  version: '1.2.0',
 
   build(input) {
     const existing = input.allow_new_experiences && input.experiences.length > 0
+    const anyFacts = existing && input.experiences.some((e) => (e.existing_facts?.length ?? 0) > 0)
     const system = `You turn résumé text into an Evidence Bank: atomic facts, metrics, skills and deliverables, each tied to the
 experience it belongs to and the exact paragraph that asserts it.
 
@@ -110,6 +128,20 @@ and a title exactly as the text states them; dates and location when present. Us
 to that experience. Do not invent experiences.`
 }
 
+${
+  anyFacts
+    ? `EXISTING FACTS — under each existing experience, the facts the bank already holds are listed as
+[fact: id] lines. A sentence of the text that RESTATES one of them — the same event and the same claim,
+whether or not the sentence repeats the numbers — is NOT a new fact. Emit it with \`corroborates\` set to
+that fact's id, the statement being the sentence as THIS text states it, kept whole (do not split a
+restatement into pieces, and do not paraphrase it into a new wording). Set corroborates to null only when
+no existing fact says the same thing. Never point two different events at one fact, and never point a
+sentence at a fact about a different event: a different project, a different outcome, or a number about a
+different thing is a new fact. You judge "same event"; the code decides whether the restatement also
+supports the existing fact's numbers.`
+    : `corroborates — always null in this run; there are no existing facts to restate.`
+}
+
 CONFIDENCE — 1.0 when the paragraph states it outright; lower only when the wording is genuinely ambiguous.`
 
     const lines: string[] = []
@@ -120,6 +152,7 @@ CONFIDENCE — 1.0 when the paragraph states it outright; lower only when the wo
         lines.push('')
         lines.push(`[key: ${e.key}] ${e.title} — ${e.organization}${dates ? ` (${dates})` : ''}${e.location ? ` · ${e.location}` : ''}${e.section ? ` · section: ${e.section}` : ''}`)
         for (const b of e.bullets) lines.push(`  ¶${b.paragraph_index}: ${b.text}`)
+        for (const f of e.existing_facts ?? []) lines.push(`  [fact: ${f.id}] ${f.statement}`)
       }
     }
     if (input.extra_sources.length) {
@@ -137,7 +170,9 @@ CONFIDENCE — 1.0 when the paragraph states it outright; lower only when the wo
 TASK
 For every experience, list the atomic facts the text asserts, the metrics, the skills it names, and the
 deliverables it describes. Then one summary sentence. Cite the paragraph (source_label "${RESUME_SOURCE_LABEL}"
-for résumé paragraphs, or the additional source's label with its line index) on every fact. List named
+for résumé paragraphs, or the additional source's label with its line index) on every fact.${
+  anyFacts ? ' Where a sentence restates an existing [fact: id], set corroborates to that id.' : ''
+} List named
 projects, if any, in the top-level "projects" array.
 
 Submit with the ${'`submit_result`'} tool.`

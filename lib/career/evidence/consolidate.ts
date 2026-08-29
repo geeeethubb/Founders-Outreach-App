@@ -184,6 +184,29 @@ function factProposal(a: EvidenceFact, b: EvidenceFact, scope: string, cap: Merg
       ] }],
     }
   }
+  if (v.rule === 'weaker_restatement') {
+    // The numbered statement is the canonical one — safestWording's subset
+    // rule would pick the number-less side, which is exactly the wrong
+    // direction here. The bare wording survives as a provenance quote at
+    // confidence 0.5: it corroborates the event, not the metric.
+    const numbered = v.numbered === 'a' ? a : b
+    const bare = v.numbered === 'a' ? b : a
+    const bareEdited = bare.edited_by_user ?? false
+    return {
+      entity_type: 'fact', keep_id: numbered.id, merge_id: bare.id, confidence: 'POSSIBLE', rule: v.rule,
+      signals: {
+        jaccard: Number(v.jaccard.toFixed(2)), containment: Number(v.containment.toFixed(2)), scope,
+        support: 'event_only', safest: numbered.statement, other_wording: bare.statement,
+        keep_source: sourceLabelOf(numbered), merge_source: sourceLabelOf(bare),
+        keep_edited_by_user: numbered.edited_by_user ?? false, merge_edited_by_user: bareEdited,
+      },
+      keep_label: factLabel(numbered), merge_label: factLabel(bare),
+      why: 'restates the event without its numbers — corroborates the event, not the metric',
+      data_preserved: 'number-less wording kept as a provenance quote at confidence 0.5 (event corroborated, metric not); every citation re-pointed; support_count unchanged; merged row tombstoned',
+      risk: bareEdited ? 'needs a human: the number-less wording was edited by hand' : 'needs a human: the numbers come from one source only',
+      conflicts: [],
+    }
+  }
   const safest = safestWording(a, b)
   // A statement the user edited by hand survives as the keep with its own
   // wording; the safest wording is still recorded so the user can see it.

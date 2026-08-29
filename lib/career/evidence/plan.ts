@@ -19,19 +19,21 @@
 // on both sides blocks every rule: two labs at one university are two rows.
 
 import type { EvidenceBank } from '../types'
+import { introducesNumbers, nearDuplicate, supportLevel, type SupportLevel } from './corroborate'
 import type { ImportProposal } from './import'
 import {
   datesCompatible,
   experienceKey,
+  NEAR_MISS_THRESHOLD,
   normalizeMetricValue,
   normalizeOrg,
   normalizeStatement,
   orgQualifier,
+  SIMILAR_TITLE_THRESHOLD,
   titleSimilarity,
 } from './normalize'
 
-export const SIMILAR_TITLE_THRESHOLD = 0.6
-export const NEAR_MISS_THRESHOLD = 0.3
+export { NEAR_MISS_THRESHOLD, SIMILAR_TITLE_THRESHOLD }
 
 /**
  * 'agent_filed': the importer filed the block under an existing id and the
@@ -53,10 +55,25 @@ export interface NearMiss {
   similarity: number
 }
 
+/**
+ * How a bank fact was recognized in an incoming one:
+ *   exact              — the same normalized statement
+ *   near_duplicate     — identical numbers, content-word Jaccard ≥ 0.8
+ *   agent_corroborates — the importer said "this restates fact X" and the
+ *                        checks agreed (id known, same experience, shared
+ *                        words, no new numbers)
+ */
+export type FactMatchRule = 'exact' | 'near_duplicate' | 'agent_corroborates'
+
 export interface Corroboration {
   factId: string
   source: string
   source_location: string | null
+  /** full: the second source carries the fact's numbers; event_only: it restates the event without them. */
+  support: SupportLevel
+  rule: FactMatchRule
+  /** The incoming wording — what the provenance row quotes. */
+  quote: string
 }
 
 export type ExperienceDecision =
@@ -67,9 +84,21 @@ export type ExperienceDecision =
 
 export type FactDecision =
   | { action: 'insert' }
-  | { action: 'reuse'; existingId: string }
+  /** No new row: the bank fact gains this source at the given support level, quoting the incoming wording. */
+  | { action: 'reuse'; existingId: string; rule: FactMatchRule; support: SupportLevel; quote: string }
   /** Same statement as an earlier fact of this proposal, under the same experience. */
   | { action: 'collapse'; intoIndex: number; corroborates: boolean }
+
+/** The decision a fact ultimately resolves to — a collapse follows its chain to an insert or a reuse. */
+export function resolveFactDecision(plan: PersistPlan, index: number): Exclude<FactDecision, { action: 'collapse' }> {
+  let d = plan.facts[index]
+  const seen = new Set<number>()
+  while (d.action === 'collapse' && !seen.has(d.intoIndex)) {
+    seen.add(d.intoIndex)
+    d = plan.facts[d.intoIndex]
+  }
+  return d.action === 'collapse' ? { action: 'insert' } : d
+}
 
 export interface PersistPlan {
   /** Index-aligned with proposal.experiences. */
@@ -205,15 +234,33 @@ export function findExperienceMatch(
   return { match: null, nearMiss: null }
 }
 
-/** The bank fact that already states this, under this experience, if any. */
+/**
+ * The bank fact that already states this, under this experience, if any.
+ * Exact normalized statement first; then, unless `nearDuplicate: false`, a
+ * fact with the identical numbers (none on both sides counts) whose content
+ * words overlap at Jaccard ≥ 0.8 — "Organized Forge 2026, the largest AI
+ * hackathon" vs "Organized Forge 2026 — the largest AI hackathon". Different
+ * numbers never match here: that pair is the consolidation engine's CONFLICT.
+ * The manual-add route passes `nearDuplicate: false`: a human typing a
+ * distinct wording means it.
+ */
 export function findFactMatch(
   facts: { id: string; experience_id: string | null; statement: string }[],
   experienceId: string | null,
-  statement: string
-): { id: string } | null {
+  statement: string,
+  opts: { nearDuplicate?: boolean } = {}
+): { id: string; rule: 'exact' | 'near_duplicate'; jaccard: number } | null {
   const want = normalizeStatement(statement)
-  const hit = facts.find((f) => f.experience_id === experienceId && normalizeStatement(f.statement) === want)
-  return hit ? { id: hit.id } : null
+  const under = facts.filter((f) => f.experience_id === experienceId)
+  const exact = under.find((f) => normalizeStatement(f.statement) === want)
+  if (exact) return { id: exact.id, rule: 'exact', jaccard: 1 }
+  if (opts.nearDuplicate === false) return null
+  let best: { id: string; jaccard: number } | null = null
+  for (const f of under) {
+    const near = nearDuplicate(f.statement, statement)
+    if (near && (!best || near.jaccard > best.jaccard)) best = { id: f.id, jaccard: near.jaccard }
+  }
+  return best ? { id: best.id, rule: 'near_duplicate', jaccard: Number(best.jaccard.toFixed(2)) } : null
 }
 
 export function planPersist(bank: EvidenceBank, proposal: ImportProposal): PersistPlan {
@@ -265,24 +312,62 @@ export function planPersist(bank: EvidenceBank, proposal: ImportProposal): Persi
     return s && !s.startsWith('new:') ? s : null
   }
 
-  // 2. Facts — (experience, normalized statement), bank first, then what this
-  //    proposal already queued. A reused fact whose source differs is a second
-  //    source for the same claim; say so rather than drop it.
-  const bankFactKey = new Map(activeFacts.map((f) => [`${f.experience_id}::${normalizeStatement(f.statement)}`, f]))
+  // 2. Facts — the bank first, then what this proposal already queued. Three
+  //    ways an incoming fact IS a bank fact, tried in order:
+  //      a. the importer's `corroborates`, verified: the id names an active
+  //         fact under the SAME bank experience and the incoming wording adds
+  //         no number the bank fact lacks (a new number is a disagreement for
+  //         the engine, never a corroboration);
+  //      b. the same normalized statement;
+  //      c. identical numbers and content-word Jaccard ≥ 0.8.
+  //    Any of them is a reuse, and the second source is recorded at the
+  //    support level the NUMBERS justify — a restatement without the "$300K+"
+  //    corroborates the event, not the metric (./corroborate).
+  const bankFactById = new Map(activeFacts.map((f) => [f.id, f]))
   const queuedFacts = new Map<string, number>()
+  const reusedByFactId = new Map<string, number>()
+  const decideReuse = (i: number, f: ImportProposal['facts'][number], existing: (typeof activeFacts)[number], rule: FactMatchRule) => {
+    const support: SupportLevel = rule === 'agent_corroborates' ? supportLevel(existing.statement, f.statement) : 'full'
+    const seen = reusedByFactId.get(existing.id)
+    if (seen !== undefined) {
+      // Two sentences of one paste restating the same bank fact (the agent
+      // atomized a line): one provenance row, at the stronger support.
+      const first = plan.facts[seen]
+      if (first.action === 'reuse' && first.support === 'event_only' && support === 'full') {
+        first.support = 'full'
+        first.quote = f.statement
+        const c = plan.corroborated.find((x) => x.factId === existing.id)
+        if (c) { c.support = 'full'; c.quote = f.statement; c.rule = rule }
+      }
+      plan.facts.push({ action: 'collapse', intoIndex: seen, corroborates: false })
+      return
+    }
+    reusedByFactId.set(existing.id, i)
+    plan.facts.push({ action: 'reuse', existingId: existing.id, rule, support, quote: f.statement })
+    if (existing.source !== f.source || (existing.source_location ?? null) !== (f.source_location ?? null)) {
+      plan.corroborated.push({ factId: existing.id, source: f.source, source_location: f.source_location ?? null, support, rule, quote: f.statement })
+    }
+  }
   proposal.facts.forEach((f, i) => {
     const norm = normalizeStatement(f.statement)
     // A fact under an experience this proposal is about to insert cannot be in
     // the bank yet; comparing it to orphan (experience_id null) facts would be
     // a false match.
     const pending = slot(f.experience_key).startsWith('new:')
-    const existing = pending ? undefined : bankFactKey.get(`${bankIdOf(f.experience_key)}::${norm}`)
-    if (existing) {
-      plan.facts.push({ action: 'reuse', existingId: existing.id })
-      if (existing.source !== f.source || (existing.source_location ?? null) !== (f.source_location ?? null)) {
-        plan.corroborated.push({ factId: existing.id, source: f.source, source_location: f.source_location ?? null })
+    const bankExperienceId = pending ? null : bankIdOf(f.experience_key)
+    if (bankExperienceId) {
+      // a. the agent's claim, checked. A failed check falls through to b/c.
+      const hinted = f.corroborates ? bankFactById.get(f.corroborates) : undefined
+      if (hinted && hinted.experience_id === bankExperienceId && !introducesNumbers(hinted.statement, f.statement)) {
+        decideReuse(i, f, hinted, 'agent_corroborates')
+        return
       }
-      return
+      // b, c. the deterministic matcher.
+      const match = findFactMatch(activeFacts, bankExperienceId, f.statement)
+      if (match) {
+        decideReuse(i, f, bankFactById.get(match.id) as (typeof activeFacts)[number], match.rule)
+        return
+      }
     }
     const k = `${slot(f.experience_key)}::${norm}`
     const earlier = queuedFacts.get(k)
