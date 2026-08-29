@@ -142,6 +142,32 @@ cannot cite fact ids is rejected by validation before any verifier runs — the 
 **Approval is a column too.** Imported material lands `approved = false` and is not usable
 by the tailor until the human approves it. The Evidence page exists for that.
 
+### The canonical view and the Review tab (migration 015)
+
+`supabase/migrations/015_evidence_canonical.sql` adds organizations, projects, source
+records, per-fact/per-experience provenance rows, merge suggestions, conflicts and
+snapshots. The Evidence page reads it through two tabs and three routes; all of them run
+on a 014-only database and say `migration015: false` instead of failing.
+
+| Route | Does |
+|---|---|
+| `GET /api/career/evidence/canonical` | Bank grouped by organization (`organization_id`, else `normalizeOrg`), tombstones out, pending rows badged; key facts from `summary_fact_ids` or category rank + support; source chips per fact |
+| `GET /api/career/evidence/review` | `buildConsolidationPlan` over approved + pending rows, kept-separate pairs suppressed, open `evidence_conflicts` |
+| `POST /api/career/evidence/review` | `merge` (POSSIBLE needs `allowPossible`), `keep_separate`, `merge_all_high` (HIGH only, `backfill: false`), `resolve_conflict`; 400 before 015 |
+| `POST /api/career/evidence/consolidate` | `{dryRun:true}` → plan + report text; `{dryRun:false}` → HIGH apply with the bank-wide backfill; 400 before 015 |
+
+**Canonical** is the first tab: organizations → roles → projects, key facts, metrics.
+Read-only; edits live on Experiences. **Review (N)** lists HIGH / POSSIBLE / CONFLICT
+cards as KEEP vs MERGE with Why · Data preserved · Risk; CONFLICT cards have no Merge
+button, only Keep separate and the candidate values.
+
+**What no button applies unattended.** `app/api/career/evidence/review/guard.ts` demotes
+a HIGH experience pair to POSSIBLE when the merge side was `edited_by_user`, or when the
+organizations differ by a qualifier and neither row has parsed dates (two labs named by
+PI surname, one row without a qualifier, two plant sites). The card then needs a person;
+`signals.downgraded` says why. Merges are tombstones (`status='merged'`,
+`merged_into`), never deletes, and every apply writes an `evidence_snapshots` row first.
+
 ### Jobs
 
 ```

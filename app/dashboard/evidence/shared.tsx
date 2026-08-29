@@ -3,7 +3,7 @@
 // Shared pieces for the Evidence page: the API shape, row helpers, and the
 // few visual atoms every tab uses. Feedback is inline divs, not a toast lib.
 
-import type { EvidenceBank } from '@/lib/career/types'
+import type { EvidenceBank, MergeStatus } from '@/lib/career/types'
 
 export interface BankCounts {
   experiences: number
@@ -134,4 +134,34 @@ export const KIND_TONE: Record<string, 'slate' | 'indigo' | 'emerald' | 'amber' 
   award: 'amber',
   leadership: 'violet',
   other: 'slate',
+}
+
+// ─── Canonical / Review atoms ────────────────────────────────────────────────
+
+
+/** VERIFIED grey · CORROBORATED green · CONFLICTING / NEEDS_REVIEW amber; a pending row gets an outline. */
+export function StatusBadge({ status, approved }: { status: MergeStatus | null; approved: boolean }) {
+  const tone: Record<MergeStatus, string> = {
+    VERIFIED: 'bg-slate-100 text-slate-600 border-slate-200',
+    CORROBORATED: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    CONFLICTING: 'bg-amber-50 text-amber-800 border-amber-200',
+    NEEDS_REVIEW: 'bg-amber-50 text-amber-800 border-amber-200',
+  }
+  return (
+    <span className="inline-flex items-center gap-1">
+      {status && <span className={`inline-block rounded border px-1.5 py-0.5 text-[11px] font-medium leading-4 ${tone[status]}`}>{status.toLowerCase().replace('_', ' ')}</span>}
+      {!approved && <span className="inline-block rounded border border-dashed border-amber-300 px-1.5 py-0.5 text-[11px] font-medium leading-4 text-amber-700">pending</span>}
+    </span>
+  )
+}
+
+/** "Résumé ¶6", "LinkedIn L350" — a source label, kept small so a fact line stays one line. */
+export function SourceChip({ label }: { label: string }) {
+  return <span className="inline-block rounded bg-slate-100 px-1 py-px text-[10px] leading-4 text-slate-500" title={label}>{label}</span>
+}
+
+export const CONFIDENCE_TONE: Record<'HIGH' | 'POSSIBLE' | 'CONFLICT', 'emerald' | 'amber' | 'slate'> = {
+  HIGH: 'emerald',
+  POSSIBLE: 'amber',
+  CONFLICT: 'slate',
 }

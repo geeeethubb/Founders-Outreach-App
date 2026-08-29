@@ -7,22 +7,27 @@ import SkillsTab from './SkillsTab'
 import StoriesTab from './StoriesTab'
 import PreferencesTab from './PreferencesTab'
 import DocumentsTab from './DocumentsTab'
+import CanonicalTab from './CanonicalTab'
+import ReviewTab, { fetchReview, reviewCount, type ReviewResponse } from './ReviewTab'
 
-type Tab = 'experiences' | 'skills' | 'stories' | 'preferences' | 'documents'
+type Tab = 'canonical' | 'experiences' | 'skills' | 'stories' | 'preferences' | 'documents' | 'review'
 
 const TABS: { id: Tab; label: string }[] = [
+  { id: 'canonical', label: 'Canonical' },
   { id: 'experiences', label: 'Experiences' },
   { id: 'skills', label: 'Skills' },
   { id: 'stories', label: 'Stories' },
   { id: 'preferences', label: 'Preferences' },
   { id: 'documents', label: 'Documents' },
+  { id: 'review', label: 'Review' },
 ]
 
 export default function EvidencePage() {
   const [data, setData] = useState<BankResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [tab, setTab] = useState<Tab>('experiences')
+  const [tab, setTab] = useState<Tab>('canonical')
+  const [review, setReview] = useState<ReviewResponse | null>(null)
   const [approvingAll, setApprovingAll] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
 
@@ -44,6 +49,13 @@ export default function EvidencePage() {
   useEffect(() => {
     reload()
   }, [reload])
+
+  // The Review tab's count, fetched once; the tab itself refetches after every action.
+  useEffect(() => {
+    let cancelled = false
+    fetchReview().then((r) => { if (!cancelled) setReview(r) }).catch(() => { /* the tab shows its own error */ })
+    return () => { cancelled = true }
+  }, [])
 
   async function approveAll() {
     if (!data) return
@@ -140,7 +152,7 @@ export default function EvidencePage() {
               tab === t.id ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:text-slate-800'
             }`}
           >
-            {t.label}
+            {t.id === 'review' && review ? `Review (${reviewCount(review)})` : t.label}
           </button>
         ))}
       </div>
@@ -149,11 +161,13 @@ export default function EvidencePage() {
         <div className="text-sm text-slate-500">Loading…</div>
       ) : data ? (
         <>
+          {tab === 'canonical' && <CanonicalTab key={data.counts?.pending ?? 0} onExperiences={() => setTab('experiences')} />}
           {tab === 'experiences' && <ExperiencesTab bank={data.bank} reload={reload} />}
           {tab === 'skills' && <SkillsTab bank={data.bank} reload={reload} />}
           {tab === 'stories' && <StoriesTab bank={data.bank} reload={reload} />}
           {tab === 'preferences' && <PreferencesTab bank={data.bank} reload={reload} />}
           {tab === 'documents' && <DocumentsTab bank={data.bank} reload={reload} />}
+          {tab === 'review' && <ReviewTab initial={review} onChanged={setReview} />}
         </>
       ) : null}
     </div>

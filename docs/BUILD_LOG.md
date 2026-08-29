@@ -6,6 +6,60 @@ architecturally and why.
 
 ---
 
+## 2026-08-28 — Evidence page: the Canonical and Review tabs, and the routes behind them
+
+**Type:** feature · **Behavior change:** the Evidence page opens on a per-organization
+canonical view; merge suggestions and conflicts are reviewed in the UI; nothing merges
+before migration 015 is applied
+
+### What was built
+
+- `GET /api/career/evidence/canonical` — the bank grouped by organization
+  (`organization_id` when 015 has assigned one, else `normalizeOrg(organization)`),
+  tombstones excluded, pending rows included and badged. Each role carries its projects,
+  key facts (`summary_fact_ids` when present, else the top 3 by category rank then
+  support), all facts, metrics and source chips ("Résumé ¶6", "LinkedIn L350"). The
+  builder is pure (`canonical/build.ts`) and tested offline.
+- `GET /api/career/evidence/review` — `buildConsolidationPlan` over the live bank
+  (approved and pending), kept-separate pairs passed as suppressed when 015 exists,
+  plus open `evidence_conflicts` rows. `POST` takes `merge` / `keep_separate` /
+  `merge_all_high` / `resolve_conflict`. CONFLICT proposals never merge through it.
+- `POST /api/career/evidence/consolidate { dryRun }` — the plan and the CLI's text
+  report, or the HIGH apply with the bank-wide backfill.
+- `CanonicalTab.tsx` (first tab) and `ReviewTab.tsx` ("Review (N)", N = open
+  HIGH + POSSIBLE + CONFLICT; no count until the fetch succeeds). Both under 300 lines.
+
+### The two guards
+
+**Migration 015.** Every route degrades on a 014-only database: reads report
+`migration015: false`, writes answer 400 with the message the banner shows
+("Merging needs migration 015 — suggestions are shown read-only"). A missing 015 never
+marks the bank as `migrationMissing`.
+
+**Unattended merges.** Review found the engine classing two pairs HIGH that must not be
+applied without a person: two UIUC labs whose qualifiers are PI surnames (or one row with
+no qualifier) and no dates on either side, and a HIGH pair whose merge side was
+`edited_by_user`. `app/api/career/evidence/review/guard.ts` demotes both to POSSIBLE
+before the plan reaches the UI or "Merge all high-confidence" / `consolidate
+{dryRun:false}`, recording `signals.downgraded` and a warning. The single-card Merge
+button still works on them — that is a human confirming. The engine rule itself is a
+wave-2 item (`TODO(wave2)` in the guard); the CLI `evidence:consolidate --apply` does
+not yet pass through this guard.
+
+`merge_all_high` runs `applyConsolidation` with `backfill: false` — it merges the HIGH
+pairs and nothing else; the organization/provenance backfill is the consolidate route's
+job. Keep-separate preserves the audit row: an existing suggestion only changes
+`status`/`resolved_at`, a new one is stamped with the proposal's confidence and rule.
+
+### Tests
+
+`npm run test:career-canonical-view` — 50 checks: grouping, tombstones, key-fact
+selection, provenance labels, and the four guard counter-examples from review (plus the
+same-org-same-dates case that must stay HIGH).
+
+---
+
+
 ## 2026-08-28 — The Evidence Bank dedupes by what a row IS, not how it was spelled
 
 **Type:** correctness · **Behavior change:** imports and manual adds reuse existing rows
