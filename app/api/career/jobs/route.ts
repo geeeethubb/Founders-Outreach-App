@@ -33,6 +33,10 @@ export interface JobCard {
   warm_path_count: number
   application_state: ApplicationState | null
   application_id: string | null
+  /** The application's current package, if one was ever generated. Tracking alone leaves it null. */
+  package_id: string | null
+  /** The newest verdict the user recorded on this job, so a reload does not look unrecorded. */
+  last_verdict: string | null
   disposition: JobDisposition
   first_seen_at: string
   source_types: string[]
@@ -45,6 +49,7 @@ function toJobCard(row: JobListRow): JobCard {
   const fit = [...fits].sort((a, b) => (b.computed_at ?? '').localeCompare(a.computed_at ?? ''))[0] ?? null
   const overall = row.fit_overall ?? fit?.overall ?? null
   const app = row.applications?.[0] ?? null
+  const lastFeedback = [...(row.feedback ?? [])].sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? ''))[0] ?? null
   return {
     id: row.id,
     title: row.title,
@@ -71,6 +76,8 @@ function toJobCard(row: JobListRow): JobCard {
     warm_path_count: Number(row.warm_paths?.[0]?.count ?? 0),
     application_state: (app?.state as ApplicationState | undefined) ?? null,
     application_id: app?.id ?? null,
+    package_id: app?.current_package_id ?? null,
+    last_verdict: lastFeedback?.verdict ?? null,
     disposition: row.disposition,
     first_seen_at: row.first_seen_at,
     source_types: sourceTypesOf(row),

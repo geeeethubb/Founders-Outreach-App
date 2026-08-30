@@ -7,7 +7,7 @@ import {
 } from '@/lib/career/evidence/consolidate-apply'
 import { isDynamicUsage } from '@/lib/http/dynamic'
 import { guardPlan } from './guard'
-import type { EvidenceConflict, MergeConfidence, MergeEntityType } from '@/lib/career/types'
+import type { EvidenceBank, EvidenceConflict, MergeConfidence, MergeEntityType } from '@/lib/career/types'
 
 export const dynamic = 'force-dynamic'
 
@@ -95,6 +95,17 @@ async function loadOpenConflicts(userId: string): Promise<{ conflicts: EvidenceC
   return { conflicts: (data ?? []) as EvidenceConflict[], migrationMissing: false, error: null }
 }
 
+/** A conflict names a row by UUID; the card should name the thing. Bank is loaded with tombstones, so a merged row still resolves. */
+function labelEntity(bank: EvidenceBank, c: EvidenceConflict): string | null {
+  if (c.entity_type === 'experience') {
+    const e = bank.experiences.find((x) => x.id === c.entity_id)
+    return e ? `${e.title} — ${e.organization}` : null
+  }
+  if (c.entity_type === 'fact') return bank.facts.find((x) => x.id === c.entity_id)?.statement ?? null
+  const m = bank.metrics.find((x) => x.id === c.entity_id)
+  return m ? [m.value, m.context].filter(Boolean).join(' ') : null
+}
+
 /** The plan over the live bank, plus the open conflict rows. Read-only; safe before 015. */
 export async function GET() {
   try {
@@ -110,6 +121,7 @@ export async function GET() {
     const plan = guardPlan(buildConsolidationPlan(bank, { suppressed, migration015: canonical }), bank)
     const conflictRows = canonical ? await loadOpenConflicts(user.id) : { conflicts: [], migrationMissing: false, error: null }
     if (conflictRows.error && !conflictRows.migrationMissing) errors.push(`evidence_conflicts: ${conflictRows.error.slice(0, 120)}`)
+    const conflicts = conflictRows.conflicts.map((c) => ({ ...c, entity_label: labelEntity(bank, c) }))
 
     return NextResponse.json({
       migration015: canonical,
@@ -118,7 +130,7 @@ export async function GET() {
       summary: plan.summary,
       suggestions: [...plan.experiences, ...plan.facts, ...plan.metrics],
       planConflicts: plan.conflicts,
-      conflicts: conflictRows.conflicts,
+      conflicts,
       suppressed: plan.suppressed,
       warnings: plan.warnings,
       errors,

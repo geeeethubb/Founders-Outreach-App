@@ -7,11 +7,14 @@
 // already in, and the follow-up is a proposal with a date attached.
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { GroundingReport, type Grounding } from '../scout/OutreachPanel'
 
 export interface ReplyState {
   id: string
   repliedAt: string | null
+  /** The Conversations thread this reply lives in, once linked. */
+  conversationId: string | null
   replyClassification: string | null
   replyAction: string | null
   replySummary: string | null
@@ -206,7 +209,18 @@ export default function ReplyPanel({
                 <GroundingReport grounding={row.suggestedReply.grounding} />
               </div>
               <p className="mt-2 text-[11px] text-slate-500">
-                Not sent. Copy this into the Gmail thread, or edit it first.
+                Not sent from here — open the thread, paste or edit, and send.
+                {row.conversationId && (
+                  <>
+                    {' '}
+                    <Link
+                      href={`/dashboard/conversations/${row.conversationId}`}
+                      className="text-indigo-600 hover:underline"
+                    >
+                      Open the thread to reply →
+                    </Link>
+                  </>
+                )}
               </p>
             </div>
           )}

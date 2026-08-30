@@ -50,8 +50,8 @@ replaced, and newly built."
 
 | Code | Phase |
 |---|---|
-| `app/api/webhooks/resend/route.ts` | 10 |
-| `verifyWebhookSignature()` (returns `false` unconditionally) | 10 |
+| `app/api/webhooks/resend/route.ts` | done — deleted 2026-08-30 |
+| `verifyWebhookSignature()` (returns `false` unconditionally) | done — deleted 2026-08-30 |
 | `email_events`, `template_performance`, `followups` tables | 10 |
 | `GMAIL_USER` / `GMAIL_APP_PASSWORD` env leftovers | 1 |
 | `Apollo API.txt` | **Immediately** — see below |

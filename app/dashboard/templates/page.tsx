@@ -155,7 +155,7 @@ export default function TemplatesPage() {
     <div className="p-8 max-w-6xl">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-semibold text-slate-900">Email Templates</h1>
+          <h1 className="text-2xl font-semibold text-slate-900">Templates</h1>
           <p className="text-slate-500 text-sm mt-1">
             Write your email in your style. Use <code className="bg-slate-100 px-1 rounded text-xs">[placeholders]</code> where AI should fill in personalized content.
           </p>
@@ -349,7 +349,7 @@ export default function TemplatesPage() {
                     onChange={(v) => setForm((f) => ({ ...f, body_template: v }))}
                     rows={16}
                     textareaClassName="font-mono"
-                    placeholder={`Hi [recipient first name],\n\n[open with something specific and compelling about them]\n\nI'm reaching out because [mention why this person is a fit for your goal].\n\n[highlight my most relevant accomplishment for this person]\n\nWould you be open to a 20-minute call to explore this further?\n\nSincerely,\nZuyu Liu\nChemical Engineer, UIUC\nPresident @ Founders: Illinois Entrepreneurs\n[LinkedIn](https://www.linkedin.com/in/zuyu-liu-58b2b2241/)`}
+                    placeholder={`Hi [recipient first name],\n\n[open with something specific and compelling about them]\n\nI'm reaching out because [mention why this person is a fit for your goal].\n\n[highlight my most relevant accomplishment for this person]\n\nWould you be open to a 20-minute call to explore this further?\n\nBest,\n[your name]\n[one line on what you do]`}
                   />
                   <p className="text-xs text-slate-400 mt-1.5">
                     Use the toolbar (or <code className="bg-slate-100 px-1 rounded">**bold**</code>, <code className="bg-slate-100 px-1 rounded">*italic*</code>) to format, and <code className="bg-slate-100 px-1 rounded">[bracket instructions]</code> wherever AI should fill in personalized content. Hit <strong>Preview</strong> to see exactly how it sends.

@@ -65,9 +65,22 @@ export async function POST(
     const generated: { contact_id: string; email_id: string }[] = []
     const skipped: { contact_id: string; name: string; reason: string }[] = []
 
+    // A second click (after a timeout, say) must not create a second draft per
+    // member. Anyone who already has an unsent draft in this campaign is skipped.
+    const { data: draftRows } = await supabase
+      .from('emails')
+      .select('contact_id')
+      .eq('campaign_id', campaignId)
+      .eq('status', 'draft')
+    const existingDraft = new Set((draftRows ?? []).map((d) => d.contact_id as string))
+
     for (const row of rows) {
       const contact = row.contact as any
       if (!contact) { skipped.push({ contact_id: row.contact_id, name: '?', reason: 'Contact not found' }); continue }
+      if (existingDraft.has(row.contact_id)) {
+        skipped.push({ contact_id: row.contact_id, name: contact.name, reason: 'Already has a draft in Draft Emails' })
+        continue
+      }
 
       try {
         let subject: string

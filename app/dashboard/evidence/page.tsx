@@ -86,7 +86,7 @@ export default function EvidencePage() {
     <div className="mx-auto max-w-6xl px-6 py-8">
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-slate-900">Evidence Bank</h1>
+          <h1 className="text-2xl font-semibold text-slate-900">Evidence</h1>
           <p className="mt-1 text-sm text-slate-600">
             Everything the résumé tailor and cover letter are allowed to argue from. Imported rows wait here until you approve them.
           </p>
@@ -108,11 +108,7 @@ export default function EvidencePage() {
 
       {data?.migrationMissing && (
         <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-          <div className="font-medium">The Evidence Bank tables do not exist yet.</div>
-          <ol className="mt-2 list-decimal space-y-1 pl-5">
-            <li>Apply <code className="rounded bg-white px-1">supabase/migrations/014_career_os.sql</code> in the Supabase SQL editor.</li>
-            <li>Run <code className="rounded bg-white px-1">npm run career:seed</code> to import the master résumé.</li>
-          </ol>
+          The Evidence Bank is not set up yet — run <code className="rounded bg-white px-1">npm run career:seed -- --approve</code> (it tells you if the database needs a migration first).
         </div>
       )}
 

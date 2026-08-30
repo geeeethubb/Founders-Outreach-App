@@ -40,9 +40,22 @@ export async function GET(request: NextRequest) {
     }
 
     type Agent = { id: string; agent_id: string; prompt_version: string; model: string; status: string; cost_usd: number | null; latency_ms: number | null; tokens_in: number | null; tokens_out: number | null; created_at: string; error: string | null }
-    const runs = ((data ?? []) as unknown as (Record<string, unknown> & { agents?: Agent[] })[]).map((r) => {
+    // Display-only: finish() is only called on normal completion, so a run killed by a
+    // timeout stays 'running' in the table. Past the longest CLI default (1200 s) plus
+    // slack, show it as abandoned. Nothing is written.
+    const ABANDONED_AFTER_MS = 25 * 60 * 1000
+    const now = Date.now()
+    const runs = ((data ?? []) as unknown as (Record<string, unknown> & { agents?: Agent[]; status?: string; started_at?: string })[]).map((r) => {
       const agents = [...(r.agents ?? [])].sort((a, b) => a.created_at.localeCompare(b.created_at))
-      return { ...r, agents, agent_count: agents.length, cost_usd: Number(agents.reduce((s, a) => s + Number(a.cost_usd ?? 0), 0).toFixed(4)) }
+      const startedAt = Date.parse(String(r.started_at ?? ''))
+      const abandoned = r.status === 'running' && Number.isFinite(startedAt) && now - startedAt > ABANDONED_AFTER_MS
+      return {
+        ...r,
+        status: abandoned ? 'abandoned' : r.status,
+        agents,
+        agent_count: agents.length,
+        cost_usd: Number(agents.reduce((s, a) => s + Number(a.cost_usd ?? 0), 0).toFixed(4)),
+      }
     })
     return NextResponse.json({ runs })
   } catch (error) {

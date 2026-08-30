@@ -17,7 +17,7 @@ type Transitions = Record<string, string[]>
 const GROUPS: { title: string; states: string[] }[] = [
   { title: 'In progress', states: ['APPLIED', 'OA', 'INTERVIEW', 'FINAL_ROUND', 'OFFER'] },
   { title: 'Preparing', states: ['PREPARING', 'READY_FOR_REVIEW', 'READY_TO_APPLY'] },
-  { title: 'Saved', states: ['DISCOVERED', 'SAVED', 'RESEARCHED'] },
+  { title: 'Tracked', states: ['DISCOVERED', 'SAVED', 'RESEARCHED'] },
   { title: 'Closed', states: ['REJECTED', 'WITHDRAWN', 'CLOSED'] },
 ]
 
@@ -98,7 +98,8 @@ export default function ApplicationsPage() {
         <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center">
           <p className="text-slate-700 font-medium">No applications yet.</p>
           <p className="text-sm text-slate-500 mt-1">
-            Save a job or generate a package from the <Link href="/dashboard/jobs" className="text-indigo-600">Jobs</Link> page and it appears here.
+            Generate a package or press Track this job on a job&apos;s Application tab (from <Link href="/dashboard/jobs" className="text-indigo-600">Jobs</Link>) and it appears here.
+            The card&apos;s Save only shortlists.
           </p>
         </div>
       ) : (

@@ -10,6 +10,7 @@
 // and invisible prompts are what this whole feature replaces.
 
 import { useCallback, useEffect, useState } from 'react'
+import Link from 'next/link'
 
 interface ReferenceStyle {
   register: string
@@ -123,9 +124,11 @@ export default function ReferenceEmailPanel({ campaignId }: { campaignId: string
         <div>
           <h2 className="font-semibold text-slate-900">Reference email</h2>
           <p className="text-sm text-slate-600 mt-0.5">
-            Paste one real email that shows how this campaign should sound. Every draft in this
-            campaign is written to match it — its length, its warmth, its way of asking. It is an
-            example, not a template: no brackets, no variables.
+            Paste one real email that shows how you sound.{' '}
+            <Link href="/dashboard/scout" className="text-indigo-600 hover:underline">Scout</Link> uses
+            it: pick this campaign under &ldquo;Write drafts in the voice of&rdquo; and every Scout draft
+            matches its length, warmth and ask. The Generate panel below uses your Templates instead.
+            It is an example, not a template: no brackets, no variables.
           </p>
         </div>
         {!editing && reference?.body && (

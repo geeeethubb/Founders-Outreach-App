@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import type { JobDetail } from '@/components/career/packageTypes'
-import VerificationBadge, { type VerifyOutcome } from '@/components/career/VerificationBadge'
 import { fmtDate } from '@/components/career/api'
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -25,7 +24,7 @@ function List({ items, empty }: { items: string[]; empty: string }) {
   )
 }
 
-export default function JobTab({ detail, onVerified }: { detail: JobDetail; onVerified: (o: VerifyOutcome) => void }) {
+export default function JobTab({ detail }: { detail: JobDetail }) {
   const [showDesc, setShowDesc] = useState(false)
   const j = detail.job
   const desc = j.description_text ?? detail.snapshot?.description_text ?? null
@@ -46,9 +45,9 @@ export default function JobTab({ detail, onVerified }: { detail: JobDetail; onVe
           posted {fmtDate(j.posted_at)} · deadline {fmtDate(j.deadline)}
           <span className="text-slate-500"> · first seen {fmtDate(j.first_seen_at)}</span>
         </Field>
+        {/* The status badge (with re-check) is in the page header; this is only the verifier's note. */}
         <Field label="Is it open?">
-          <VerificationBadge status={j.verification_status} note={j.verification_note} lastVerifiedAt={j.last_verified_at} jobId={j.id} onVerified={onVerified} />
-          {j.verification_note && <p className="text-xs text-slate-500 mt-1">{j.verification_note}</p>}
+          {j.verification_note ? <p className="text-xs text-slate-500">{j.verification_note}</p> : <span className="text-slate-400">see the badge above</span>}
         </Field>
         <Field label="Links">
           <div className="flex flex-wrap gap-3">

@@ -677,6 +677,9 @@ export default function CampaignDetailPage() {
                 ? `AI drafts a personalized email for the ${memberSelected.size} selected contact${memberSelected.size !== 1 ? 's' : ''}`
                 : 'AI drafts a personalized email for every contact in this campaign'}
             </p>
+            <p className="text-xs text-slate-500">
+              Uses a template or fresh AI variants — not the reference email above.
+            </p>
           </div>
         </div>
 
@@ -808,12 +811,14 @@ export default function CampaignDetailPage() {
           <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-3 mb-4">
             <p className="text-sm font-medium text-green-800">
               ✅ {genResult.generated} email{genResult.generated !== 1 ? 's' : ''} drafted
-              {genResult.skipped.length > 0 && ` · ${genResult.skipped.length} skipped (no research)`}
+              {genResult.skipped.length > 0 && ` · ${genResult.skipped.length} skipped`}
             </p>
             {genResult.skipped.length > 0 && (
-              <p className="text-xs text-green-700 mt-1">
-                Skipped: {genResult.skipped.map((s) => s.name).join(', ')} — run AI Research on their profiles first
-              </p>
+              <ul className="text-xs text-green-700 mt-1 space-y-0.5">
+                {genResult.skipped.map((s, i) => (
+                  <li key={i}>Skipped {s.name} — {s.reason}</li>
+                ))}
+              </ul>
             )}
             <Link href="/dashboard/drafts" className="text-xs font-semibold text-green-700 underline mt-1 inline-block">
               Review drafts →

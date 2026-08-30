@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import OutreachPanel, { type Grounding, type OutreachSnapshot } from './OutreachPanel'
 
 interface Component {
@@ -142,6 +143,8 @@ interface Brief {
 interface ScoutResult {
   runId: string | null
   searchMode: string
+  /** Where the "who you are" side came from: the Evidence Bank or the fixture. */
+  backgroundSource: { source: 'bank' | 'fixture'; items: number; warning: string | null }
   internal: InternalSummary
   funnel: Record<string, number>
   prospects: Prospect[]
@@ -176,6 +179,49 @@ const STAGES = [
   'Ranking and assembling your list',
 ]
 
+// A run costs minutes and dollars, so the last result is kept in this browser.
+// Briefs and drafts are not kept here — they live on Outreach.
+const LAST_RUN_KEY = 'scout:last'
+
+interface LastRun {
+  at: number
+  goal: string
+  geography: string
+  searchMode: string
+  campaignId: string
+  result: ScoutResult
+}
+
+function readLastRun(): LastRun | null {
+  try {
+    const raw = localStorage.getItem(LAST_RUN_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as Partial<LastRun>
+    if (!parsed.result || typeof parsed.at !== 'number') return null
+    return parsed as LastRun
+  } catch {
+    return null
+  }
+}
+
+function writeLastRun(run: LastRun) {
+  try {
+    localStorage.setItem(LAST_RUN_KEY, JSON.stringify(run))
+  } catch {
+    // Private window or storage full — the run still shows, it just won't survive a refresh.
+  }
+}
+
+function relativeTime(at: number): string {
+  const mins = Math.max(0, Math.round((Date.now() - at) / 60_000))
+  if (mins < 1) return 'just now'
+  if (mins < 60) return `${mins} min ago`
+  const hours = Math.round(mins / 60)
+  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`
+  const days = Math.round(hours / 24)
+  return `${days} day${days === 1 ? '' : 's'} ago`
+}
+
 function badge(rec: Prospect['recommendation']): string {
   if (rec === 'STRONG') return 'bg-emerald-100 text-emerald-800 border-emerald-200'
   if (rec === 'MAYBE') return 'bg-amber-100 text-amber-800 border-amber-200'
@@ -198,6 +244,8 @@ export default function ScoutPage() {
   const [running, setRunning] = useState(false)
   const [stage, setStage] = useState(0)
   const [result, setResult] = useState<ScoutResult | null>(null)
+  // Set when `result` came from this browser's storage rather than a run just made.
+  const [restoredAt, setRestoredAt] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [open, setOpen] = useState<string | null>(null)
 
@@ -214,6 +262,19 @@ export default function ScoutPage() {
       .then((r) => (r.ok ? r.json() : { campaigns: [] }))
       .then((d) => setCampaigns(d.campaigns ?? []))
       .catch(() => setCampaigns([]))
+  }, [])
+
+  // Restore the last run from this browser so a refresh does not throw away a
+  // four-minute, multi-dollar result.
+  useEffect(() => {
+    const last = readLastRun()
+    if (!last) return
+    setGoal(last.goal)
+    setGeography(last.geography)
+    setSearchMode(last.searchMode)
+    setCampaignId(last.campaignId)
+    setResult(last.result)
+    setRestoredAt(last.at)
   }, [])
 
   async function buildBrief(p: Prospect) {
@@ -282,6 +343,7 @@ export default function ScoutPage() {
     setRunning(true)
     setError(null)
     setResult(null)
+    setRestoredAt(null)
     setStage(0)
 
     // Rough pacing so the page does not look frozen. Seven stages across the
@@ -297,6 +359,7 @@ export default function ScoutPage() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Scouting failed')
       setResult(data as ScoutResult)
+      writeLastRun({ at: Date.now(), goal, geography, searchMode, campaignId, result: data as ScoutResult })
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Scouting failed')
     } finally {
@@ -307,10 +370,11 @@ export default function ScoutPage() {
 
   return (
     <div className="p-8 max-w-5xl">
-      <h1 className="text-2xl font-semibold text-slate-900">Scout Opportunities</h1>
+      <h1 className="text-2xl font-semibold text-slate-900">Scout</h1>
       <p className="text-sm text-slate-600 mt-1">
         Describe what you are looking for. The system finds the companies, picks who to contact
-        inside them, researches the shortlist, and ranks the result.
+        inside them, researches the shortlist, and ranks the result. Drafts land in{' '}
+        <Link href="/dashboard/outreach" className="text-indigo-600 hover:underline">Outreach</Link>.
       </p>
 
       {/* ─── Mission ─────────────────────────────────────────────────────── */}
@@ -464,7 +528,12 @@ export default function ScoutPage() {
       {/* ─── Results ─────────────────────────────────────────────────────── */}
       {result && (
         <>
-          <div className="mt-6 flex flex-wrap gap-4 text-sm bg-white border border-slate-200 rounded-lg p-4">
+          {restoredAt !== null && (
+            <div className="mt-6 rounded-lg border border-sky-200 bg-sky-50 px-4 py-2 text-sm text-sky-900">
+              Showing your last run from {relativeTime(restoredAt)} · Scout again to replace it.
+            </div>
+          )}
+          <div className={`${restoredAt !== null ? 'mt-3' : 'mt-6'} flex flex-wrap gap-4 text-sm bg-white border border-slate-200 rounded-lg p-4`}>
             <span><strong>{result.prospects.length}</strong> prospects</span>
             <span className="text-slate-400">·</span>
             <span>
@@ -481,6 +550,18 @@ export default function ScoutPage() {
             </span>
             <span className="text-slate-400">·</span>
             <span>{Math.round(result.usage.latencyMs / 1000)}s</span>
+            {/* Guarded: a run stored before this field existed has no backgroundSource. */}
+            {result.backgroundSource && (
+              result.backgroundSource.warning || result.backgroundSource.source !== 'bank' ? (
+                <span className="basis-full text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1 text-xs">
+                  Background: fixture — {result.backgroundSource.warning ?? 'the Evidence Bank was not used for this run'}
+                </span>
+              ) : (
+                <span className="basis-full text-xs text-slate-500">
+                  Background: {result.backgroundSource.items} items from your Evidence Bank
+                </span>
+              )
+            )}
           </div>
 
           {/* ─── The internal-first decision, always shown ─────────────────── */}
@@ -745,12 +826,33 @@ export default function ScoutPage() {
                                   <span className="font-medium">Alternate angle:</span>{' '}
                                   {briefs[p.key].draft?.alternate_angle}
                                   <button
-                                    onClick={() => buildBrief(p)}
+                                    onClick={() => {
+                                      const snap = snapshots[p.key]
+                                      const draft = briefs[p.key].draft
+                                      const touched =
+                                        snap &&
+                                        (snap.state === 'approved' ||
+                                          snap.body !== draft?.body ||
+                                          snap.subject !== draft?.subject)
+                                      if (
+                                        touched &&
+                                        !confirm('Regenerating replaces this draft and discards your edits/approval. Continue?')
+                                      ) return
+                                      void buildBrief(p)
+                                    }}
                                     disabled={briefing === p.key}
                                     className="ml-3 underline hover:text-slate-700 disabled:text-slate-300"
                                   >
-                                    {briefing === p.key ? 'Working…' : 'Regenerate'}
+                                    {briefing === p.key ? 'Working…' : 'Regenerate (~30 s, paid)'}
                                   </button>
+                                  {briefs[p.key].outreachId && (
+                                    <Link
+                                      href="/dashboard/outreach"
+                                      className="ml-3 text-indigo-600 hover:underline"
+                                    >
+                                      Saved to Outreach →
+                                    </Link>
+                                  )}
                                 </>
                               }
                             />

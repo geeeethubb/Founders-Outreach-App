@@ -53,6 +53,8 @@ export async function GET(request: NextRequest) {
         sentAt: r.sent_at,
         sendError: r.send_error,
         repliedAt: r.replied_at,
+        // Set by linkReplies once a reply lands; the thread the founder answers from.
+        conversationId: r.conversation_id ?? null,
         replyClassification: r.reply_classification,
         replyAction: r.reply_action,
         replySummary: r.reply_summary,

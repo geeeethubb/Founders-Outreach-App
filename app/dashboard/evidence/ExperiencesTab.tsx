@@ -45,23 +45,34 @@ function ExperienceCard({
   const [adding, setAdding] = useState(false)
   const [statement, setStatement] = useState('')
   const [category, setCategory] = useState<FactCategory>('achievement')
+  const [editingHeader, setEditingHeader] = useState(false)
   const dates = [e.start_date, e.end_date].filter(Boolean).join(' – ')
 
   return (
     <div className="rounded-lg border border-slate-200 bg-white">
       <div className="flex flex-wrap items-start justify-between gap-2 border-b border-slate-100 px-4 py-3">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="font-medium text-slate-900">{e.title}</span>
-            <Chip tone={KIND_TONE[e.kind] ?? 'slate'}>{e.kind}</Chip>
+        {editingHeader ? (
+          <HeaderEditor
+            e={e}
+            busy={busy === `hdr-${e.id}`}
+            onCancel={() => setEditingHeader(false)}
+            onSave={(patch) => act(`hdr-${e.id}`, async () => { await patchRow('evidence_experiences', e.id, patch); setEditingHeader(false) })}
+          />
+        ) : (
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-medium text-slate-900">{e.title}</span>
+              <Chip tone={KIND_TONE[e.kind] ?? 'slate'}>{e.kind}</Chip>
+              <button type="button" onClick={() => setEditingHeader(true)} className="text-[11px] text-slate-500 hover:text-slate-800">edit</button>
+            </div>
+            <div className="text-sm text-slate-600">
+              {e.organization}
+              {dates ? ` · ${dates}` : ''}
+              {e.location ? ` · ${e.location}` : ''}
+            </div>
+            {e.description && <div className="mt-1 text-xs text-slate-500">{e.description}</div>}
           </div>
-          <div className="text-sm text-slate-600">
-            {e.organization}
-            {dates ? ` · ${dates}` : ''}
-            {e.location ? ` · ${e.location}` : ''}
-          </div>
-          {e.description && <div className="mt-1 text-xs text-slate-500">{e.description}</div>}
-        </div>
+        )}
         <div className="flex items-center gap-2">
           {pending.length > 0 && (
             <button
@@ -156,6 +167,56 @@ function ExperienceCard({
   )
 }
 
+type HeaderPatch = Pick<EvidenceExperience, 'title' | 'organization' | 'start_date' | 'end_date' | 'location'>
+
+/**
+ * Title, organization, dates and location as text inputs. Saves through the
+ * allow-listed rows route, which stamps edited_by_user so a later import does
+ * not overwrite the fix. Dates stay free text in the importer's M/YYYY form.
+ */
+function HeaderEditor({ e, busy, onCancel, onSave }: { e: EvidenceExperience; busy: boolean; onCancel: () => void; onSave: (patch: HeaderPatch) => void }) {
+  const [d, setD] = useState<HeaderPatch>({
+    title: e.title, organization: e.organization, start_date: e.start_date ?? '', end_date: e.end_date ?? '', location: e.location ?? '',
+  })
+  const field = (key: keyof HeaderPatch, placeholder: string, cls = '') => (
+    <input
+      value={d[key] ?? ''}
+      onChange={(ev) => setD({ ...d, [key]: ev.target.value })}
+      placeholder={placeholder}
+      className={`rounded border border-slate-300 px-2 py-1 text-sm ${cls}`}
+    />
+  )
+  const valid = d.title.trim().length > 0 && d.organization.trim().length > 0
+  return (
+    <div className="flex-1 space-y-2">
+      <div className="flex flex-wrap gap-2">
+        {field('title', 'Title', 'min-w-[200px] flex-1')}
+        {field('organization', 'Organization', 'min-w-[200px] flex-1')}
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {field('start_date', 'Start (e.g. 5/2025)', 'w-36')}
+        {field('end_date', 'End (e.g. 8/2025 or Present)', 'w-44')}
+        {field('location', 'Location', 'min-w-[160px] flex-1')}
+      </div>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          disabled={busy || !valid}
+          onClick={() => onSave({
+            title: d.title.trim(), organization: d.organization.trim(),
+            start_date: d.start_date?.trim() || null, end_date: d.end_date?.trim() || null, location: d.location?.trim() || null,
+          })}
+          className="rounded bg-indigo-600 px-3 py-1 text-xs font-medium text-white disabled:opacity-50"
+        >
+          {busy ? 'Saving…' : 'save'}
+        </button>
+        <button type="button" onClick={onCancel} className="text-xs text-slate-500">cancel</button>
+        <span className="text-[11px] text-slate-400">Your edit wins over later imports.</span>
+      </div>
+    </div>
+  )
+}
+
 function FactRow({ f, busy, act }: { f: EvidenceFact; busy: string | null; act: (id: string, fn: () => Promise<unknown>) => Promise<void> }) {
   const [editing, setEditing] = useState(false)
   const [text, setText] = useState(f.statement)
@@ -180,8 +241,6 @@ function FactRow({ f, busy, act }: { f: EvidenceFact; busy: string | null; act: 
         <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">
           <Chip tone="slate">{f.category}</Chip>
           {f.source_location && <span>{f.source_location}</span>}
-          <span>· {f.source}</span>
-          <span>· conf {Number(f.confidence).toFixed(2)}</span>
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-1.5">

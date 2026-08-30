@@ -243,7 +243,8 @@ export interface ListJobsFilters {
 
 export type JobListRow = JobOpportunity & {
   fit: unknown[]
-  applications: { id: string; state: string }[]
+  applications: { id: string; state: string; current_package_id: string | null }[]
+  feedback: { verdict: string; created_at: string }[]
   warm_paths: { count: number }[]
 }
 
@@ -251,7 +252,7 @@ export async function listJobs(userId: string, filters: ListJobsFilters = {}): P
   const db = createServiceClient()
   let q = db
     .from('job_opportunities')
-    .select('*, fit:job_fit_evaluations(*), applications(id, state), warm_paths(count)', { count: 'exact' })
+    .select('*, fit:job_fit_evaluations(*), applications(id, state, current_package_id), feedback:job_feedback(verdict, created_at), warm_paths(count)', { count: 'exact' })
     .eq('user_id', userId)
   if (filters.canonicalOnly ?? true) q = q.eq('is_canonical', true)
   if (filters.mission_id) q = q.eq('mission_id', filters.mission_id)

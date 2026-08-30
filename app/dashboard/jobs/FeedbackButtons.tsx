@@ -14,14 +14,14 @@ const VERDICTS: { value: FeedbackVerdict; label: string; cls: string }[] = [
 export interface FeedbackOutcome {
   verdict: FeedbackVerdict
   disposition: 'saved' | 'dismissed' | null
-  fitOverall: number | null
+  /** How many evaluations the mission-wide recompute re-summed (null when it failed). */
+  reranked: number | null
 }
 
 /**
- * Verdict → reasons picker → POST feedback → POST fit/recompute { jobId }.
- * The recompute is arithmetic only (no agent), so it is cheap to do on every
- * verdict; the new overall comes back so the card can re-rank itself without
- * a full reload.
+ * Verdict → reasons picker → POST feedback → POST fit/recompute {} (mission-wide).
+ * The recompute is arithmetic only (no agent, lib/career/fit/rank.ts), so it is
+ * cheap to do on every verdict; the caller reloads the list so the order updates.
  */
 export default function FeedbackButtons({
   jobId,
@@ -37,6 +37,7 @@ export default function FeedbackButtons({
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
+  const [msg, setMsg] = useState<string | null>(null)
 
   function toggle(r: FeedbackReason) {
     setReasons((prev) => (prev.includes(r) ? prev.filter((x) => x !== r) : [...prev, r]))
@@ -46,6 +47,7 @@ export default function FeedbackButtons({
     if (!picking) return
     setBusy(true)
     setErr(null)
+    setMsg(null)
     const fb = await api<{ disposition: 'saved' | 'dismissed' | null }>(`/api/career/jobs/${jobId}/feedback`, {
       json: { verdict: picking, reasons, note: note.trim() || undefined },
     })
@@ -54,10 +56,12 @@ export default function FeedbackButtons({
       setBusy(false)
       return
     }
-    const rc = await api<{ overall: number | null; errors: string[] }>('/api/career/fit/recompute', { json: { jobId } })
+    const rc = await api<{ updated: number; errors: string[] }>('/api/career/fit/recompute', { json: {} })
     setBusy(false)
+    const updated = rc.ok ? rc.data?.updated ?? 0 : null
     if (!rc.ok) setErr(`Feedback saved, but re-ranking failed: ${rc.error}`)
-    onDone({ verdict: picking, disposition: fb.data?.disposition ?? null, fitOverall: rc.data?.overall ?? null })
+    else setMsg(`Re-ranked ${updated} job${updated === 1 ? '' : 's'}`)
+    onDone({ verdict: picking, disposition: fb.data?.disposition ?? null, reranked: updated })
     setPicking(null)
     setReasons([])
     setNote('')
@@ -119,6 +123,7 @@ export default function FeedbackButtons({
         </div>
       )}
       {err && <p className="mt-1 text-xs text-rose-600">{err}</p>}
+      {msg && !err && <p className="mt-1 text-xs text-emerald-700">{msg}</p>}
     </div>
   )
 }

@@ -11,11 +11,10 @@ import { formatRelativeTime } from '@/lib/utils'
 interface EmailedInfo { count: number; lastSentAt: string }
 
 const GOAL_OPTIONS = [
-  { value: 'speaker',        label: '🎤 Speaker / Event',      desc: 'Invite them to speak at an Illinois Entrepreneurs event' },
+  { value: 'personal_career', label: '🙋 Personal Opportunity', desc: 'Internships, mentorship, or opportunities for yourself' },
   { value: 'mentor',         label: '🧭 Mentor / Advisor',     desc: 'Ask them to mentor a UIUC student founder' },
   { value: 'jobs',           label: '💼 Internship / Jobs',    desc: 'Connect our top students with their team' },
   { value: 'investor_intro', label: '💰 Investor Intro',       desc: 'Intro for a student-led startup' },
-  { value: 'personal_career', label: '🙋 Personal Opportunity', desc: 'Internships, mentorship, or opportunities for yourself' },
 ] as const
 
 type Goal = typeof GOAL_OPTIONS[number]['value']
@@ -41,7 +40,7 @@ function ComposeContent() {
     preselectedContactId ? new Set([preselectedContactId]) : new Set()
   )
   const [contactSearch, setContactSearch] = useState('')
-  const [goal, setGoal] = useState<Goal>('speaker')
+  const [goal, setGoal] = useState<Goal>('personal_career')
   const [mode, setMode] = useState<Mode>('template')
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('')
 
@@ -111,6 +110,15 @@ function ComposeContent() {
     )
   }
 
+  // Generating persists every variant as a draft row. Only one is ever sent, so
+  // the others are removed here rather than left to pile up in Draft Emails —
+  // where Approve All would send them to the same person. Only status='draft'
+  // rows from this compose session are touched.
+  async function discardDraftRows(ids: string[]) {
+    if (ids.length === 0) return
+    await supabase.from('emails').delete().in('id', ids).eq('status', 'draft')
+  }
+
   function toggleContact(id: string) {
     setSelectedIds((prev) => {
       const next = new Set(prev)
@@ -140,6 +148,9 @@ function ComposeContent() {
     setGenerating(true)
     setError('')
     try {
+      // A regenerate replaces the previous variants. Their rows are dropped only
+      // after the new ones arrive, so a failed call leaves the old drafts usable.
+      const previousIds = variants.map((v) => v.email_id)
       if (selectedIds.size === 1) {
         const res = await fetch('/api/generate', {
           method: 'POST',
@@ -157,6 +168,7 @@ function ComposeContent() {
         setVariants(data.variants)
         setSelectedVariant(0)
         setStep('variants')
+        await discardDraftRows(previousIds)
       } else {
         const res = await fetch('/api/generate-multi', {
           method: 'POST',
@@ -171,6 +183,7 @@ function ComposeContent() {
         })
         const data = await res.json()
         if (!res.ok) throw new Error(data.error)
+        await discardDraftRows(previousIds)
         router.push(`/dashboard/drafts?generated=${data.generated}`)
       }
     } catch (e) {
@@ -202,6 +215,10 @@ function ComposeContent() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
+      // The sent variant is now status='sent'; the unsent ones are orphans.
+      await discardDraftRows(
+        variants.filter((_, i) => i !== selectedVariant).map((v) => v.email_id)
+      )
       setSentContactName(selectedContact.name)
       setSendSuccess(true)
       setStep('send')
@@ -254,7 +271,7 @@ function ComposeContent() {
   return (
     <div className="p-8 max-w-5xl">
       <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-slate-900">Compose Outreach</h1>
+        <h1 className="text-2xl font-semibold text-slate-900">Compose</h1>
         <p className="text-slate-500 text-sm mt-1">AI-powered, personalized emails for your outreach</p>
       </div>
 
@@ -562,7 +579,12 @@ function ComposeContent() {
                 ))}
               </div>
             )}
-            <button onClick={() => { setStep('setup'); setVariants([]) }} className="ml-auto text-sm text-slate-400 hover:text-slate-600">← Back</button>
+            <button
+              onClick={() => { void discardDraftRows(variants.map((v) => v.email_id)); setStep('setup'); setVariants([]) }}
+              className="ml-auto text-sm text-slate-400 hover:text-slate-600"
+            >
+              ← Back
+            </button>
           </div>
 
           {mode === 'fresh' && variants[selectedVariant] && (

@@ -46,6 +46,7 @@ export default function DocumentsTab({ bank, reload }: { bank: EvidenceBank; rel
     form.append('file', file)
     form.append('as_master', 'true')
     form.append('approve', String(approve))
+    form.append('include_profile', String(includeProfile))
     run('upload', () => fetch('/api/career/evidence/upload', { method: 'POST', body: form }))
   }
 
@@ -109,7 +110,7 @@ export default function DocumentsTab({ bank, reload }: { bank: EvidenceBank; rel
         </div>
         <div className="mt-2 flex flex-wrap gap-4 text-xs text-slate-600">
           <label className="flex items-center gap-1.5"><input type="checkbox" checked={approve} onChange={(e) => setApprove(e.target.checked)} /> approve imported rows immediately</label>
-          <label className="flex items-center gap-1.5"><input type="checkbox" checked={includeProfile} onChange={(e) => setIncludeProfile(e.target.checked)} /> include profile free text</label>
+          <label className="flex items-center gap-1.5"><input type="checkbox" checked={includeProfile} onChange={(e) => setIncludeProfile(e.target.checked)} /> also import My Profile text (creates a second source; conflicts may appear under Review)</label>
         </div>
       </section>
 

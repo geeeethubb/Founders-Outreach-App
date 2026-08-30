@@ -823,8 +823,8 @@ them into `talent_items` — and continue to serve V1's screens.
 | `template_performance` | Nothing ever wrote to it. Superseded by `outcome_events`. |
 | `followups` | Superseded by `emails.reply_to_email_id`, which is what the shipped follow-up flow actually uses. |
 
-Drop in Phase 10, after confirming zero rows. Route deletion (`/api/webhooks/resend`) happens
-alongside.
+Drop after confirming zero rows (migration 016, still pending). The dead route
+`/api/webhooks/resend` was deleted on 2026-08-30.
 
 ---
 

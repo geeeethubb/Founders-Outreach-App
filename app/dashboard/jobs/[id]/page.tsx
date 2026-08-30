@@ -15,6 +15,7 @@ import FitBadge, { EligibilityChip } from '@/components/career/FitBadge'
 import StateBadge from '@/components/career/StateBadge'
 import VerificationBadge, { type VerifyOutcome } from '@/components/career/VerificationBadge'
 import InlineNotice, { MigrationNotice } from '@/components/career/InlineNotice'
+import FeedbackButtons, { type FeedbackOutcome } from '../FeedbackButtons'
 import JobTab from './JobTab'
 import FitTab from './FitTab'
 import ResearchTab from './ResearchTab'
@@ -119,6 +120,12 @@ function JobDetail({ id }: { id: string }) {
     setDetail((d) => (d ? { ...d, application: a } : d))
   }
 
+  /** Same buttons as the card. The disposition is patched locally; the fit adjustment comes back with the reload. */
+  async function onFeedback(o: FeedbackOutcome) {
+    setDetail((d) => (d && o.disposition ? { ...d, job: { ...d.job, disposition: o.disposition } } : d))
+    await load()
+  }
+
   if (loading) return <p className="p-8 text-sm text-slate-500">Loading…</p>
 
   if (!detail) {
@@ -161,7 +168,15 @@ function JobDetail({ id }: { id: string }) {
             <EligibilityChip value={fit?.eligibility} />
             <VerificationBadge status={j.verification_status} note={j.verification_note} lastVerifiedAt={j.last_verified_at} jobId={j.id} onVerified={onVerified} />
             {detail.application && <StateBadge state={detail.application.state} />}
-            {j.disposition !== 'new' && <span className="text-[11px] text-slate-500">{j.disposition}</span>}
+            {j.disposition === 'saved' && (
+              <span className="text-[11px] px-1.5 py-0.5 rounded border bg-indigo-50 text-indigo-700 border-indigo-200">saved</span>
+            )}
+            {j.disposition === 'dismissed' && (
+              <span className="text-[11px] px-1.5 py-0.5 rounded border bg-slate-50 text-slate-600 border-slate-200">dismissed</span>
+            )}
+          </div>
+          <div className="mt-2">
+            <FeedbackButtons jobId={j.id} lastVerdict={detail.feedback?.[0]?.verdict ?? null} onDone={onFeedback} />
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -175,13 +190,6 @@ function JobDetail({ id }: { id: string }) {
               Open posting ↗
             </a>
           )}
-          <button
-            type="button"
-            onClick={() => setTab('package')}
-            className="px-3 py-1.5 rounded-md bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700"
-          >
-            {detail.packages.length ? 'Package' : 'Generate package'}
-          </button>
         </div>
       </div>
 
@@ -214,7 +222,7 @@ function JobDetail({ id }: { id: string }) {
         })}
       </div>
 
-      {tab === 'job' && <JobTab detail={detail} onVerified={onVerified} />}
+      {tab === 'job' && <JobTab detail={detail} />}
       {tab === 'fit' && <FitTab fit={fit} busy={intelBusy} onReevaluate={() => runIntelligence({ fit: true })} />}
       {tab === 'research' && (
         <ResearchTab

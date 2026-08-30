@@ -36,7 +36,7 @@ export default function CanonicalTab({ onExperiences }: { onExperiences: () => v
 
   if (error) return <Notice kind="error">{error}</Notice>
   if (!data) return <div className="text-sm text-slate-500">Loading…</div>
-  if (data.migrationMissing) return <Notice kind="error">{data.error || 'Apply supabase/migrations/014_career_os.sql first.'}</Notice>
+  if (data.migrationMissing) return <Notice kind="error">The Evidence Bank is not set up yet — run <code className="rounded bg-white px-1">npm run career:seed -- --approve</code> (it tells you if the database needs a migration first).</Notice>
   if (data.organizations.length === 0 && data.unattached.facts.length === 0) return <div className="text-sm text-slate-500">No experiences yet.</div>
 
   return (
@@ -44,7 +44,6 @@ export default function CanonicalTab({ onExperiences }: { onExperiences: () => v
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
         <span>
           {data.organizations.length} organizations · {data.organizations.reduce((n, o) => n + o.roles.length, 0)} roles
-          {!data.migration015 && ' · migration 015 not applied: grouped by normalized name, no provenance rows'}
         </span>
         <button type="button" onClick={onExperiences} className="font-medium text-indigo-600 hover:underline">edit on the Experiences tab →</button>
       </div>

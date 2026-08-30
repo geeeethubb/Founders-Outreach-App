@@ -6,6 +6,66 @@ architecturally and why.
 
 ---
 
+## 2026-08-30 — Usability pass: one word per concept, no paid work without a click, docs that match the code
+
+**Type:** usability fixes across four workstreams · **Behavior change:** UI labels, copy,
+navigation, a few one-line guards; no migration, no prompt change, no change to `lib/email/*`.
+
+### Why
+
+A five-lens usability audit (`.career-out/audit-synth.json`) verified ~68 findings against the
+code. The founder's brief: "as simple, as straightforward, as functional, and as user friendly
+as possible." Everything below was confirmed in code before it was changed; anything needing a
+migration, a one-off SQL update, or a prompt-version bump was deferred and is listed in the
+audit file.
+
+### D — Navigation, docs, dead code
+
+- **Dashboard** (`app/dashboard/page.tsx`): subtitle no longer names a student club; the four
+  shortcuts now reach Scout, Jobs, Outreach and Conversations; the empty state starts on Scout.
+- **Sidebar** (`components/layout/Sidebar.tsx`): the same 14 items, grouped under small
+  headings — People (Scout, Outreach, Conversations, Contacts), Internships (Jobs, Companies,
+  Applications, Evidence), Manual email (Compose, Draft Emails, Templates, Campaigns), Me.
+  "My Profile" is now **Profile & Settings**, matching the frozen "Connect your Gmail in
+  Settings" strings in `lib/email/*`. The "New Outreach" CTA (which opened Compose) is gone.
+- **Runs**: `GET /api/career/runs` reports a run still "running" 25 minutes after it started as
+  `abandoned` — display-only, nothing is written (`finish()` is only called on normal
+  completion, so a run killed by a timeout stayed sky-blue forever). `RunRow` prints "did not
+  finish" for it; the kind filter reads Job scouts / Verifications / Packages / Evidence
+  imports; the subtitle says these are Career OS runs only.
+- **Setup docs describe the app that exists**: README Status is Phase 11 with 014 + 015 applied
+  and no outstanding founder actions, plus a "Founder commands" table; "29 decision records"
+  → 38, "thirteen agents" → seven outreach + twelve Career OS; the Resend caveat and "four
+  GOOGLE_*" (oauth.ts reads three) are gone. `.env.local.example` drops the Resend block, lists
+  the real scopes (`gmail.send`, `gmail.readonly`) and adds the optional `CAREER_USER_ID`.
+  SETUP.md replaces the Resend step with the Google OAuth client, runs all migrations in Step 2,
+  and its feature/stack tables name Gmail. `MigrationNotice` names 014 *then* 015 and
+  `career:seed -- --approve`. CLAUDE.md drops the `Apollo API.txt` trap (untracked 2026-08-10,
+  not in the tree) and the webhook trap; CURRENT_STATE §6/§9 record both as done.
+- **Dead code**: `app/api/webhooks/resend/route.ts` deleted (its verifier returned `false`
+  unconditionally; nothing sent via Resend). `react-hot-toast`, `@heroicons/react` and
+  `date-fns` uninstalled — a grep across `app/`, `components/`, `lib/`, `scripts/`, `evals/`
+  found zero imports. `verifyWebhookSignature` in `lib/email/resend.ts` is now unreferenced and
+  left alone (do-not-touch zone).
+- **Guide** (`docs/HOW_TO_USE_OUTREACH_OS.md`): the "Things That May Be Confusing" list loses
+  the five items this pass fixed (two Saved's, two sync buttons, campaign stats missing Scout
+  sends, Compose orphans, Preferences in two places) and gains Save-vs-Track, Preferences-is-
+  not-the-editor and the Runs "abandoned" meaning; page names follow the sidebar.
+
+### Workstream A
+
+2026-08-30 — Usability pass, workstream A (Jobs & Applications). A1: the application state SAVED is labelled 'Tracked' everywhere (tracker group, StateBadge, STATE_LABELS); copy on the Application tab and the empty tracker says a package or 'Track this job' creates the record and the card's Save only shortlists. A2: a verdict now POSTs fit/recompute {} (mission-wide, arithmetic only) and the Jobs list reloads in place so the order updates; the list query embeds job_feedback(verdict, created_at) and applications.current_package_id, so cards show the last verdict after a reload and key 'Open package' on an actual package, not on a tracked-only application. A3: PackagePanel reloads before judging a generate response (a 504 shows the server's row, not the empty state); a redo beside an applied application is no longer called 'locked' and no longer offers the illegal READY_TO_APPLY finalize; generating-progress list extracted to PackageProgress.tsx. A4: ScoutPanel refreshes the list on every outcome, explains a timeout in plain words, disables Close mid-run, adds 'Run again', and tucks the sliders under 'Run size'. A5: the job detail page has the same Love/Interested/Maybe/Not-interested buttons as the card, saved/dismissed chips, no fake 'Generate package' header button; JobTab shows the verification badge once. A6: the tracker confirms before Applied (it locks documents) and shows 'Generate package' instead of a dead 'Redo package' when no package exists. A7: the Mission page drops Season, Status and the mission switcher (the name is the heading); CAREER_OS.md §5 records that the season is Summer 2027 by construction. PATCH /api/career/missions/[id] still accepts season/status.
+
+### Workstream B
+
+Usability pass, workstream B (Evidence & Profile). Review conflicts carry entity_label (experience 'title — org', fact statement, metric 'value context') resolved in the review route from the tombstone-inclusive bank; ConflictCard shows it instead of a UUID prefix. Review/Experiences/Canonical/Stories copy moved to plain language: 'Keeps'/'Folds into it', no rule: or confidence spans, one setup sentence (npm run career:seed -- --approve) on all three banners, H1 'Evidence'. Preferences tab drops the 'hard' checkbox (nothing in lib/career enforced it — hard_constraints on career_missions do) and points at Jobs → Mission; weight saves on blur. Profile page is 'Profile & Settings' with Gmail at the top under 'Settings' (matches the frozen lib/email strings) and says its Career Context feeds only the older outreach loop. Documents upload now honours include_profile (it was ignored by the route). Experience header (title/org/dates/location) is editable on the Experiences tab through the allow-listed rows route, which stamps edited_by_user so merges and re-imports keep the human's value. Column and prompt versions unchanged.
+
+### Workstream C
+
+fix(usability/C): Scout background banner compared against 'evidence' but the API emits 'bank'|'fixture', so every Evidence-Bank run was mislabeled as fixture — check now uses !== 'bank' and the field is typed as the union. Compose regenerate deleted the previous variants' draft rows before calling /api/generate; on failure the screen still offered rows that no longer existed — old rows are now discarded only after new variants arrive.
+
+---
+
 ## 2026-08-30 — "What I'm scouting for": a stated direction leads the job search
 
 **Type:** feature · **Behavior change:** the Jobs page has a free-text direction; when set, the

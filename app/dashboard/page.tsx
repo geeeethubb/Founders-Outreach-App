@@ -29,7 +29,7 @@ export default async function DashboardPage() {
       <div className="mb-8">
         <h1 className="text-2xl font-semibold text-slate-900">Dashboard</h1>
         <p className="text-slate-500 text-sm mt-1">
-          Your outreach pipeline for Founders: Illinois Entrepreneurs
+          People, internships, drafts and replies — nothing sends without you.
         </p>
       </div>
 
@@ -50,30 +50,30 @@ export default async function DashboardPage() {
       <div className="grid grid-cols-4 gap-4 mb-8">
         {[
           {
-            href: '/dashboard/contacts',
-            title: 'Add Contact',
-            desc: 'Add a YC founder or SF operator',
-            icon: '➕',
+            href: '/dashboard/scout',
+            title: 'Scout',
+            desc: 'Describe a goal, get ranked people',
+            icon: '🔎',
             color: 'border-indigo-200 hover:border-indigo-400',
           },
           {
-            href: '/dashboard/compose',
-            title: 'Write Outreach',
-            desc: 'AI-generate a personalized email',
-            icon: '✍️',
+            href: '/dashboard/jobs',
+            title: 'Jobs',
+            desc: 'Ranked, verified internship postings',
+            icon: '💼',
             color: 'border-purple-200 hover:border-purple-400',
           },
           {
-            href: '/dashboard/campaigns',
-            title: 'New Campaign',
-            desc: 'Speaker series, mentor drive, jobs',
-            icon: '🎯',
+            href: '/dashboard/outreach',
+            title: 'Outreach',
+            desc: 'Review and send Scout drafts',
+            icon: '✉️',
             color: 'border-orange-200 hover:border-orange-400',
           },
           {
             href: '/dashboard/conversations',
-            title: 'View Replies',
-            desc: 'Manage active conversations',
+            title: 'Conversations',
+            desc: 'Answer replies',
             icon: '💬',
             color: 'border-green-200 hover:border-green-400',
           },
@@ -139,15 +139,15 @@ export default async function DashboardPage() {
       {recentContacts.length === 0 && (
         <div className="bg-white rounded-xl border-2 border-dashed border-slate-200 p-12 text-center">
           <div className="text-4xl mb-3">🚀</div>
-          <h3 className="font-semibold text-slate-700 mb-2">Start building your pipeline</h3>
+          <h3 className="font-semibold text-slate-700 mb-2">Start with Scout</h3>
           <p className="text-slate-400 text-sm mb-4">
-            Add YC founders, SF operators, mentors, and investors you want to connect with.
+            Describe who you want to reach; Scout finds and ranks people, and drafts wait for your approval.
           </p>
           <Link
-            href="/dashboard/contacts"
+            href="/dashboard/scout"
             className="inline-flex items-center gap-2 bg-indigo-600 text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors"
           >
-            Add your first contact →
+            Open Scout →
           </Link>
         </div>
       )}

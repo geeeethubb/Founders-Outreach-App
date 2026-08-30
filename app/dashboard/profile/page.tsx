@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import type { Profile } from '@/types'
 import GmailConnection from '@/components/settings/GmailConnection'
@@ -137,10 +138,16 @@ export default function ProfilePage() {
   return (
     <div className="p-8 max-w-3xl">
       <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-slate-900">My Profile</h1>
+        <h1 className="text-2xl font-semibold text-slate-900">Profile &amp; Settings</h1>
         <p className="text-slate-500 text-sm mt-1">
-          The AI uses this to write better personal outreach emails on your behalf
+          Your Gmail connection, and the profile the outreach emails are written from.
         </p>
+      </div>
+
+      {/* Settings: the email layer's errors say "Connect your Gmail in Settings" — this is that place. */}
+      <div className="mb-6">
+        <h2 className="font-medium text-slate-800 text-sm mb-2">Settings</h2>
+        <GmailConnection />
       </div>
 
       {/* Avatar + name header */}
@@ -219,8 +226,6 @@ export default function ProfilePage() {
                 />
               </div>
             </div>
-
-            <GmailConnection />
           </>
         )}
 
@@ -228,23 +233,18 @@ export default function ProfilePage() {
           <>
             <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4">
               <p className="text-sm text-indigo-800 font-medium mb-1">
-                💡 How this is used
+                How this is used
               </p>
               <p className="text-sm text-indigo-700">
-                The AI reads everything on this tab for two things: <strong>(1) ranking your contacts</strong> by how relevant each person is to <em>you</em> — your skills, experience, and what you're looking for — instead of just how famous they are; and <strong>(2) writing emails</strong> that sound like you. The more you add here, the better the fit ranking.
-              </p>
-              <p className="text-xs text-indigo-600 mt-2">
-                After updating this, go to <strong>Contacts → Re-research All</strong> to re-rank everyone with your new profile.
+                Used only when researching contacts and writing outreach emails in the older loop. Jobs, Scout and application documents read the{' '}
+                <Link href="/dashboard/evidence" className="font-medium underline">Evidence Bank</Link> instead.
               </p>
             </div>
 
             <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="font-medium text-slate-800 text-sm">What you're looking for</h3>
-                <span className="text-xs text-indigo-500 font-medium">⭐ Top ranking signal</span>
-              </div>
+              <h3 className="font-medium text-slate-800 text-sm">What you're looking for</h3>
               <p className="text-xs text-slate-500">
-                The single most important input for ranking. Describe the roles, industries, and kinds of people you want to reach — this is what a contact is scored against.
+                Describe the roles, industries, and kinds of people you want to reach — contact research scores people against this.
               </p>
               <TextArea
                 label=""
@@ -278,7 +278,7 @@ export default function ProfilePage() {
                 <span className="text-xs text-slate-400">Paste text, or upload as a backup</span>
               </div>
               <p className="text-xs text-slate-500">
-                The richest signal for ranking — the AI uses your real projects, skills, and experience to judge how relevant each contact is to you. Pasting is most reliable; uploading a PDF/.txt just fills the box below (still editable).
+                Résumé text for outreach emails only — the job side reads Evidence. Pasting is most reliable; uploading a PDF/.txt just fills the box below (still editable).
               </p>
 
               <div className="flex items-center gap-3 flex-wrap">
@@ -350,7 +350,7 @@ export default function ProfilePage() {
         {/* Save button */}
         <div className="flex items-center justify-between pt-2">
           <div>
-            <p className="text-xs text-slate-400">Changes are saved to your profile and used immediately by the AI</p>
+            <p className="text-xs text-slate-400">Saved to your profile; the next outreach draft uses it.</p>
             {saveError && (
               <p className="text-xs text-red-500 mt-1 font-medium">⚠ Save failed: {saveError}</p>
             )}

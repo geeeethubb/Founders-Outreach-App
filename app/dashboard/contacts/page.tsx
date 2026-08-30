@@ -8,7 +8,7 @@ import AddToCampaignButton from '@/components/contacts/AddToCampaignButton'
 import { formatRelativeTime, STATUS_COLORS, CATEGORY_COLORS, relevanceLabel, relevanceColor } from '@/lib/utils'
 import type { Contact } from '@/types'
 
-const STATUS_ORDER = ['new', 'researching', 'researched', 'drafted', 'sent', 'replied', 'meeting', 'archived']
+const STATUS_ORDER = ['discovered', 'new', 'researching', 'researched', 'drafted', 'sent', 'replied', 'meeting', 'archived']
 const CATEGORIES = ['speaker', 'mentor', 'recruiter', 'investor', 'peer', 'partner']
 const SORT_OPTIONS = [
   { value: 'added_desc', label: 'Newest first' },
@@ -24,7 +24,8 @@ export default function ContactsPage() {
   const [showModal, setShowModal] = useState(false)
   const [userId, setUserId] = useState('')
   const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState<string>('all')
+  // 'mine' hides Scout-discovered people (the bulk of the table) by default.
+  const [statusFilter, setStatusFilter] = useState<string>('mine')
   const [categoryFilter, setCategoryFilter] = useState<string>('all')
   const [relevanceFilter, setRelevanceFilter] = useState<string>('all')
   const [sortBy, setSortBy] = useState<string>('added_desc')
@@ -47,10 +48,7 @@ export default function ContactsPage() {
       const loaded = (data as Contact[]) ?? []
       setContacts(loaded)
       setLoading(false)
-      const unresearched = loaded.filter((c) => c.status === 'new')
-      if (unresearched.length > 0) {
-        fetch('/api/research/batch', { method: 'POST' }).catch(() => {})
-      }
+      // Research is paid; it runs only from the "Research N unresearched" button.
     }
     load()
   }, [])
@@ -120,7 +118,10 @@ export default function ContactsPage() {
       if (search && !c.name.toLowerCase().includes(search.toLowerCase()) &&
           !c.company?.toLowerCase().includes(search.toLowerCase()) &&
           !c.role?.toLowerCase().includes(search.toLowerCase())) return false
-      if (statusFilter !== 'all' && c.status !== statusFilter) return false
+      if (statusFilter === 'mine') {
+        // 'discovered' is written by Scout's contact index but is not in ContactStatus.
+        if ((c.status as string) === 'discovered') return false
+      } else if (statusFilter !== 'all' && c.status !== statusFilter) return false
       if (categoryFilter !== 'all' && c.research?.category !== categoryFilter) return false
       if (relevanceFilter !== 'all' && getRelevanceTier(c) !== relevanceFilter) return false
       return true
@@ -141,7 +142,7 @@ export default function ContactsPage() {
     })
 
   const unresearchedCount = contacts.filter((c) => c.status === 'new').length
-  const activeFilters = [statusFilter, categoryFilter, relevanceFilter].filter(f => f !== 'all').length
+  const activeFilters = [statusFilter, categoryFilter, relevanceFilter].filter(f => f !== 'all' && f !== 'mine').length
 
   if (loading) {
     return (
@@ -161,6 +162,9 @@ export default function ContactsPage() {
             {filtered.length !== contacts.length
               ? `${filtered.length} of ${contacts.length} contacts`
               : `${contacts.length} people in your pipeline`}
+          </p>
+          <p className="text-slate-500 text-xs mt-1">
+            Scout searches your indexed contacts; after adding people here, run <code className="text-slate-700">npm run index:network</code> so it can see them.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -233,7 +237,8 @@ export default function ContactsPage() {
 
         {/* Status filter */}
         <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
-          className={`px-3 py-2 border rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 ${statusFilter !== 'all' ? 'border-indigo-400 text-indigo-700 bg-indigo-50' : 'border-slate-200'}`}>
+          className={`px-3 py-2 border rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 ${statusFilter !== 'all' && statusFilter !== 'mine' ? 'border-indigo-400 text-indigo-700 bg-indigo-50' : 'border-slate-200'}`}>
+          <option value="mine">Mine (not discovered)</option>
           <option value="all">All statuses</option>
           {STATUS_ORDER.map((s) => (
             <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
@@ -251,7 +256,7 @@ export default function ContactsPage() {
         {/* Clear filters */}
         {(activeFilters > 0 || search) && (
           <button
-            onClick={() => { setSearch(''); setStatusFilter('all'); setCategoryFilter('all'); setRelevanceFilter('all') }}
+            onClick={() => { setSearch(''); setStatusFilter('mine'); setCategoryFilter('all'); setRelevanceFilter('all') }}
             className="px-3 py-2 text-sm text-slate-400 hover:text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
             Clear {activeFilters > 0 ? `(${activeFilters})` : ''}
           </button>
@@ -273,7 +278,7 @@ export default function ContactsPage() {
               </button>
             </>
           ) : (
-            <button onClick={() => { setSearch(''); setStatusFilter('all'); setCategoryFilter('all'); setRelevanceFilter('all') }}
+            <button onClick={() => { setSearch(''); setStatusFilter('mine'); setCategoryFilter('all'); setRelevanceFilter('all') }}
               className="text-sm text-indigo-600 hover:text-indigo-700 font-medium mt-2">
               Clear filters
             </button>

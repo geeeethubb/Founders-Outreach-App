@@ -83,7 +83,9 @@ export default function StoriesTab({ bank, reload }: { bank: EvidenceBank; reloa
         </div>
       )}
 
-      {bank.stories.length === 0 && !editing && <div className="text-sm text-slate-500">No stories yet.</div>}
+      {bank.stories.length === 0 && !editing && (
+        <div className="text-sm text-slate-500">No stories yet. A STAR story is what the cover letter draws its narrative paragraph from — add one per experience you want to talk about.</div>
+      )}
       {bank.stories.map((s) => (
         <div key={s.id} className="rounded-lg border border-slate-200 bg-white p-4">
           <div className="flex items-start justify-between gap-2">

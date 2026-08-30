@@ -148,12 +148,24 @@ export default function DraftsPage() {
     setSelected((prev) => (prev.size === drafts.length ? new Set() : new Set(drafts.map((d) => d.id))))
   }
 
+  // A bulk send must never email one person twice. If any contact in the batch
+  // has more than one draft, stop and ask the founder to pick one.
+  function hasDuplicateContacts(batch: DraftEmail[]): boolean {
+    const perContact = new Map<string, number>()
+    for (const d of batch) perContact.set(d.contact_id, (perContact.get(d.contact_id) ?? 0) + 1)
+    const dupes = [...perContact.values()].filter((n) => n > 1).length
+    if (dupes === 0) return false
+    alert(`${dupes} contact${dupes !== 1 ? 's have' : ' has'} more than one draft — pick one variant and discard the rest before sending in bulk.`)
+    return true
+  }
+
   async function sendSelected() {
     const sendable = drafts.filter((d) => selected.has(d.id) && d.contact.email)
     if (sendable.length === 0) {
       alert('None of the selected drafts have an email address to send to.')
       return
     }
+    if (hasDuplicateContacts(sendable)) return
     if (!confirm(`Send ${sendable.length} selected email${sendable.length !== 1 ? 's' : ''} now? This cannot be undone.`)) return
     setBulkBusy(true)
     for (const draft of sendable) {
@@ -181,6 +193,7 @@ export default function DraftsPage() {
       alert('No drafts with email addresses to send.')
       return
     }
+    if (hasDuplicateContacts(sendable)) return
     if (!confirm(`Send ${sendable.length} email${sendable.length !== 1 ? 's' : ''} now? This cannot be undone.`)) return
     setApprovingAll(true)
 
@@ -208,7 +221,7 @@ export default function DraftsPage() {
           <h1 className="text-2xl font-semibold text-slate-900">Draft Emails</h1>
           <p className="text-slate-500 text-sm mt-1">
             {drafts.length === 0
-              ? 'No drafts — generate emails from a campaign to get started'
+              ? 'No drafts yet'
               : `${drafts.length} draft${drafts.length !== 1 ? 's' : ''} waiting · ${sendableCount} ready to send`}
           </p>
         </div>
@@ -297,7 +310,7 @@ export default function DraftsPage() {
           <div className="text-4xl mb-3">📭</div>
           <p className="font-medium text-slate-700 mb-1">No drafts yet</p>
           <p className="text-slate-400 text-sm">
-            Go to a campaign, set your goal, and click "Generate Emails" to draft personalized emails for all contacts.
+            Drafts from Compose (2+ contacts) and Campaign generate appear here. Scout drafts are on Outreach.
           </p>
         </div>
       ) : (
@@ -338,6 +351,11 @@ export default function DraftsPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <p className="font-medium text-slate-800 text-sm">{draft.contact.name}</p>
+                      {draft.variant_label && (
+                        <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">
+                          Variant {draft.variant_label}
+                        </span>
+                      )}
                       {draft.campaign && (
                         <span className="text-xs bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full">
                           {draft.campaign.name}

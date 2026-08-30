@@ -17,17 +17,7 @@ import ResumeDiff from './ResumeDiff'
 import LetterPanel from './LetterPanel'
 import PackageDocuments from './PackageDocuments'
 import PackageVersions from './PackageVersions'
-
-const STAGE_LABEL: Record<string, string> = {
-  started: 'Starting',
-  intelligence: 'Researching the company, judging fit, matching your evidence',
-  tailoring: 'Tailoring the résumé and verifying every change',
-  resume_review: 'Waiting for your review',
-  resume_documents: 'Building the résumé DOCX and PDF',
-  cover_letter: 'Writing and grounding the cover letter',
-  documents: 'Building the cover letter documents and running QA',
-  finalized: 'Finalized',
-}
+import PackageProgress, { STAGE_LABEL } from './PackageProgress'
 
 interface Props {
   jobId: string
@@ -103,8 +93,17 @@ export default function PackagePanel({ jobId, job, packages, view, application, 
       : await api<{ package_id: string; status: string; error: string | null; errors: string[]; warnings: string[]; costUsd: number }>('/api/career/packages', { json: { job_id: jobId } })
     setBusy(null)
     setStage(null)
+    // Reload before judging the answer: the server created the package row before it
+    // started working, so a timeout (504) or a failure still has a row to show — never
+    // the empty state with Generate live, where a second click pays again.
+    await onReload()
     if (!r.ok && !r.body?.package_id) {
-      setNotice({ kind: 'error', text: r.error ?? 'Package generation failed' })
+      setNotice({
+        kind: 'error',
+        text: r.status === 504 || r.status === 0
+          ? 'The request ended before an answer came back; the package row below shows where it got to.'
+          : r.error ?? 'Package generation failed',
+      })
       return
     }
     const errs = (r.body?.errors as string[] | undefined) ?? []
@@ -112,7 +111,6 @@ export default function PackagePanel({ jobId, job, packages, view, application, 
     if (r.body?.error) setNotice({ kind: 'error', text: String(r.body.error) })
     else if (errs.length) setNotice({ kind: 'warn', text: `Finished with errors: ${errs.join(' · ')}` })
     else if (warns.length) setNotice({ kind: 'info', text: warns.join(' · ') })
-    await onReload()
   }
 
   /** Long request: builds the résumé documents, writes the letter, runs QA. 422 carries qa + error. */
@@ -173,7 +171,11 @@ export default function PackagePanel({ jobId, job, packages, view, application, 
   }
 
   const applyHref = job.apply_url ?? job.canonical_url
-  const locked = status === 'locked' || Boolean(view?.application?.locked)
+  // `locked` is THIS package's status. A redo beside an applied application is a draft:
+  // editable, but it can never be marked ready to apply (APPLIED → READY_TO_APPLY is not a
+  // legal transition), so the finalize block is replaced by a note.
+  const locked = status === 'locked'
+  const applicationLocked = Boolean(view?.application?.locked)
   const readOnly = locked || status === 'superseded' || status === 'ready_to_apply'
 
   return (
@@ -195,25 +197,7 @@ export default function PackagePanel({ jobId, job, packages, view, application, 
         </div>
       )}
 
-      {generating && (
-        <div className="rounded-xl border border-indigo-200 bg-indigo-50/40 p-4">
-          <p className="text-sm font-medium text-indigo-900">Generating package…</p>
-          <ol className="mt-2 space-y-0.5 text-xs">
-            {Object.entries(STAGE_LABEL)
-              .filter(([k]) => ['started', 'intelligence', 'tailoring', 'resume_review'].includes(k))
-              .map(([k, label]) => {
-                const order = ['started', 'intelligence', 'tailoring', 'resume_review']
-                const cur = order.indexOf(stage ?? 'started')
-                const idx = order.indexOf(k)
-                return (
-                  <li key={k} className={idx < cur ? 'text-emerald-700' : idx === cur ? 'text-indigo-800 font-medium' : 'text-slate-400'}>
-                    {idx < cur ? '✓' : idx === cur ? '●' : '○'} {label}
-                  </li>
-                )
-              })}
-          </ol>
-        </div>
-      )}
+      {generating && <PackageProgress stage={stage} />}
 
       {latest && view && !generating && (
         <>
@@ -230,6 +214,11 @@ export default function PackagePanel({ jobId, job, packages, view, application, 
             <InlineNotice kind="info">
               This package is <strong>locked</strong>: it is the record of what you submitted. It can no longer be edited in place —
               a redo creates a new version beside it.
+            </InlineNotice>
+          )}
+          {applicationLocked && !locked && (
+            <InlineNotice kind="info">
+              You already applied with the submitted version — this v{view.package.version} is a draft beside it and cannot be marked ready to apply.
             </InlineNotice>
           )}
 
@@ -362,7 +351,7 @@ export default function PackagePanel({ jobId, job, packages, view, application, 
             <LetterPanel packageId={latest.id} letter={view.cover_letter} readOnly={readOnly} onChanged={onLetter} onDocuments={onReload} />
           )}
 
-          {status === 'ready_for_review' && (
+          {status === 'ready_for_review' && !applicationLocked && (
             <div className="rounded-lg border border-emerald-200 bg-emerald-50/40 p-3">
               <p className="text-sm text-slate-700">
                 Finalizing marks the package READY TO APPLY. The cover letter should be approved first;

@@ -49,7 +49,7 @@ const LOCKED_STATES: ApplicationState[] = ['APPLIED', 'OA', 'INTERVIEW', 'FINAL_
 
 export const STATE_LABELS: Record<ApplicationState, string> = {
   DISCOVERED: 'Discovered',
-  SAVED: 'Saved',
+  SAVED: 'Tracked',
   RESEARCHED: 'Researched',
   PREPARING: 'Preparing',
   READY_FOR_REVIEW: 'Ready for review',

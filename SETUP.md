@@ -1,7 +1,8 @@
 # Outreach OS — Setup Guide
 
-> AI-powered relationship outreach for Founders: Illinois Entrepreneurs
-> Personalized cold email at scale — for YC founders, SF operators, mentors, investors.
+> Finds the right people and the right internships, researches, drafts and tracks; you approve.
+> Nothing is sent or submitted without you. How to use it day to day:
+> [docs/HOW_TO_USE_OUTREACH_OS.md](docs/HOW_TO_USE_OUTREACH_OS.md).
 
 ---
 
@@ -9,8 +10,10 @@
 
 - Node.js 18+ (`node -v` to check)
 - A Supabase account (free): https://supabase.com
-- Your OpenAI API key: https://platform.openai.com/api-keys
-- Your Resend account + API key: https://resend.com
+- An OpenAI API key: https://platform.openai.com/api-keys
+- An Anthropic API key (Career OS agents): https://console.anthropic.com
+- A Google Cloud OAuth client (Gmail sending and reply sync — Step 3)
+- An Apollo API key (contact enrichment): https://app.apollo.io
 
 ---
 
@@ -33,23 +36,27 @@ npm install
    - `anon public` key → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
    - `service_role` key → `SUPABASE_SERVICE_ROLE_KEY`
 
-5. Go to **SQL Editor** in Supabase, paste the entire contents of
-   `supabase/migrations/001_initial.sql` and click **Run**
+5. Go to **SQL Editor** and run every file in `supabase/migrations/` in numeric order
+   (`001_initial.sql` through `015_evidence_canonical.sql`). Each file is idempotent, so
+   re-running one is harmless. Run `npm run check:sql` first if you have edited a migration.
 
-   This creates all tables, RLS policies, and indexes.
+   This creates all tables, RLS policies, indexes and the private `career-docs` storage bucket.
 
 ---
 
-## Step 3 — Resend Setup
+## Step 3 — Google OAuth (Gmail)
 
-1. Go to https://resend.com and create an account
-2. Add and verify a sending domain (even a subdomain works: `mail.yourdomain.com`)
-   - If you don't have a domain yet, use Resend's test mode (emails only go to your own address)
-3. Go to **API Keys** → Create key → copy it
-4. (Optional) Go to **Webhooks** → Add endpoint:
-   - URL: `https://your-app.vercel.app/api/webhooks/resend`
-   - Events: `email.delivered`, `email.opened`, `email.bounced`
-   - Copy the signing secret
+The app sends from **your own Gmail** and reads replies from it. There is no third-party mail
+service.
+
+1. At https://console.cloud.google.com/apis/credentials create an OAuth 2.0 **Web application**
+   client. Enable the Gmail API for the project.
+2. Consent screen scopes: `openid`, `email`, `gmail.send`, `gmail.readonly`. Add yourself as a
+   test user (Testing mode is fine for personal use).
+3. Authorized redirect URIs: `http://localhost:3000/api/google/callback` and, later, your
+   production URL with the same path.
+4. Copy the client ID and secret into `.env.local` (Step 4). After the app is running, open
+   **Profile & Settings** and click **Connect Gmail**.
 
 ---
 
@@ -59,7 +66,7 @@ npm install
 cp .env.local.example .env.local
 ```
 
-Edit `.env.local` and fill in all values:
+Edit `.env.local` and fill in the values (`.env.local.example` explains each one):
 
 ```env
 NEXT_PUBLIC_SUPABASE_URL=https://xxxx.supabase.co
@@ -67,13 +74,20 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
 SUPABASE_SERVICE_ROLE_KEY=eyJ...
 
 OPENAI_API_KEY=sk-...
+ANTHROPIC_API_KEY=sk-ant-...
+APOLLO_API_KEY=...
 
-RESEND_API_KEY=re_...
-FROM_EMAIL=outreach@yourdomain.com
-FROM_NAME=Founders Illinois Entrepreneurs
-RESEND_WEBHOOK_SECRET=whsec_...   # optional, for reply tracking
+GOOGLE_CLIENT_ID=....apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=...
+GOOGLE_REDIRECT_URI=http://localhost:3000/api/google/callback
+EMAIL_TOKEN_ENCRYPTION_KEY=...   # base64 32-byte key; see .env.local.example
 
 NEXT_PUBLIC_APP_URL=http://localhost:3000
+
+CAREER_MASTER_RESUME_PATH=./Zuyu_Resume.docx
+CAREER_OUTPUT_DIR=./.career-out
+CRON_SECRET=change-me
+# CAREER_USER_ID=   optional; only needed with more than one profile in the database
 ```
 
 ---
@@ -87,11 +101,10 @@ npm run dev
 Open http://localhost:3000
 
 1. Create an account (signup)
-2. You'll land on the Dashboard
-3. Click **Add Contact** → add a YC founder or SF operator
-4. Open their contact page → click **Run AI Research**
-5. Go to **Compose** → select them → pick a goal → **Generate AI Email Variants**
-6. Pick a variant, edit it, hit **Send**
+2. Open **Profile & Settings** → **Connect Gmail**
+3. Go to **Scout**, describe who you want to reach, and run it
+4. Review the drafts on **Outreach**; approve and send the ones you like
+5. Replies arrive on **Conversations** (sync from Gmail)
 
 ---
 
@@ -107,14 +120,14 @@ Or connect your GitHub repo at https://vercel.com/new
 **Add environment variables** in Vercel dashboard:
 - Settings → Environment Variables → paste all values from `.env.local`
 
-Update `NEXT_PUBLIC_APP_URL` to your Vercel URL.
+Update `NEXT_PUBLIC_APP_URL` and `GOOGLE_REDIRECT_URI` to your Vercel URL, and add that
+redirect URI to the Google OAuth client.
 
 ---
 
 ## Step 7 — Career OS (Summer 2027 job search)
 
-1. In the Supabase SQL editor, run `supabase/migrations/014_career_os.sql` (idempotent; it also
-   creates the private `career-docs` storage bucket). Run 013 first if you have not.
+1. Migrations 014 and 015 are part of Step 2. If you skipped them, run them now.
 2. Put your master résumé at `./Zuyu_Resume.docx` (untracked — it is gitignored). Set
    `ANTHROPIC_API_KEY`; optionally `CAREER_MASTER_RESUME_PATH`, `CAREER_OUTPUT_DIR`, `CRON_SECRET`
    (see `.env.local.example`).
@@ -131,27 +144,7 @@ Update `NEXT_PUBLIC_APP_URL` to your Vercel URL.
 6. `npm run career:verify` (or the daily cron at `/api/career/cron/verify` with `CRON_SECRET`)
    re-checks saved and tracked postings and closes ones that disappeared before you applied.
 
-## How to Use — Workflow
-
-### For YC Founder / Speaker Outreach
-1. Add contact: name + company + LinkedIn URL
-2. Research: click "Run AI Research" — GPT-4o uses its knowledge of the person
-   - OR paste their LinkedIn "About" section for better results
-3. Review research card: summary, talking points, shared context
-4. Compose → Goal: "Speaker / Event" → Generate
-5. Pick best variant, edit if needed, send
-6. Track replies in Conversations tab
-
-### For Mentor Program
-Same flow, Goal: "Mentor / Advisor"
-
-### For Internship Pipeline
-Same flow, Goal: "Internship / Jobs"
-Add custom note: "We have 3 senior engineers and 2 PMs to introduce"
-
-### For Investor Introductions
-Same flow, Goal: "Investor Intro"
-Add custom note: describe the student startup briefly
+The full command list is in [README.md](README.md#founder-commands).
 
 ---
 
@@ -159,23 +152,13 @@ Add custom note: describe the student startup briefly
 
 | Feature | How to use |
 |---------|-----------|
-| AI Research | Contact page → "Run AI Research" |
-| Paste LinkedIn bio | Research card → 📋 icon → paste text |
-| Generate 3 email variants | Compose → select contact + goal → Generate |
-| Edit before sending | Compose → click any variant → edit inline |
-| Track emails | Conversations tab (once Resend webhook is set up) |
-| Group by goal | Campaigns tab → create a campaign |
-
----
-
-## Customizing Sender Context
-
-The AI is pre-loaded with context about Illinois Entrepreneurs. To update this, edit:
-
-```
-lib/ai/research.ts  — CLUB_CONTEXT variable (lines 7–14)
-lib/ai/personalize.ts — SYSTEM_PROMPT (update club details)
-```
+| Find people for a goal | Scout → describe the goal → ranked prospects with why-them / why-me |
+| Send Scout's drafts | Outreach → edit, approve, send (one click each; nothing auto-sends) |
+| Track replies | Conversations (pulled from Gmail; sync also updates Outreach) |
+| Email someone you already have | Contacts → Compose → template fill or three AI variants |
+| Make Scout sound like you | Campaigns → paste a reference email → pick it on Scout |
+| Find internships | Jobs → Scout now |
+| Build a résumé + cover letter | Job → Package tab → Generate package |
 
 ---
 
@@ -186,18 +169,8 @@ lib/ai/personalize.ts — SYSTEM_PROMPT (update club details)
 | Frontend | Next.js 14 App Router |
 | Database | Supabase (PostgreSQL + RLS) |
 | Auth | Supabase Auth |
-| AI Research | OpenAI GPT-4o |
-| AI Generation | OpenAI GPT-4o |
-| AI Classification | OpenAI GPT-4o-mini |
-| Email Sending | Resend |
+| Outreach agents | OpenAI (roles in `lib/ai/models.ts`) |
+| Career OS agents | Anthropic |
+| Contact enrichment | Apollo |
+| Email sending and reply sync | Gmail API, per-user OAuth2 |
 | Deployment | Vercel |
-
----
-
-## Adding Features Later
-
-- **Trigger.dev background jobs**: For automated follow-up scheduling
-- **LinkedIn scraping**: Integrate Firecrawl (`npm install @mendable/firecrawl-js`) in `lib/ai/research.ts`
-- **CRM sync**: Add Notion or HubSpot API calls in `app/api/send/route.ts`
-- **Analytics dashboard**: Query `template_performance` and `email_events` tables
-- **CSV import**: Build a file upload in `app/(dashboard)/contacts/import/page.tsx`

@@ -270,6 +270,12 @@ it).
 language or a 404 is `CLOSED`; unconfirmed for longer than the staleness window is `STALE`.
 Saved and applied-to jobs are re-checked by `npm run career:verify` and by the cron route.
 
+**Season** is Summer 2027 by construction: `lib/career/jobs/normalize.ts` classifies
+`season_relevance` against summer 2027, `lib/career/scout/orchestrator.ts` boosts `summer_2027`
+when ranking what to extract, and the Jobs card chip reads the same literal — none of them read
+`career_missions.season`. The Mission page therefore does not offer a season (or status) control
+until the chip and scoring read the mission; the PATCH route still accepts both keys.
+
 ---
 
 ## 6. Fit

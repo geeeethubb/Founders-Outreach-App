@@ -9,7 +9,8 @@ export const maxDuration = 300
 const MAX_BYTES = 5 * 1024 * 1024
 
 /**
- * Multipart: `file` (.docx), `as_master` ('true' | 'false'), `approve`.
+ * Multipart: `file` (.docx), `as_master` ('true' | 'false'), `approve`,
+ * `include_profile` ('true' also imports the My Profile free text as a second source).
  * Saves the document, then seeds experiences, bullets and the importer's
  * proposals from it. An alternate (as_master=false) is stored but its bullets
  * are not marked on-master.
@@ -27,13 +28,14 @@ export async function POST(request: NextRequest) {
     if (file.size > MAX_BYTES) return NextResponse.json({ error: 'File is larger than 5 MB.' }, { status: 413 })
     const asMaster = String(form.get('as_master') ?? 'true') !== 'false'
     const approve = String(form.get('approve') ?? 'false') === 'true'
+    const includeProfile = String(form.get('include_profile') ?? 'false') === 'true'
 
     if (!asMaster) {
       return NextResponse.json({ error: 'Alternate résumés are not imported yet — upload as master.' }, { status: 400 })
     }
 
     const buffer = Buffer.from(await file.arrayBuffer())
-    const result = await seedEvidenceFromDocx(user.id, buffer, { approve, filename: file.name })
+    const result = await seedEvidenceFromDocx(user.id, buffer, { approve, includeProfile, filename: file.name })
     if (result.migrationMissing) {
       return NextResponse.json({ error: 'Apply supabase/migrations/014_career_os.sql first.', migrationMissing: true }, { status: 409 })
     }

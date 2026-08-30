@@ -22,7 +22,7 @@ const STATE_STYLE: Record<string, string> = {
 
 const STATE_LABEL: Record<string, string> = {
   DISCOVERED: 'Discovered',
-  SAVED: 'Saved',
+  SAVED: 'Tracked',
   RESEARCHED: 'Researched',
   PREPARING: 'Preparing',
   READY_FOR_REVIEW: 'Ready for review',

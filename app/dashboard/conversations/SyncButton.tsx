@@ -23,24 +23,32 @@ export default function SyncButton() {
         threadsResolved?: number
         sentEmails?: number
         error?: string
+        errors?: string[]
       }
       if (!res.ok) {
         setIsError(true)
         setMessage(data.error ?? 'Sync failed')
         return
       }
+      let text: string
       if (data.newReplies && data.newReplies > 0) {
-        setMessage(`Found ${data.newReplies} new ${data.newReplies === 1 ? 'reply' : 'replies'}`)
+        text = `Found ${data.newReplies} new ${data.newReplies === 1 ? 'reply' : 'replies'}`
         router.refresh()
       } else if (!data.sentEmails) {
-        setMessage('No sent emails to check yet')
+        text = 'No sent emails to check yet'
       } else if (!data.threadsResolved) {
         // Sent emails exist but none mapped to a Gmail thread — usually a missing
         // read scope or the send predating thread tracking.
-        setMessage(`No Gmail threads matched your ${data.sentEmails} sent email${data.sentEmails === 1 ? '' : 's'}`)
+        text = `No Gmail threads matched your ${data.sentEmails} sent email${data.sentEmails === 1 ? '' : 's'}`
       } else {
-        setMessage(`Up to date · checked ${data.threadsResolved} thread${data.threadsResolved === 1 ? '' : 's'}`)
+        text = `Up to date · checked ${data.threadsResolved} thread${data.threadsResolved === 1 ? '' : 's'}`
       }
+      // Errors from linking replies to Outreach rows — shown, never swallowed.
+      if (data.errors && data.errors.length > 0) {
+        setIsError(true)
+        text = `${text} · ${data.errors.join('; ')}`
+      }
+      setMessage(text)
     } catch {
       setIsError(true)
       setMessage('Sync failed')
@@ -76,7 +84,7 @@ export default function SyncButton() {
         >
           <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
         </svg>
-        {syncing ? 'Syncing…' : 'Sync from Gmail'}
+        {syncing ? 'Syncing…' : 'Sync replies'}
       </button>
     </div>
   )

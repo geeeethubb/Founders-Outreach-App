@@ -118,8 +118,8 @@ profiles ──┬── contacts ──┬── contact_research   (1:1)
 
 ### Dead or unused tables
 
-- **`email_events`** — only the Resend webhook writes here. That webhook is dead (§6).
-  Open/click tracking does not work with the Gmail send path.
+- **`email_events`** — nothing writes here since the dead Resend webhook was deleted
+  (2026-08-30). Open/click tracking does not exist on the Gmail send path.
 - **`template_performance`** — nothing writes to it. Zero rows in practice.
 - **`followups`** — table exists; the shipped follow-up flow uses `emails.reply_to_email_id`
   instead. Effectively unused.
@@ -146,7 +146,6 @@ profiles ──┬── contacts ──┬── contact_research   (1:1)
 | `/api/google/{connect,callback,status,disconnect}` | Gmail OAuth lifecycle | |
 | `/api/templates`, `/api/templates/[id]` | Template CRUD | |
 | `/api/contacts/[id]` | Update / delete a contact | |
-| `POST /api/webhooks/resend` | **Dead** | See §6 |
 
 ---
 
@@ -170,16 +169,12 @@ messages not from the user, and imports new ones. Idempotency comes from a uniqu
 search (`rfc822msgid:` first, then `to:<contact email>`). Each imported reply is classified
 by an LLM, which then updates conversation and contact status.
 
-### The Resend webhook — dead code
+### The Resend webhook — deleted
 
-`app/api/webhooks/resend/route.ts` still exists and still parses Resend events, but:
-
-- `RESEND_API_KEY` / `RESEND_WEBHOOK_SECRET` are **not** in `.env.local`.
-- `verifyWebhookSignature()` is a stub that **returns `false` unconditionally** — so if a
-  secret were ever configured, every request would be rejected as invalid.
-- Nothing sends via Resend, so no Resend event can ever arrive.
-
-It is unreachable in practice. Delete it in V2.
+`app/api/webhooks/resend/route.ts` was deleted on 2026-08-30. Nothing ever sent via Resend,
+so no event could arrive, and its signature verifier returned `false` unconditionally.
+`verifyWebhookSignature()` in `lib/email/resend.ts` is now unreferenced (that file is in the
+do-not-touch zone and stays as is).
 
 **Consequence:** open and click tracking do not exist. `email_events` never fills.
 Any "open rate" in the product is structurally unavailable — which is fine, because the
@@ -271,23 +266,14 @@ Compose, Draft Emails, Campaigns, My Profile, Conversations.
 `NEXT_PUBLIC_APP_URL`, plus two dead leftovers (`GMAIL_USER`, `GMAIL_APP_PASSWORD` from the
 pre-OAuth SMTP era).
 
-`.env.local.example` is **out of date**: it still documents `RESEND_API_KEY`, `FROM_EMAIL`,
-and `RESEND_WEBHOOK_SECRET`, none of which are used, and omits `APOLLO_API_KEY`, which is.
+`.env.local.example` matches the variables the code reads (the Resend block was removed on
+2026-08-30); `CAREER_USER_ID` is optional and only matters with more than one profile.
 
-### ⚠ Security finding — committed credential
+### Security note — the committed credential
 
-`Apollo API.txt` is a 22-byte file, **tracked in git**, containing a single bare token string.
-It does not match the `APOLLO_API_KEY` currently in `.env.local`, so it is most likely a
-superseded key — but a credential-shaped secret is in the repository history either way.
-
-**Recommended action (needs your decision, not done automatically):**
-1. Rotate that key in the Apollo dashboard, regardless of whether it is still live.
-2. `git rm --cached "Apollo API.txt"` and add it to `.gitignore`.
-3. Removing it from *history* requires a rewrite (`git filter-repo`) and a force-push.
-   If this repo has ever been pushed to a remote or shared, do the rewrite. If it has only
-   ever been local and private, rotating the key is sufficient.
-
-`.gitignore` correctly covers `.env*` files. This is an isolated slip, not a pattern.
+`Apollo API.txt` (a bare token string) was untracked and gitignored on 2026-08-10 (see
+BUILD_LOG, Phase 3); it is no longer in the working tree. The key should still be rotated if
+it never was, and the string remains in git history. `.gitignore` covers `.env*` files.
 
 ---
 
@@ -305,7 +291,7 @@ Ordered by how much it blocks the new architecture.
 | 6 | **Scoring is one opaque float** | V2 requires component scores, per-mission weights, evidence, and confidence. |
 | 7 | **No agent-run observability** | "Why this person? Why this email?" is unanswerable today. |
 | 8 | **Goals are a 5-value enum; club identity is hardcoded in prompts** | V2 needs a generalized Mission system. |
-| 9 | **Dead Resend surface** — route, `email_events`, stub verifier that returns `false` | Confusing; the misleading `resend.ts` / `resend_message_id` names actively mislead readers. |
+| 9 | **Resend leftovers** — `email_events` (route deleted 2026-08-30), stub verifier in `resend.ts` | The misleading `resend.ts` / `resend_message_id` names still mislead readers. |
 | 10 | **No tests, no eval harness** | V2 gates outbound mail on evaluation. Needs a runner. |
 | 11 | **No design system**; 962-line page; duplicated constants | Slows every new screen. Not blocking, but compounding. |
 

@@ -1,20 +1,12 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import type { Campaign } from '@/types'
 import { formatRelativeTime } from '@/lib/utils'
 
-const CAMPAIGN_PRESETS = [
-  { name: 'Spring Speaker Series 2025', goal: 'Recruit 6 YC founders / SF operators to speak at our spring events' },
-  { name: 'Mentor Program — Fall 2025', goal: 'Find 10 mentors for our student founders cohort' },
-  { name: 'Internship Pipeline — Summer 2025', goal: 'Connect top UIUC students with Bay Area startup internships' },
-  { name: 'Investor Intros — Seed Round', goal: 'Facilitate introductions to seed-stage investors for 3 student-led startups' },
-]
-
 export default function CampaignsPage() {
-  const router = useRouter()
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [loading, setLoading] = useState(true)
   const [showCreate, setShowCreate] = useState(false)
@@ -95,28 +87,13 @@ export default function CampaignsPage() {
         <div className="bg-white rounded-xl border border-slate-200 p-5 mb-6">
           <h3 className="font-semibold text-slate-800 mb-4">Create Campaign</h3>
 
-          {/* Presets */}
-          <p className="text-xs text-slate-500 mb-2">Quick presets for Illinois Entrepreneurs:</p>
-          <div className="flex flex-wrap gap-2 mb-4">
-            {CAMPAIGN_PRESETS.map((p) => (
-              <button
-                key={p.name}
-                type="button"
-                onClick={() => { setName(p.name); setGoal(p.goal) }}
-                className="text-xs px-2.5 py-1 border border-slate-200 rounded-full text-slate-600 hover:border-indigo-400 hover:text-indigo-600 transition-colors"
-              >
-                {p.name}
-              </button>
-            ))}
-          </div>
-
           <form onSubmit={createCampaign} className="space-y-3">
             <div>
               <label className="block text-xs font-medium text-slate-600 mb-1">Campaign Name *</label>
               <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Spring Speaker Series 2025"
+                placeholder="e.g. Industrial AI internships — winter 2026"
                 required
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
@@ -156,7 +133,11 @@ export default function CampaignsPage() {
       ) : (
         <div className="space-y-3">
           {campaigns.map((campaign) => (
-            <div key={campaign.id} className="bg-white rounded-xl border border-slate-200 p-5 hover:border-indigo-200 transition-colors">
+            <Link
+              key={campaign.id}
+              href={`/dashboard/campaigns/${campaign.id}`}
+              className="block bg-white rounded-xl border border-slate-200 p-5 hover:border-indigo-200 transition-colors"
+            >
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-1">
@@ -179,32 +160,9 @@ export default function CampaignsPage() {
                 </span>
                 <div className="flex gap-2 ml-auto">
                   <button
-                    onClick={() => router.push(`/dashboard/campaigns/${campaign.id}`)}
-                    className="text-xs text-indigo-600 hover:text-indigo-700 font-medium"
-                  >
-                    Open dashboard
-                  </button>
-                  <span className="text-slate-200">|</span>
-                  <button
-                    onClick={async () => {
-                      await supabase.from('campaigns')
-                        .update({ status: campaign.status === 'active' ? 'paused' : 'active' })
-                        .eq('id', campaign.id)
-                      setCampaigns((c) =>
-                        c.map((x) =>
-                          x.id === campaign.id
-                            ? { ...x, status: campaign.status === 'active' ? 'paused' : 'active' }
-                            : x
-                        )
-                      )
-                    }}
-                    className="text-xs text-slate-500 hover:text-slate-700"
-                  >
-                    {campaign.status === 'active' ? 'Pause' : 'Resume'}
-                  </button>
-                  <span className="text-slate-200">|</span>
-                  <button
-                    onClick={async () => {
+                    onClick={async (e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
                       if (!confirm(`Delete "${campaign.name}"? This cannot be undone.`)) return
                       await supabase.from('campaigns').delete().eq('id', campaign.id)
                       setCampaigns((c) => c.filter((x) => x.id !== campaign.id))
@@ -215,7 +173,7 @@ export default function CampaignsPage() {
                   </button>
                 </div>
               </div>
-            </div>
+            </Link>
           ))}
         </div>
       )}

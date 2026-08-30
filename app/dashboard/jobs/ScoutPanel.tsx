@@ -107,8 +107,21 @@ export default function ScoutPanel({
     // A 409 carries the partial result too; show whatever came back, never hide it.
     const body = (r.data ?? (r.body?.result as ScoutResult | undefined)) ?? null
     if (body) setResult(body)
-    if (!r.ok) setError(r.error)
-    if (r.ok) onFinished()
+    if (!r.ok) {
+      setError(
+        r.status === 504 || r.status === 0
+          ? 'The web run ran out of time. Whatever it stored is already in the list; for a longer run use npm run career:scout.'
+          : r.error
+      )
+    }
+    // Rows are persisted before the 270 s deadline even when the route itself times out,
+    // so the list is refreshed on every outcome — a 504 must not hide stored jobs.
+    onFinished()
+  }
+
+  function runAgain() {
+    setResult(null)
+    setError(null)
   }
 
   return (
@@ -119,29 +132,41 @@ export default function ScoutPanel({
           <p className={`text-xs mt-0.5 ${direction?.trim() ? 'text-slate-700 font-medium' : 'text-slate-500 italic'}`}>{scoutingLine(direction)}</p>
           <p className="text-xs text-slate-500 mt-0.5">
             Plans search strategies from what you&apos;re scouting for and the mission, checks watched companies, searches the web, extracts and
-            verifies postings. One run fits the 300s web ceiling at these caps; the CLI (<code>npm run career:scout</code>) has no ceiling.
+            verifies postings. Up to five minutes.
           </p>
         </div>
-        <button type="button" onClick={onClose} className="text-xs text-slate-500 hover:text-slate-900">
+        <button
+          type="button"
+          onClick={onClose}
+          disabled={running}
+          title={running ? 'A run is in progress — results appear here' : undefined}
+          className="text-xs text-slate-500 hover:text-slate-900 disabled:opacity-40 disabled:cursor-not-allowed"
+        >
           Close
         </button>
       </div>
 
       {!running && !result && (
         <>
-          <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Slider label="Strategies" value={strategies} max={CAPS.strategies} onChange={setStrategies} hint="planner strategies to execute" />
-            <Slider label="Rounds" value={rounds} max={CAPS.rounds} onChange={setRounds} hint="web-search rounds per strategy" />
-            <Slider label="Companies" value={companies} max={CAPS.companies} onChange={setCompanies} hint="watched companies to check" />
-            <Slider label="Extract" value={extract} max={CAPS.extract} onChange={setExtract} hint="postings to extract (each is a model call)" />
-          </div>
-          <label className="mt-3 flex items-center gap-2 text-xs text-slate-600">
-            <input type="checkbox" checked={verify} onChange={(e) => setVerify(e.target.checked)} />
-            Verify each posting is open (fetches the page; ambiguous pages cost a model call)
-          </label>
-          <button type="button" onClick={run} className="mt-3 px-4 py-2 rounded-md bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700">
+          <button type="button" onClick={run} className="mt-4 px-4 py-2 rounded-md bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700">
             Run scout
           </button>
+          <details className="mt-3">
+            <summary className="text-xs text-slate-600 cursor-pointer">Run size (defaults fit the five-minute limit)</summary>
+            <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-4">
+              <Slider label="Strategies" value={strategies} max={CAPS.strategies} onChange={setStrategies} hint="planner strategies to execute" />
+              <Slider label="Rounds" value={rounds} max={CAPS.rounds} onChange={setRounds} hint="web-search rounds per strategy" />
+              <Slider label="Companies" value={companies} max={CAPS.companies} onChange={setCompanies} hint="watched companies to check" />
+              <Slider label="Extract" value={extract} max={CAPS.extract} onChange={setExtract} hint="postings to extract (each is a model call)" />
+            </div>
+            <label className="mt-3 flex items-center gap-2 text-xs text-slate-600">
+              <input type="checkbox" checked={verify} onChange={(e) => setVerify(e.target.checked)} />
+              Verify each posting is open (fetches the page; ambiguous pages cost a model call)
+            </label>
+            <p className="mt-2 text-[11px] text-slate-400">
+              One run fits the 300s web ceiling at these caps; the CLI (<code>npm run career:scout</code>) has no ceiling.
+            </p>
+          </details>
         </>
       )}
 
@@ -161,7 +186,17 @@ export default function ScoutPanel({
 
       {error && (
         <div className="mt-4">
-          <InlineNotice kind="error">{error}</InlineNotice>
+          <InlineNotice kind="error">
+            {error}
+            {!result && (
+              <>
+                {' '}
+                <button type="button" onClick={runAgain} className="underline">
+                  Run again
+                </button>
+              </>
+            )}
+          </InlineNotice>
         </div>
       )}
 
@@ -180,6 +215,9 @@ export default function ScoutPanel({
             <span className="text-slate-400">·</span>
             <span>{(result.latencyMs / 1000).toFixed(0)}s</span>
             {result.stats?.deadline_hit && <span className="text-amber-700 font-medium">· deadline hit — partial run</span>}
+            <button type="button" onClick={runAgain} className="ml-auto text-xs px-2.5 py-1 rounded-md border border-slate-300 text-slate-700 hover:bg-white">
+              Run again
+            </button>
           </div>
           {result.plan && (
             <p className="text-xs text-slate-600">

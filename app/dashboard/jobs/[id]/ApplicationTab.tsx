@@ -54,7 +54,7 @@ export default function ApplicationTab({
     return (
       <div className="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center">
         <p className="text-slate-700 font-medium">Not being tracked yet.</p>
-        <p className="text-sm text-slate-500 mt-1 mb-3">Saving a job or generating a package starts an application record automatically.</p>
+        <p className="text-sm text-slate-500 mt-1 mb-3">Generating a package or pressing Track this job starts an application record; the card&apos;s Save only shortlists the job.</p>
         <button type="button" onClick={start} disabled={busy} className="px-3 py-1.5 rounded-md border border-slate-300 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50">
           {busy ? 'Starting…' : 'Track this job'}
         </button>

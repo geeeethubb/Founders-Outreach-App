@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import type { EvidenceBank, EvidencePreference } from '@/lib/career/types'
 import { Notice, insertRow, patchRow, removeRow } from './shared'
 
@@ -29,7 +30,9 @@ export default function PreferencesTab({ bank, reload }: { bank: EvidenceBank; r
     <div className="space-y-4">
       {error && <Notice kind="error">{error}</Notice>}
       <p className="text-sm text-slate-600">
-        Soft preferences carry a weight the ranking reads. A hard constraint eliminates rather than penalizes — feedback never changes it.
+        Copied from the Mission at seed time. The Mission page is what gates and ranks — edit there:{' '}
+        <Link href="/dashboard/jobs/mission" className="font-medium text-indigo-600 hover:underline">Jobs → Mission</Link>.
+        These rows only add a line to the planner and fit prompts.
       </p>
       <div className="flex flex-wrap items-center gap-2">
         <input value={category} onChange={(e) => setCategory(e.target.value)} list="pref-categories" placeholder="category" className="w-40 rounded border border-slate-300 px-2 py-1 text-sm" />
@@ -65,6 +68,7 @@ export default function PreferencesTab({ bank, reload }: { bank: EvidenceBank; r
 
 function PreferenceRow({ p, busy, act }: { p: EvidencePreference; busy: boolean; act: (id: string, fn: () => Promise<unknown>) => Promise<void> }) {
   const [weight, setWeight] = useState(Number(p.weight))
+  const save = () => { if (weight !== Number(p.weight)) act(p.id, () => patchRow('evidence_preferences', p.id, { weight })) }
   return (
     <tr className="border-b border-slate-50 last:border-0">
       <td className="px-4 py-2 text-slate-800">
@@ -79,20 +83,15 @@ function PreferenceRow({ p, busy, act }: { p: EvidencePreference; busy: boolean;
             max={1}
             step={0.05}
             value={weight}
-            disabled={p.hard_constraint || busy}
+            disabled={busy}
             onChange={(e) => setWeight(Number(e.target.value))}
-            onMouseUp={() => weight !== Number(p.weight) && act(p.id, () => patchRow('evidence_preferences', p.id, { weight }))}
-            onTouchEnd={() => weight !== Number(p.weight) && act(p.id, () => patchRow('evidence_preferences', p.id, { weight }))}
+            onMouseUp={save}
+            onTouchEnd={save}
+            onBlur={save}
             className="w-32"
           />
-          <span className="w-10 text-xs tabular-nums text-slate-600">{p.hard_constraint ? '—' : weight.toFixed(2)}</span>
+          <span className="w-10 text-xs tabular-nums text-slate-600">{weight.toFixed(2)}</span>
         </div>
-      </td>
-      <td className="w-32 px-4 py-2">
-        <label className="flex items-center gap-1.5 text-xs text-slate-600">
-          <input type="checkbox" checked={p.hard_constraint} disabled={busy} onChange={(e) => act(p.id, () => patchRow('evidence_preferences', p.id, { hard_constraint: e.target.checked }))} />
-          hard
-        </label>
       </td>
       <td className="w-16 px-4 py-2 text-right">
         <button type="button" disabled={busy} onClick={() => act(p.id, () => removeRow('evidence_preferences', p.id))} className="text-[11px] text-slate-400 hover:text-red-600">delete</button>

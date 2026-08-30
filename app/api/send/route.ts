@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
     const account = await getEmailAccount(user.id)
     if (!account) {
       return NextResponse.json(
-        { error: 'Connect your Gmail in Settings to send.' },
+        { error: 'Connect your Gmail on Profile & Settings to send.' },
         { status: 403 }
       )
     }
@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
       accessToken = await getAccessToken(account.refreshToken)
     } catch (e) {
       return NextResponse.json(
-        { error: e instanceof Error ? e.message : 'Gmail authorization failed — reconnect in Settings.' },
+        { error: e instanceof Error ? e.message : 'Gmail authorization failed — reconnect on Profile & Settings.' },
         { status: 401 }
       )
     }

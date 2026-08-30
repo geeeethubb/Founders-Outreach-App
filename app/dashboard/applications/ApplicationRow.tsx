@@ -74,6 +74,8 @@ export default function ApplicationRow({
   const [stage, setStage] = useState('')
 
   async function move(to: string) {
+    // Same warning the job's Application tab gives: APPLIED locks the documents.
+    if (to === 'APPLIED' && !window.confirm('Marking Applied locks the current package as the record of what you sent. Continue?')) return
     const note = to === 'REJECTED' || to === 'WITHDRAWN' ? window.prompt('Note (optional):') ?? null : null
     setBusy(true)
     setError(await onPatch(row.id, { state: to, note }))
@@ -126,14 +128,21 @@ export default function ApplicationRow({
               Posting ↗
             </a>
           )}
-          {/* Opens the job's Package tab with the redo confirm box; a redo is always a new version beside this one. */}
-          <Link
-            href={`/dashboard/jobs/${row.job_id}?tab=package&redo=1`}
-            title={row.locked ? 'Documents already submitted stay locked; the redo becomes a new version beside them' : 'Regenerate the package as a new version'}
-            className="text-slate-600 hover:underline"
-          >
-            Redo package
-          </Link>
+          {/* With a package: opens the job's Package tab with the redo confirm box (always a new version beside this one).
+              Tracked only: there is nothing to redo, so it opens the tab's Generate button instead. */}
+          {row.package ? (
+            <Link
+              href={`/dashboard/jobs/${row.job_id}?tab=package&redo=1`}
+              title={row.locked ? 'Documents already submitted stay locked; the redo becomes a new version beside them' : 'Regenerate the package as a new version'}
+              className="text-slate-600 hover:underline"
+            >
+              Redo package
+            </Link>
+          ) : (
+            <Link href={`/dashboard/jobs/${row.job_id}?tab=package`} title="Tailor the résumé and draft a cover letter for this job" className="text-slate-600 hover:underline">
+              Generate package
+            </Link>
+          )}
           <button onClick={() => setOpen((o) => !o)} className="text-slate-500 hover:text-slate-900">
             {open ? 'Hide' : 'Details'}
           </button>

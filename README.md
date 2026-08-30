@@ -106,9 +106,9 @@ Read [docs/CAREER_OS.md](docs/CAREER_OS.md). Measured: 0 unsupported résumé cl
 | Doc | What it covers |
 |---|---|
 | [PRODUCT.md](docs/PRODUCT.md) | What this is, the North Star, missions, scoring, approval |
-| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Target architecture and 29 decision records |
+| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Target architecture and 38 decision records |
 | [PIPELINE.md](docs/PIPELINE.md) | The state machine, stage by stage |
-| [AGENTS.md](docs/AGENTS.md) | The thirteen agents: inputs, outputs, boundaries |
+| [AGENTS.md](docs/AGENTS.md) | The agents (outreach and Career OS): inputs, outputs, boundaries |
 | [DATA_MODEL.md](docs/DATA_MODEL.md) | Schema, new tables, migration sequence |
 | [EVALS.md](docs/EVALS.md) | Quality criteria and thresholds |
 | [CURRENT_STATE.md](docs/CURRENT_STATE.md) | How the app works **today** |
@@ -123,31 +123,38 @@ Start with [PRODUCT.md](docs/PRODUCT.md) for the *what* and
 
 ## Status
 
-**Phase 10 complete.** Phases 0, 3, 6, 7, 8, 9 and 10 have shipped. The loop runs end to end:
-state a goal, get a ranked shortlist drawn from your own network first, read why each person
-is there, approve a draft, send it from your Gmail, and see the reply come back.
+**Phase 11 (Career OS) is built on the Phase 10 outreach loop, and both run end to end.**
+Migrations 014 and 015 are applied and the Evidence Bank is seeded; there are no outstanding
+founder actions.
 
 | | |
 |---|---|
-| Latest write-up | [PHASE_NETWORK_AND_REFERENCE.md](docs/PHASE_NETWORK_AND_REFERENCE.md) |
-| What changed and why, per phase | [BUILD_LOG.md](docs/BUILD_LOG.md) |
+| How to use it | [docs/HOW_TO_USE_OUTREACH_OS.md](docs/HOW_TO_USE_OUTREACH_OS.md) |
+| What changed and why | [BUILD_LOG.md](docs/BUILD_LOG.md) |
 | What is still V1 | [CURRENT_STATE.md](docs/CURRENT_STATE.md) |
 
-**Two founder actions are outstanding**, and the app tells you about both:
-
-```bash
-# 1. Apply supabase/migrations/013_network_and_reference.sql in the Supabase SQL editor.
-# 2. Then index the contacts you already have — once, about $1.60 for ~900 people.
-npm run index:network
-```
-
-Until then the scout searches an empty network index and says so in the run log.
-
-**Not built yet:** missions as a database object (they are run parameters today), the
-`no_response` timer, send pacing, and the learning surface. The Talent Knowledge Base is the
-Evidence Bank (`/dashboard/evidence`, migrations 014 + 015); Scout reads it, and the fixture at
-`evals/phase3/user-profile.ts` is only the empty-bank fallback. See
+**Not built yet:** the `no_response` timer, send pacing, the `followup_due_at` scheduler.
+Never built by design: autonomous submission and auto-send. See
 [IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md).
+
+### Founder commands
+
+| Command | What it does |
+|---|---|
+| `npm run dev` | Run the app at http://localhost:3000 |
+| `npm run career:scout` | Deep job scout from the terminal (**Scout now** on `/dashboard/jobs` is the same run capped to the web's 300 s) |
+| `npm run career:verify` | Re-check saved and tracked postings; closes ones that disappeared |
+| `npm run career:package -- --job <id>` | Build an application package for one job |
+| `npm run career:seed -- --approve` | Import the master résumé into the Evidence Bank (first setup, or to re-seed) |
+| `npm run evidence:audit` | Report duplicates and conflicts in the Evidence Bank without changing anything |
+| `npm run evidence:consolidate` | Apply the audit's high-confidence merges (snapshot first) |
+| `npm run career:fix-names` | Fix the applicant name on stored cover letters |
+| `npm run index:network` | Index contacts for Scout — run after adding people by hand |
+| `npm run check:sql` | Parse a migration with PostgreSQL's parser before applying it |
+| `npm run test:career` | Offline checks, no keys, free |
+
+Everything else in `package.json` (`eval:*`, `probe:*`, `smoke:*`, `test:career-*`) is
+development-only and costs money wherever it hits an API.
 
 ---
 
@@ -162,11 +169,10 @@ OpenAI · Gmail API (per-user OAuth2 for both sending and reply sync) · Apollo 
 
 See [SETUP.md](SETUP.md) for first-time setup.
 
-> **Note:** `SETUP.md` and `.env.local.example` still reference Resend, which the app no
-> longer uses — it sends through each user's own Gmail via OAuth. Both are corrected in
-> Phase 1. The variables actually required today are Supabase (URL, anon key, service-role
-> key), `OPENAI_API_KEY`, `APOLLO_API_KEY`, the four `GOOGLE_*` OAuth values,
-> `EMAIL_TOKEN_ENCRYPTION_KEY`, and `NEXT_PUBLIC_APP_URL`.
+The app sends through each user's own Gmail via OAuth; there is no third-party mail service.
+Required variables: Supabase (URL, anon key, service-role key), `OPENAI_API_KEY`,
+`ANTHROPIC_API_KEY`, `APOLLO_API_KEY`, the three `GOOGLE_*` OAuth values,
+`EMAIL_TOKEN_ENCRYPTION_KEY`, and `NEXT_PUBLIC_APP_URL`. See `.env.local.example`.
 
 ```bash
 npm install
@@ -178,8 +184,9 @@ Database migrations in `supabase/migrations/` are applied by hand in the Supabas
 in numeric order.
 
 The Career OS CLIs (`career:scout`, `career:verify`, `career:package`, `evidence:*`, …) act on one
-profile: pass `--user <id>` or set `CAREER_USER_ID` in `.env.local`; with several profiles and
-neither, they list the profiles and stop.
+profile. With one profile in the database (the normal case) nothing is needed; with several,
+pass `--user <id>` or set the optional `CAREER_USER_ID` in `.env.local`, otherwise they list
+the profiles and stop.
 
 ---
 

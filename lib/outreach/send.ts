@@ -104,7 +104,7 @@ export async function sendOutreach(userId: string, id: string): Promise<SendOutc
   // ─── Gmail ───
   const account = await getEmailAccount(userId)
   if (!account) {
-    return { ok: false, error: 'Connect your Gmail in Settings to send.', status: 403 }
+    return { ok: false, error: 'Connect your Gmail on Profile & Settings to send.', status: 403 }
   }
 
   const todayStart = new Date()
@@ -165,6 +165,11 @@ export async function sendOutreach(userId: string, id: string): Promise<SendOutc
       .insert({
         user_id: userId,
         contact_id: contact.id,
+        // A draft written in a campaign's voice counts as that campaign's send,
+        // so campaign stats and feedback see it.
+        // (Same cast store.ts uses: the column arrived in migration 013 and the
+        // OutreachRow interface does not list it.)
+        campaign_id: (before as unknown as { campaign_id?: string | null }).campaign_id ?? null,
         subject: before.subject,
         body,
         status: 'draft',

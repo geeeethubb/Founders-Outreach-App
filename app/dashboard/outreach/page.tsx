@@ -7,6 +7,7 @@
 // created; this is where they are decided on, sent, and tracked afterwards.
 
 import { useCallback, useEffect, useState } from 'react'
+import Link from 'next/link'
 import OutreachPanel, { StateBadge, type Grounding, type OutreachState } from '../scout/OutreachPanel'
 import ReplyPanel, { type ReplyState } from './ReplyPanel'
 
@@ -25,6 +26,7 @@ interface Row extends ReplyState {
   score: number | null
   sentAt: string | null
   sendError: string | null
+  conversationId: string | null
 }
 
 interface Funnel {
@@ -116,7 +118,10 @@ export default function OutreachPage() {
           <h1 className="text-2xl font-semibold text-slate-900">Outreach</h1>
           <p className="text-sm text-slate-600 mt-1">
             Every draft, its approval state, and what happened after it went out. Nothing sends
-            without you.
+            without you. To answer someone, use{' '}
+            <Link href="/dashboard/conversations" className="text-indigo-600 hover:underline">Conversations</Link>;
+            to find more people,{' '}
+            <Link href="/dashboard/scout" className="text-indigo-600 hover:underline">Scout</Link>.
           </p>
         </div>
         <button

@@ -170,7 +170,7 @@ function JobsView() {
         </div>
         <div className="flex items-center gap-2">
           <Link href="/dashboard/companies" className="text-sm text-slate-600 hover:text-slate-900">
-            Watchlist
+            Companies
           </Link>
           <Link href="/dashboard/applications" className="text-sm text-slate-600 hover:text-slate-900">
             Applications
@@ -271,7 +271,7 @@ function JobsView() {
           </p>
           <div className="space-y-3">
             {jobs.map((j) => (
-              <JobCard key={j.id} job={j} onChange={(p) => patchJob(j.id, p)} />
+              <JobCard key={j.id} job={j} onChange={(p) => patchJob(j.id, p)} onReranked={loadJobs} />
             ))}
           </div>
           <div className="mt-4 flex items-center justify-between text-xs text-slate-500">

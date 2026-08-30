@@ -225,10 +225,8 @@ and that column holds an RFC822 Message-ID this app generates.
 |---|---|
 | `lib/email/resend.ts` | Sends via **Gmail API**. Nothing uses Resend. |
 | `emails.resend_message_id` | An RFC822 Message-ID this app generates. Never a Resend ID. |
-| `app/api/webhooks/resend/` | **Dead.** Its verifier returns `false` unconditionally. Delete in Phase 10. |
 | `email_events`, `template_performance`, `followups` | Never written to. Drop in Phase 10. |
 | `nodemailer` | Used only as `MailComposer`, a MIME builder. No SMTP. |
-| `react-hot-toast` | A dependency that is never imported. Feedback uses inline divs and `alert()`. |
 | `tailwind.config.ts` `brand` colors | Defined, never used. Pages hardcode `indigo-600`. |
 | `package.json` says `openai@^4.52.0` | **4.104.0** is installed, and it has the Responses API + `web_search`. |
 | `/api/research/rerun` | **Deletes all research** with no server-side confirmation. |
@@ -241,7 +239,6 @@ and that column holds an RFC822 Message-ID this app generates.
 | A `VERIFIED_OPEN` job | Was listed by an ATS API *at `last_verified_at`*. It is a timestamped status, not a promise; `npm run career:verify` and the cron re-check it. |
 | PDF rendering | Word via COM on this machine, LibreOffice when installed, otherwise DOCX only with QA saying so. There is no HTML-to-PDF fallback, deliberately (ADR-033). |
 | `applications.locked` | Set on APPLIED. Submitted documents are never overwritten; a new package is a new version under a new storage path. |
-| ⚠ `Apollo API.txt` | A credential-shaped string tracked in git. See [CURRENT_STATE.md §9](docs/CURRENT_STATE.md#9-configuration). |
 | `evals/phase3/user-profile.ts` `RESUME_ITEMS` | A **fallback fixture**, used by the outreach loop only when the Evidence Bank is empty. Scout, positioning and the reply routes read the bank through `lib/outreach/background.ts`. Do not add to it. |
 | `loadEvidenceBank(...).canonical` | `true` = migration 015 tables exist. It is not `migrationMissing` (which is about 014). A 014-only database returns `canonical: false` and empty 015 arrays, never an error. |
 | A `status = 'merged'` evidence row | A tombstone, kept so provenance and snapshots resolve. The loader filters them; a raw query must too. Never delete one — restore from `evidence_snapshots` instead. |

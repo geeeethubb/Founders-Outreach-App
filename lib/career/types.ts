@@ -857,6 +857,8 @@ export interface EvidenceConflict {
   user_id: string
   entity_type: 'experience' | 'fact' | 'metric'
   entity_id: string
+  /** Human name for entity_id, resolved by the review route (experience "title — org", fact statement, metric "value context"). Null when the row is gone. */
+  entity_label?: string | null
   field: string
   candidates: ConflictCandidate[]
   status: 'open' | 'resolved'

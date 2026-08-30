@@ -42,7 +42,16 @@ function urgency(deadline: string | null): { text: string; cls: string } | null 
  * IS IT OPEN · WHEN · WHO. Every mutation goes to a route and the parent's
  * copy of the row is patched from the response — never from optimism.
  */
-export default function JobCard({ job, onChange }: { job: JobCardData; onChange: (patch: Partial<JobCardData>) => void }) {
+export default function JobCard({
+  job,
+  onChange,
+  onReranked,
+}: {
+  job: JobCardData
+  onChange: (patch: Partial<JobCardData>) => void
+  /** A verdict re-ranks the whole mission; the parent reloads the list so the order updates. */
+  onReranked?: () => void
+}) {
   const router = useRouter()
   const [expanded, setExpanded] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
@@ -61,9 +70,9 @@ export default function JobCard({ job, onChange }: { job: JobCardData; onChange:
   }
 
   async function generatePackage() {
-    // An application already exists ⇒ a package probably does too; the detail
-    // page shows it and offers "new version" there. Do not spend on a click.
-    if (job.application_id) return router.push(`/dashboard/jobs/${job.id}?tab=package`)
+    // A package already exists ⇒ the detail page shows it and offers "new version"
+    // there. Do not spend on a click. (Tracking alone does not create a package.)
+    if (job.package_id) return router.push(`/dashboard/jobs/${job.id}?tab=package`)
     setBusy('package')
     setErr(null)
     const r = await api<{ package_id: string; status: string; error: string | null; errors: string[] }>('/api/career/packages', { json: { job_id: job.id } })
@@ -74,9 +83,10 @@ export default function JobCard({ job, onChange }: { job: JobCardData; onChange:
 
   function onFeedback(o: FeedbackOutcome) {
     onChange({
+      last_verdict: o.verdict,
       ...(o.disposition ? { disposition: o.disposition } : {}),
-      ...(o.fitOverall !== null ? { fit_overall: o.fitOverall } : {}),
     })
+    if (o.reranked !== null) onReranked?.()
   }
 
   function onVerified(o: VerifyOutcome) {
@@ -127,7 +137,7 @@ export default function JobCard({ job, onChange }: { job: JobCardData; onChange:
             {job.fit_explanation}
           </p>
         ) : (
-          <p className="mt-2 text-xs text-slate-400">Not evaluated yet — open the job and press Re-evaluate, or generate a package.</p>
+          <p className="mt-2 text-xs text-slate-400">Not evaluated yet — open the job and press Evaluate fit, or generate a package.</p>
         )}
 
         {/* IS IT OPEN · WHEN · WHO */}
@@ -161,7 +171,7 @@ export default function JobCard({ job, onChange }: { job: JobCardData; onChange:
 
       {/* Actions */}
       <div className="border-t border-slate-100 px-4 py-2.5 flex items-start justify-between gap-3 flex-wrap">
-        <FeedbackButtons jobId={job.id} onDone={onFeedback} />
+        <FeedbackButtons jobId={job.id} lastVerdict={job.last_verdict} onDone={onFeedback} />
         <div className="flex items-center gap-2 text-xs">
           {job.disposition !== 'saved' ? (
             <button type="button" disabled={busy !== null} onClick={() => setDisposition('saved')} className="px-2 py-1 rounded-md border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-50">
@@ -188,7 +198,7 @@ export default function JobCard({ job, onChange }: { job: JobCardData; onChange:
             title={job.verification_status === 'CLOSED' ? 'The posting is closed' : 'Tailor the résumé and draft a cover letter for this job'}
             className="px-2.5 py-1 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
           >
-            {busy === 'package' ? 'Starting… (a few minutes)' : job.application_id ? 'Open package' : 'Generate package'}
+            {busy === 'package' ? 'Starting… (a few minutes)' : job.package_id ? 'Open package' : 'Generate package'}
           </button>
         </div>
       </div>

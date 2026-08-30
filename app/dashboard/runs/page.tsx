@@ -10,7 +10,13 @@ import { api, fmtUsd } from '@/components/career/api'
 import InlineNotice, { MigrationNotice } from '@/components/career/InlineNotice'
 import RunRow, { type RunView } from './RunRow'
 
-const KINDS = ['job_scout', 'job_verify', 'package', 'evidence_import'] as const
+const KINDS: { value: string; label: string }[] = [
+  { value: '', label: 'All' },
+  { value: 'job_scout', label: 'Job scouts' },
+  { value: 'job_verify', label: 'Verifications' },
+  { value: 'package', label: 'Packages' },
+  { value: 'evidence_import', label: 'Evidence imports' },
+]
 
 export default function RunsPage() {
   const [kind, setKind] = useState<string>('')
@@ -47,7 +53,7 @@ export default function RunsPage() {
         <div>
           <h1 className="text-2xl font-semibold text-slate-900">Runs</h1>
           <p className="text-sm text-slate-500 mt-1">
-            Every scout, verify, package and import run, with the agent calls that made it cost what it did.{' '}
+            Career OS runs only (job scouts, verifications, packages, evidence imports) with the agent calls that made each cost what it did. People-search Scout runs are not listed here.{' '}
             <Link href="/dashboard/jobs" className="text-indigo-600 hover:underline">
               Jobs
             </Link>
@@ -55,10 +61,9 @@ export default function RunsPage() {
         </div>
         <div className="flex items-center gap-2 text-xs">
           <select value={kind} onChange={(e) => setKind(e.target.value)} className="rounded-md border border-slate-300 px-2 py-1">
-            <option value="">all kinds</option>
             {KINDS.map((k) => (
-              <option key={k} value={k}>
-                {k}
+              <option key={k.value} value={k.value}>
+                {k.label}
               </option>
             ))}
           </select>

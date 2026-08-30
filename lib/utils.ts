@@ -20,6 +20,7 @@ export function formatRelativeTime(dateString: string): string {
 }
 
 export const STATUS_COLORS: Record<string, string> = {
+  discovered:  'bg-violet-100 text-violet-700',
   new:         'bg-gray-100 text-gray-700',
   researching: 'bg-yellow-100 text-yellow-700',
   researched:  'bg-blue-100 text-blue-700',

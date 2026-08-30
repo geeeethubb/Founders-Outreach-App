@@ -21,7 +21,8 @@ interface MissionsResponse {
   defaults: { weights: FitWeights; labels: Record<string, string>; questions: Record<string, string> }
 }
 
-const SEASONS = ['summer_2027', 'winter_2026_27', 'fall_2026', 'spring_2027', 'other']
+// Season and status are not edited here: the season is Summer 2027 by construction
+// (docs/CAREER_OS.md §5) and the only mission is the active one whatever its status.
 const WORK_MODES: CareerMissionPreferences['work_modes'] = ['remote', 'hybrid', 'onsite']
 
 function tier(prefs: CareerMissionPreferences, n: 1 | 2 | 3): GeoTier {
@@ -84,8 +85,6 @@ export default function MissionPage() {
     const body: Partial<CareerMission> = {
       name: draft.name,
       objective: draft.objective,
-      season: draft.season,
-      status: draft.status,
       preferences: draft.preferences,
       hard_constraints: draft.hard_constraints.filter((c) => c.dimension.trim()),
       fit_weights: draft.fit_weights,
@@ -141,8 +140,16 @@ export default function MissionPage() {
     <div className="p-8 max-w-4xl">
       {back}
       <div className="mt-2 mb-5 flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold text-slate-900">Mission</h1>
+        <div className="min-w-0 flex-1">
+          <label className="block">
+            <span className="text-[11px] uppercase tracking-wide font-semibold text-slate-500">Mission</span>
+            <input
+              value={draft.name}
+              onChange={(e) => patch({ name: e.target.value })}
+              aria-label="Mission name"
+              className="mt-0.5 w-full max-w-xl text-2xl font-semibold text-slate-900 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-indigo-500 focus:outline-none"
+            />
+          </label>
           <p className="text-sm text-slate-500 mt-1">What you are looking for. The planner reads all of it; the fit evaluator reads the preferences and answers ten questions weighted below.</p>
         </div>
         <button type="button" onClick={save} disabled={saving || !dirty} className="px-3 py-1.5 rounded-md bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 shrink-0">
@@ -155,46 +162,9 @@ export default function MissionPage() {
           <InlineNotice kind={notice.kind}>{notice.text}</InlineNotice>
         </div>
       )}
-      {loaded.missions.length > 1 && (
-        <p className="mb-4 text-xs text-slate-500">
-          {loaded.missions.length} missions —{' '}
-          {loaded.missions.map((m) => (
-            <button key={m.id} type="button" onClick={() => setDraft(m)} className={`mr-2 ${m.id === draft.id ? 'font-medium text-slate-800' : 'text-indigo-600 hover:underline'}`}>
-              {m.name}
-            </button>
-          ))}
-        </p>
-      )}
-
       <div className="space-y-4">
         <Section title="Goal">
-          <div className="grid grid-cols-1 md:grid-cols-[1fr_12rem_8rem] gap-3">
-            <label className="text-xs font-semibold text-slate-600">
-              Name
-              <input value={draft.name} onChange={(e) => patch({ name: e.target.value })} className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1 text-sm font-normal" />
-            </label>
-            <label className="text-xs font-semibold text-slate-600">
-              Season
-              <select value={draft.season} onChange={(e) => patch({ season: e.target.value })} className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1 text-sm font-normal">
-                {[...SEASONS, ...(SEASONS.includes(draft.season) ? [] : [draft.season])].map((s) => (
-                  <option key={s} value={s}>
-                    {s.replace(/_/g, ' ')}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="text-xs font-semibold text-slate-600">
-              Status
-              <select value={draft.status} onChange={(e) => patch({ status: e.target.value as CareerMission['status'] })} className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1 text-sm font-normal">
-                {['draft', 'active', 'paused', 'archived'].map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-          <label className="block mt-3 text-xs font-semibold text-slate-600">
+          <label className="block text-xs font-semibold text-slate-600">
             Objective
             <textarea value={draft.objective} onChange={(e) => patch({ objective: e.target.value })} rows={2} className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1 text-sm font-normal" />
           </label>

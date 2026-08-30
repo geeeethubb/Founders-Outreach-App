@@ -38,10 +38,11 @@ const STATUS_STYLE: Record<string, string> = {
   succeeded: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   running: 'bg-sky-50 text-sky-700 border-sky-200',
   failed: 'bg-rose-50 text-rose-700 border-rose-200',
+  abandoned: 'bg-slate-100 text-slate-600 border-slate-200',
 }
 
-function duration(a: string, b: string | null): string {
-  if (!b) return '…'
+function duration(a: string, b: string | null, status: string): string {
+  if (!b) return status === 'abandoned' ? 'did not finish' : '…'
   const s = Math.round((new Date(b).getTime() - new Date(a).getTime()) / 1000)
   return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`
 }
@@ -57,7 +58,7 @@ export default function RunRow({ run }: { run: RunView }) {
         <span className="text-slate-800">{run.label ?? '—'}</span>
         <span className={`px-1.5 py-0.5 rounded border ${STATUS_STYLE[run.status] ?? 'bg-slate-50 text-slate-600 border-slate-200'}`}>{run.status}</span>
         <span className="text-slate-500">
-          {formatRelativeTime(run.started_at).toLowerCase()} · {duration(run.started_at, run.completed_at)}
+          {formatRelativeTime(run.started_at).toLowerCase()} · {duration(run.started_at, run.completed_at, run.status)}
         </span>
         <span className="ml-auto text-slate-600 tabular-nums">
           {run.agent_count} agent call{run.agent_count === 1 ? '' : 's'} · {fmtUsd(run.cost_usd)}

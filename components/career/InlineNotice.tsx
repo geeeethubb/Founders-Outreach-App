@@ -23,10 +23,11 @@ export function MigrationNotice() {
       <div className="font-medium">The Career OS tables do not exist yet.</div>
       <ol className="mt-1 list-decimal space-y-0.5 pl-5">
         <li>
-          Apply <code className="rounded bg-white px-1">supabase/migrations/014_career_os.sql</code> in the Supabase SQL editor.
+          Apply <code className="rounded bg-white px-1">supabase/migrations/014_career_os.sql</code> then{' '}
+          <code className="rounded bg-white px-1">015_evidence_canonical.sql</code> in the Supabase SQL editor.
         </li>
         <li>
-          Run <code className="rounded bg-white px-1">npm run career:seed</code> to import the master résumé.
+          Run <code className="rounded bg-white px-1">npm run career:seed -- --approve</code> to import the master résumé.
         </li>
       </ol>
     </InlineNotice>

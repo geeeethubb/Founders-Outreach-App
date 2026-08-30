@@ -36,7 +36,7 @@ export async function fetchReview(): Promise<ReviewResponse> {
 const SECTIONS: { c: MergeConfidence; title: string; blurb: string }[] = [
   { c: 'HIGH', title: 'High confidence', blurb: 'Same organization, same role, compatible dates — or the same statement word for word.' },
   { c: 'POSSIBLE', title: 'Possible', blurb: 'Similar but not identical. Nothing merges here without you.' },
-  { c: 'CONFLICT', title: 'Conflict', blurb: 'The two disagree on a number or a date. Both stay; pick a value below or keep both.' },
+  { c: 'CONFLICT', title: 'Conflict', blurb: 'The two disagree on a number or date; they stay separate — resolve the value under Open conflicts.' },
 ]
 
 export default function ReviewTab({ initial, onChanged }: { initial: ReviewResponse | null; onChanged: (r: ReviewResponse) => void }) {
@@ -92,7 +92,7 @@ export default function ReviewTab({ initial, onChanged }: { initial: ReviewRespo
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-slate-600">
-          Rows the matcher thinks describe the same thing. Merging tombstones the right-hand row and re-points its facts, metrics and bullets to the left — nothing is deleted.
+          These look like the same thing. Merge moves the right one&apos;s facts under the left one; nothing is deleted and you can undo from a snapshot.
         </p>
         <button
           type="button"
@@ -103,7 +103,7 @@ export default function ReviewTab({ initial, onChanged }: { initial: ReviewRespo
           {busy === 'all' ? 'Merging…' : `Merge all high-confidence (${high.length})`}
         </button>
       </div>
-      {readOnly && <Notice kind="info">Merging needs migration 015 — suggestions are shown read-only. Apply <code className="rounded bg-white px-1">supabase/migrations/015_evidence_canonical.sql</code> in the Supabase SQL editor.</Notice>}
+      {readOnly && <Notice kind="info">Merging needs migration 015 — apply <code className="rounded bg-white px-1">supabase/migrations/015_evidence_canonical.sql</code> in the Supabase SQL editor. Suggestions are shown read-only until then.</Notice>}
       {error && <Notice kind="error">{error}</Notice>}
       {ok && <Notice kind="ok">{ok}</Notice>}
       {data.errors && data.errors.length > 0 && <Notice kind="error">{data.errors.join(' · ')}</Notice>}
@@ -153,7 +153,7 @@ type Act = (key: string, body: Record<string, unknown>, done: string) => Promise
 
 function Side({ heading, label, tone, p }: { heading: string; label: string; tone: 'indigo' | 'slate'; p: MergeProposal }) {
   const s = p.signals as Record<string, unknown>
-  const side = heading === 'KEEP' ? 'keep' : 'merge'
+  const side = heading === 'Keeps' ? 'keep' : 'merge'
   const meta = [s[`${side}_kind`], s[`${side}_source`], s[`${side}_approved`] === false ? 'pending' : null].filter((x): x is string => typeof x === 'string' && x.length > 0)
   const counts = s[`${side}_counts`] as { facts?: number; metrics?: number; bullets?: number } | undefined
   return (
@@ -179,11 +179,10 @@ function ProposalCard({ p, readOnly, busy, act }: { p: MergeProposal; readOnly: 
       <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
         <Chip tone={CONFIDENCE_TONE[p.confidence]}>{p.confidence}</Chip>
         <Chip>{p.entity_type}</Chip>
-        <span>rule: {p.rule}</span>
       </div>
       <div className="grid gap-2 sm:grid-cols-2">
-        <Side heading="KEEP" label={p.keep_label} tone="indigo" p={p} />
-        <Side heading="MERGE" label={p.merge_label} tone="slate" p={p} />
+        <Side heading="Keeps" label={p.keep_label} tone="indigo" p={p} />
+        <Side heading="Folds into it" label={p.merge_label} tone="slate" p={p} />
       </div>
       <dl className="mt-2 space-y-0.5 text-xs">
         <Line k="Why" v={p.why} />
@@ -237,7 +236,7 @@ function ConflictCard({ c, readOnly, busy, act }: { c: EvidenceConflict; readOnl
       <div className="mb-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
         <Chip tone="amber">{c.entity_type}</Chip>
         <span className="font-medium text-slate-800">{c.field}</span>
-        <span className="font-mono text-[10px] text-slate-400">{c.entity_id.slice(0, 8)}</span>
+        <span className="text-slate-700">{c.entity_label ?? `id ${c.entity_id.slice(0, 8)}…`}</span>
       </div>
       <ul className="space-y-1 text-sm">
         {c.candidates.map((cand, i) => (
