@@ -30,7 +30,7 @@ import { listJobs, listWatchlist, updateJobVerification, upsertJobs, type JobLis
 import type { VerifyResult } from '../jobs/verify'
 import { verifyWithAgent, type VerifierFn } from '../jobs/verify-batch'
 import { runIntelligenceBatch, type BatchResult } from '../intelligence/orchestrator'
-import { ensureDefaultMission, getMission, renderMission } from '../missions/store'
+import { ensureDefaultMission, getMission, renderMission, sanitizeDirection } from '../missions/store'
 import { DEFAULT_SCOUT_BUDGET, startCareerRun, type CareerBudget, type CareerRun } from '../runs'
 import { setAnthropicDeadline } from '@/lib/providers/anthropic/client'
 import { getPageFetcher } from '../sources/fetch'
@@ -163,6 +163,15 @@ export interface JobScoutParams {
   verify?: boolean
   /** False turns off post-scout ranking (the eval measures ranking separately). Default on. */
   rank?: boolean
+  /**
+   * Replaces mission.preferences.direction IN MEMORY for this run only (the CLI's
+   * --direction). Never persisted; the stored mission is not touched. It reaches
+   * the planner, evidence retrieval and the fallback strategies; post-scout
+   * ranking is SKIPPED (with an error line) because fit rows persist against
+   * the stored mission and would otherwise be judged against a direction that
+   * was never saved.
+   */
+  directionOverride?: string | null
   onProgress?: (stage: string, detail: string) => void
   label?: string
 }
@@ -197,17 +206,56 @@ export function scoutToolContext(userId: string, runId: string | null, budget: C
   return { user_id: userId, run_id: runId, budget: { maxCompanies: 0, maxPeoplePerCompany: 0, maxApolloCalls: 0, maxWebSearches: budget.maxWebSearches, maxAgentSteps: budget.maxAgentSteps } }
 }
 
+const DIRECTION_FILLER = /\b(?:i(?:'d| would)? (?:want|like|love|hope|plan|intend|am looking|'m looking) to|i want|i'd like|i would like|i am|i'm|pivot(?:ing)? (?:in)?to|move (?:in)?to|transition(?:ing)? (?:in)?to|break(?:ing)? into|go into|get into|looking for|interested in|something in|ideally|maybe|also open to|open to|my|me|as a)\b/gi
+const MAX_DIRECTION_PHRASES = 4
+
+/**
+ * The direction's key phrases, deterministically: split on commas, slashes,
+ * semicolons, " and " / " or ", drop filler ("pivot into", "I want"), keep the
+ * first four. Used by the fallback strategy; no judgment, so no agent.
+ */
+export function directionPhrases(direction: string | null | undefined): string[] {
+  if (!direction) return []
+  const out: string[] = []
+  for (const part of direction.split(/[,;\/\n]|\s+(?:and|or)\s+|\s+[—–-]\s+/i)) {
+    // A pivot statement often ends in a clause about the person ("— as a chemical
+    // engineer my experience transfers"); keep the target, not the credential.
+    const head = part.split(/\b(?:because|since|as a|as an|given|with my|my )\b/i)[0]
+    const phrase = head.replace(DIRECTION_FILLER, ' ').replace(/[^\w\s&+'.-]/g, ' ').replace(/\s+/g, ' ').trim()
+    // Two-letter acronyms people actually write as a direction (AI, ML, EV, VR)
+    // are kept; two-letter lowercase fragments are filler residue.
+    const minLength = /^[A-Z][A-Z0-9]$/.test(phrase) ? 2 : 3
+    if (phrase.length < minLength || phrase.split(' ').length > 6) continue
+    if (!out.some((p) => p.toLowerCase() === phrase.toLowerCase())) out.push(phrase)
+    if (out.length >= MAX_DIRECTION_PHRASES) break
+  }
+  return out
+}
+
 /**
  * Strategies built from the mission alone, used only when the planner fails.
- * Two surfaces: the keyless ATS boards (where a first-party posting is one hop
- * away) and the mission's own company types. No role inference — that is the
- * planner's judgment, and this is the deterministic floor beneath it.
+ * Three surfaces at most: the stated direction (first, when there is one), the
+ * keyless ATS boards (where a first-party posting is one hop away) and the
+ * mission's own company types. No role inference — that is the planner's
+ * judgment, and this is the deterministic floor beneath it.
  */
 export function fallbackStrategies(mission: Pick<CareerMission, 'preferences' | 'season'>): SearchStrategy[] {
   const season = mission.season === 'summer_2027' ? 'Summer 2027' : mission.season.replace(/_/g, ' ')
   const tier1 = mission.preferences.geo_tiers.find((t) => t.tier === 1)?.locations ?? []
   const geo = tier1.length ? tier1 : ['United States']
   const types = mission.preferences.company_types.slice(0, 3)
+  const phrases = directionPhrases(mission.preferences.direction)
+  const direction: SearchStrategy | null = phrases.length
+    ? {
+        name: 'fallback · stated direction',
+        kind: 'job_first',
+        rationale: 'deterministic fallback — the mission planner failed; queries built from the stated direction',
+        queries: phrases.flatMap((p, i) => [`${p} "${season}" internship`, `${p} intern "${season}" site:${['job-boards.greenhouse.io', 'jobs.lever.co', 'jobs.ashbyhq.com'][i % 3]}`]),
+        target_titles: phrases.map((p) => `${p} Intern`),
+        geo_focus: geo,
+        priority: 0.6,
+      }
+    : null
   const boards: SearchStrategy = {
     name: 'fallback · public ATS boards',
     kind: 'job_first',
@@ -233,7 +281,7 @@ export function fallbackStrategies(mission: Pick<CareerMission, 'preferences' | 
     geo_focus: geo,
     priority: 0.4,
   }
-  return [boards, byType]
+  return direction ? [direction, boards, byType] : [boards, byType]
 }
 
 function toWatched(row: Record<string, unknown>): WatchedCompany {
@@ -274,8 +322,13 @@ export async function runJobScout(params: JobScoutParams, deps: JobScoutDeps = {
   const m = await store.getMission(params.userId, params.missionId ?? null)
   if (m.migrationMissing) return fail('migration 014_career_os.sql has not been applied', true)
   if (!m.mission) return fail(m.error ?? 'no mission')
-  const mission = m.mission
+  // A CLI --direction replaces the stored direction for this run only: a new
+  // object, so the stored mission row and the caller's object are untouched.
+  const mission: CareerMission = params.directionOverride !== undefined
+    ? { ...m.mission, preferences: { ...m.mission.preferences, direction: sanitizeDirection(params.directionOverride) } }
+    : m.mission
   const missionText = renderMission(mission)
+  const direction = sanitizeDirection(mission.preferences.direction)
   const bankRes = await store.loadBank(params.userId)
   if (bankRes.migrationMissing) return fail('migration 014_career_os.sql has not been applied', true)
   errors.push(...bankRes.errors)
@@ -295,6 +348,7 @@ export async function runJobScout(params: JobScoutParams, deps: JobScoutDeps = {
   }
 
   // (c) Plan.
+  progress('plan', direction ? `planning from your direction: ${direction.slice(0, 100)}${direction.length > 100 ? '…' : ''}` : 'planning from the evidence (no direction stated)')
   progress('plan', 'asking the mission planner')
   const planner = deps.planner ?? runJobMissionPlanner
   const planRes = await planner(
@@ -494,7 +548,15 @@ export async function runJobScout(params: JobScoutParams, deps: JobScoutDeps = {
   // start is reported, never silently skipped.
   if (up.ids.length > 0 && params.rank !== false) {
     const window = deadline - Date.now() - RANK_DEADLINE_RESERVE_MS
-    if (window < RANK_MIN_WINDOW_MS) {
+    if (params.directionOverride !== undefined) {
+      // Fit rows are persisted under the stored mission's id and reused at the
+      // same prompt version; judging them against a direction that was never
+      // saved would pollute every later run. Say so rather than rank quietly
+      // against the wrong direction.
+      const skip = 'ranking skipped: --direction is not applied to fit (fit rows are stored against the saved mission — save the direction on the Jobs page to rank against it)'
+      errors.push(skip)
+      progress('rank', skip)
+    } else if (window < RANK_MIN_WINDOW_MS) {
       errors.push(`ranking skipped: ${Math.max(0, Math.round(window / 1000))}s left of the deadline`)
     } else {
       progress('rank', `${Math.min(MAX_RANK_JOBS, up.ids.length)} jobs`)

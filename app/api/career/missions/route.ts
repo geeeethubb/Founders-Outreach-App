@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { isDynamicUsage } from '@/lib/http/dynamic'
-import { createMission, ensureDefaultMission, listMissions } from '@/lib/career/missions/store'
+import { createMission, ensureDefaultMission, listMissions, type MissionPatch } from '@/lib/career/missions/store'
 import { DEFAULT_FIT_WEIGHTS, FIT_DIMENSION_LABELS, FIT_DIMENSION_QUESTIONS } from '@/lib/career/fit/dimensions'
-import type { CareerMission } from '@/lib/career/types'
 
 export const dynamic = 'force-dynamic'
 
@@ -45,7 +44,11 @@ export async function POST(request: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const body = (await request.json()) as Partial<CareerMission>
+    const body = (await request.json().catch(() => null)) as MissionPatch | null
+    if (!body || typeof body !== 'object' || Array.isArray(body)) return NextResponse.json({ error: 'Body must be a JSON object' }, { status: 400 })
+    if (body.preferences?.direction != null && typeof body.preferences.direction !== 'string') {
+      return NextResponse.json({ error: 'preferences.direction must be a string or null' }, { status: 400 })
+    }
     const { mission, error } = await createMission(user.id, body)
     if (error || !mission) return NextResponse.json({ error: error ?? 'Failed to create mission' }, { status: 500 })
     return NextResponse.json({ mission })

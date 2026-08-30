@@ -8,6 +8,7 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { FIT_DIMENSIONS, type CareerMission, type CareerMissionPreferences, type FitWeights, type HardConstraint } from '../types'
 import { isFitWeights } from '../fit/dimensions'
+import { MAX_DIRECTION_CHARS, sanitizeDirection } from './direction'
 
 function isMissingSchema(message: string): boolean {
   return /relation .* does not exist|column .* does not exist|schema cache|could not find/i.test(message)
@@ -58,8 +59,12 @@ export const DEFAULT_MISSION_PREFERENCES: CareerMissionPreferences = {
   notes:
     'Do not equate prestige with quality. Learn adjacent categories rather than filtering on these strings. ' +
     'Roles may span technical, engineering, technical strategy, product, industrial innovation, operations ' +
-    'technology, AI/manufacturing, analytical, or cross-functional work — infer plausible roles from the evidence bank.',
+    'technology, AI/manufacturing, analytical, or cross-functional work — when no direction is stated, infer plausible ' +
+    'roles from the evidence bank; when one is, it decides the roles and the evidence explains why I am credible for them.',
+  direction: null,
 }
+
+export { MAX_DIRECTION_CHARS, sanitizeDirection }
 
 export const DEFAULT_HARD_CONSTRAINTS: HardConstraint[] = [
   { dimension: 'employment_type', operator: 'in', value: ['internship', 'co_op'], label: 'Internships only' },
@@ -120,10 +125,10 @@ export async function ensureDefaultMission(userId: string): Promise<{ mission: C
 
 export async function createMission(
   userId: string,
-  input: Partial<Omit<CareerMission, 'id' | 'user_id' | 'created_at' | 'updated_at'>>
+  input: MissionPatch
 ): Promise<{ mission: CareerMission | null; error: string | null }> {
   const supabase = createServiceClient()
-  const row = { ...defaultMission(userId), ...sanitizeMissionPatch(input) }
+  const row = { ...defaultMission(userId), ...sanitizeMissionPatch(input, DEFAULT_MISSION_PREFERENCES) }
   const { data, error } = await supabase.from('career_missions').insert(row as never).select('*').single()
   return { mission: (data as CareerMission | null) ?? null, error: error?.message ?? null }
 }
@@ -131,12 +136,15 @@ export async function createMission(
 export async function updateMission(
   userId: string,
   id: string,
-  patch: Partial<CareerMission>
+  patch: MissionPatch
 ): Promise<{ mission: CareerMission | null; error: string | null }> {
   const supabase = createServiceClient()
+  // A partial preferences patch ({ preferences: { direction } }) merges over
+  // what is stored; it must never wipe the other lists.
+  const current = patch.preferences ? await getMission(userId, id) : null
   const { data, error } = await supabase
     .from('career_missions')
-    .update(sanitizeMissionPatch(patch) as never)
+    .update(sanitizeMissionPatch(patch, current?.preferences ?? null) as never)
     .eq('user_id', userId)
     .eq('id', id)
     .select('*')
@@ -144,14 +152,24 @@ export async function updateMission(
   return { mission: (data as CareerMission | null) ?? null, error: error?.message ?? null }
 }
 
-/** Only known columns, only well-formed values. Malformed input is dropped, not coerced. */
-export function sanitizeMissionPatch(patch: Partial<CareerMission>): Record<string, unknown> {
+/**
+ * Only known columns, only well-formed values. Malformed input is dropped, not
+ * coerced. When `base` preferences are given, a partial `preferences` patch is
+ * merged over them key by key (absent keys keep the stored value); without a
+ * base the patch is taken whole, as `createMission` does over the defaults.
+ */
+export type MissionPatch = Partial<Omit<CareerMission, 'preferences'>> & { preferences?: Partial<CareerMissionPreferences> }
+
+export function sanitizeMissionPatch(patch: MissionPatch, base: CareerMissionPreferences | null = null): Record<string, unknown> {
   const out: Record<string, unknown> = {}
   if (typeof patch.name === 'string' && patch.name.trim()) out.name = patch.name.trim()
   if (typeof patch.objective === 'string' && patch.objective.trim()) out.objective = patch.objective.trim()
   if (typeof patch.season === 'string' && patch.season.trim()) out.season = patch.season.trim()
   if (patch.status && ['draft', 'active', 'paused', 'archived'].includes(patch.status)) out.status = patch.status
-  if (patch.preferences && typeof patch.preferences === 'object') out.preferences = sanitizePreferences(patch.preferences)
+  if (patch.preferences && typeof patch.preferences === 'object') {
+    const given = Object.fromEntries(Object.entries(patch.preferences).filter(([, v]) => v !== undefined)) as Partial<CareerMissionPreferences>
+    out.preferences = sanitizePreferences(base ? { ...base, ...given } : given)
+  }
   if (Array.isArray(patch.hard_constraints)) {
     out.hard_constraints = patch.hard_constraints.filter(
       (c) => c && typeof c === 'object' && typeof c.dimension === 'string' && typeof c.operator === 'string'
@@ -180,6 +198,7 @@ export function sanitizePreferences(p: Partial<CareerMissionPreferences>): Caree
           ...(typeof t.description === 'string' && t.description.trim() ? { description: t.description.trim() } : {}),
         }))
     : DEFAULT_MISSION_PREFERENCES.geo_tiers
+  const direction = sanitizeDirection(p.direction)
   const modes = strings(p.work_modes).filter((m): m is 'remote' | 'hybrid' | 'onsite' => ['remote', 'hybrid', 'onsite'].includes(m))
   return {
     geo_tiers: tiers,
@@ -189,22 +208,31 @@ export function sanitizePreferences(p: Partial<CareerMissionPreferences>): Caree
     optimize_for: strings(p.optimize_for),
     work_modes: modes.length ? modes : DEFAULT_MISSION_PREFERENCES.work_modes,
     ...(typeof p.notes === 'string' ? { notes: p.notes } : {}),
+    ...(direction ? { direction } : {}),
   }
 }
 
 /** Compact rendering for prompts. Every agent that needs the mission reads this, so it is one place. */
 export function renderMission(m: Pick<CareerMission, 'objective' | 'season' | 'preferences' | 'hard_constraints'>): string {
   const p = m.preferences
-  const lines: string[] = [`OBJECTIVE: ${m.objective}`, `SEASON: ${m.season}`]
+  const direction = sanitizeDirection(p.direction)
+  const lines: string[] = []
+  // The direction leads: it is the first thing every agent reads, and the
+  // default company types are demoted to examples when it is present.
+  if (direction) lines.push(`DIRECTION (what I want to scout for — this leads the plan): ${direction}`)
+  lines.push(`OBJECTIVE: ${m.objective}`, `SEASON: ${m.season}`)
   for (const t of p.geo_tiers) {
     lines.push(`GEOGRAPHY TIER ${t.tier}: ${t.locations.join('; ')}${t.description ? ` — ${t.description}` : ''}`)
   }
-  if (p.company_types.length) lines.push(`COMPANY TYPES: ${p.company_types.join(', ')}`)
+  if (p.company_types.length) {
+    const label = direction ? 'COMPANY TYPES (default examples — the DIRECTION above takes precedence where they differ)' : 'COMPANY TYPES'
+    lines.push(`${label}: ${p.company_types.join(', ')}`)
+  }
   if (p.industries.length) lines.push(`INDUSTRIES: ${p.industries.join(', ')}`)
   if (p.role_families.length) lines.push(`ROLE FAMILIES (seed): ${p.role_families.join(', ')}`)
   if (p.optimize_for.length) lines.push(`OPTIMIZE FOR (in order): ${p.optimize_for.join(' > ')}`)
   if (p.work_modes.length) lines.push(`WORK MODES: ${p.work_modes.join(', ')}`)
-  if (p.notes) lines.push(`NOTES: ${p.notes}`)
+  if (p.notes) lines.push(`${direction ? 'NOTES (defaults — the DIRECTION above takes precedence)' : 'NOTES'}: ${p.notes}`)
   if (m.hard_constraints.length) lines.push(`HARD CONSTRAINTS: ${m.hard_constraints.map((c) => c.label).join('; ')}`)
   return lines.join('\n')
 }

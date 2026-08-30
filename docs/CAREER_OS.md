@@ -45,8 +45,9 @@ it does not send anything itself.
 ## 2. The workflow, as built
 
 ```
-JOB MISSION (editable preferences, weights)
-  → MISSION PLANNER            agent · role families inferred from the Evidence Bank, search strategies,
+JOB MISSION (editable preferences, weights, an optional DIRECTION in the user's words)
+  → MISSION PLANNER            agent · role families from the DIRECTION (evidence argues credibility) or,
+                                       without one, inferred from the Evidence Bank; search strategies,
                                        seed target companies, adjacency rules
   → DISCOVER                   agent session (job-first, web) + deterministic (company-first, ATS APIs)
   → NORMALIZE                  code · title→role family, location→city/state/tier, season, employment type
@@ -67,6 +68,19 @@ JOB MISSION (editable preferences, weights)
   → READY FOR REVIEW → READY TO APPLY → (human applies) → APPLIED → OA … OFFER / REJECTED
   → OUTCOME + FEEDBACK         stored; ranking reads explicit feedback; no ML
 ```
+
+The mission's `preferences.direction` is what the user wants to scout for, in their own words ("life
+sciences / genomics research — my chemical engineering background transfers"); `renderMission()` puts it
+first, so it leads the planner's role families, strategies and seed companies, and the Fit Evaluator
+judges `role_fit` and `mission_interest_fit` as transferability toward it rather than as a match to past
+titles. Where it disagrees with the default company types it takes precedence (they are relabelled as
+examples); when it is empty every agent behaves exactly as before, inferring from the evidence. The
+`--direction` flag on `npm run career:scout` overrides it for one run without saving it — for the plan,
+retrieval and fallback strategies only; that run skips post-scout ranking (and says so), because fit
+rows persist against the saved mission and would otherwise be judged against a direction nobody saved.
+A fit row records the direction it was judged toward (`prompt_version` is `<version>+direction.<sha>`
+when one is set), so saving or editing the direction invalidates every stored rank: the next rank —
+post-scout or **Re-rank** — re-evaluates each job at cost, exactly as a prompt bump would.
 
 Two loops feed back deliberately and narrowly:
 
@@ -197,9 +211,31 @@ applications            state machine · job_snapshot_id · locked after APPLIED
 ```
 
 **Immutability after submission.** `applications.locked = true` is set when the state reaches
-`APPLIED`. A locked application's package is `locked` too; a later "Generate Package" creates a
-new version and never overwrites the files that were submitted. Storage paths carry the package
-version, so nothing can be written over.
+`APPLIED`. A locked application's package is `locked` too; a later redo creates a new version
+and never overwrites the files that were submitted. Storage paths carry the package version, so
+nothing can be written over.
+
+**Redo.** "Redo package (new version)" on the job's Package tab (and "Redo package" on every
+Applications row, which opens that tab with the confirm box) calls
+`POST /api/career/packages/[id]/redo` → `lib/career/package/redo.ts` `redoPackage`: the normal
+generate path for the job — intelligence reused when fresh, the résumé re-tailored, stop at
+review — as version N+1. The old version becomes `superseded` unless it is `locked`, in which
+case it stays exactly as submitted with the new version beside it. "Redo letter only" on the
+letter panel rewrites just the letter for the current package. `clonePackageVersion` is the
+no-model sibling: version N+1 carrying the old package's reviewed résumé patch and snapshots,
+which `finishPackage({ letterFromStored })` then renders without calling the writer.
+
+**The applicant's name.** `profiles.name` is the email local-part for anyone the signup
+trigger named (`coalesce(full_name, split_part(email,'@',1))`), and the first live letter was
+greeted and signed "zuyu.alex06". Every letter, sign-off and document header now resolves the
+name through `lib/career/identity.ts` `resolveApplicantName`: profile name when it looks like a
+person's name → the master résumé's name line → an approved education fact → `OUTREACH_SENDER_NAME`
+→ `Applicant`. An email-like name (a token with a dot or digits, or anything with `@`) can never
+be printed: `assembleLetter`, `buildLetterDocuments` and `buildCoverLetterDocx` each refuse one
+at their own boundary. The outreach loop's `resolveSenderFrom` uses the same resolver.
+`npm run career:fix-names [-- --dry-run]` repairs letters written before this: it rewrites
+the email-like tokens in every `cover_letters` text column and, for the current letter of a
+locked or ready package, renders a new package version from the corrected text.
 
 ---
 

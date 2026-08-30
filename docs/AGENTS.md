@@ -480,7 +480,7 @@ reasoning: [CAREER_OS.md §3](CAREER_OS.md#3-agents-added-each-against-the-agent
 | Agent | Module | Judgment it owns | Tier | Searches | Structural guarantee in `validate()` |
 |---|---|---|---|---|---|
 | **Resume Importer** | `resume-importer/` | which atomic facts, metrics and skills does this résumé *assert*, and under which experience? | standard | no | every numeric token in a fact must appear in the cited paragraph; skills must be quotable; misfiled paragraphs dropped and counted |
-| **Job Mission Planner** | `job-mission-planner/` | what roles could this person plausibly do, where are they posted, which companies are worth watching before they post? | standard | ≤3 | ≥3 strategies with ≥2 queries; non-operator seeds stripped; seed URLs verified against the evidence pool |
+| **Job Mission Planner** | `job-mission-planner/` | starting from the stated DIRECTION (where the person wants to go — a pivot included), what roles serve it and why is this person credible for them; without one, what roles could this person plausibly do; where are they posted, which companies are worth watching before they post? | standard | ≤3 | ≥3 strategies with ≥2 queries; non-operator seeds stripped; seed URLs verified against the evidence pool |
 | **Job Scout** | `job-scout/` (session) | is this search surface productive, and what next? — diagnosis + action per round, tools `lookup_ats_board` / `fetch_page` injected | standard | ≤4/round | a posting URL must be in the evidence pool or returned by a tool — exact, never origin-level |
 | **Job Extractor** | `job-extractor/` | what does this posting require, and is it a Summer 2027 internship? | cheap | no | exact enums; arrays capped; cached by text hash |
 | **Job Verifier** | `job-verifier/` | does this ambiguous page say the job is open? | cheap | no | `OPEN / CLOSED / UNCLEAR` only; never reached by ATS results or explicit closed banners |
@@ -524,7 +524,7 @@ labels and confidence. Consumers and what they receive:
 |---|---|---|
 | People Scout / Positioning (`lib/outreach/background.ts`) | mission goal | ≤12 experiences as `BackgroundItem`s — the fixture `RESUME_ITEMS` only when the bank is empty |
 | Fit Evaluator, Evidence Matcher | the job | 6 experiences, 16 facts (compact for fit, detailed for the matcher) |
-| Job Mission Planner | generic | 8 experiences + skills + preferences |
+| Job Mission Planner | generic | 8 experiences + skills + preferences — the mission's DIRECTION line, when present, leads the plan and the evidence argues credibility for it (prompt 1.1.0; the Fit Evaluator 1.1.0 judges `role_fit` / `mission_interest_fit` as transferability toward the same direction) |
 | Resume Tailor | the job | every experience with master-résumé bullets, facts ranked ≤8 each; other experiences only when retrieved |
 | Cover Letter Writer | the job | matcher-chosen facts first, retrieval fills to 10 |
 

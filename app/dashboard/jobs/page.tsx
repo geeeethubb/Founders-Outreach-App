@@ -14,6 +14,8 @@ import JobCard, { type JobCardData } from './JobCard'
 import JobFilters, { DEFAULT_FILTERS, filtersToQuery, type JobFilterState } from './JobFilters'
 import ScoutPanel from './ScoutPanel'
 import AddByUrl from './AddByUrl'
+import DirectionCard, { type DirectionStatus } from './DirectionCard'
+import { directionDirty, directionPatch } from './direction'
 
 const PAGE = 25
 
@@ -50,6 +52,12 @@ function JobsView() {
   const [error, setError] = useState<string | null>(null)
   const [migrationMissing, setMigrationMissing] = useState(false)
   const [scouting, setScouting] = useState(false)
+  // The direction draft lives here, not in the card: Scout now must be able to
+  // save it first, so a run never plans from text the founder has not stored.
+  const [direction, setDirection] = useState('')
+  const [directionTouched, setDirectionTouched] = useState(false)
+  const [directionSaving, setDirectionSaving] = useState(false)
+  const [directionStatus, setDirectionStatus] = useState<DirectionStatus | null>(null)
 
   const loadJobs = useCallback(async () => {
     setLoading(true)
@@ -75,7 +83,16 @@ function JobsView() {
       api<JobsResponse>('/api/career/jobs?freshness=likely&disposition=new,saved&hasWarmPath=1&limit=200'),
       api<{ counts?: { experiences: number; facts: number } }>('/api/career/evidence'),
     ])
-    if (m.ok && m.data) setMission(m.data.missions.find((x) => x.id === m.data!.activeId) ?? m.data.missions[0] ?? null)
+    if (m.ok && m.data) {
+      const active = m.data.missions.find((x) => x.id === m.data!.activeId) ?? m.data.missions[0] ?? null
+      setMission(active)
+      // Only seed the textarea from the server while it is untouched; a reload after a
+      // scout run must not overwrite what the founder is typing.
+      setDirectionTouched((touched) => {
+        if (!touched) setDirection(active?.preferences.direction ?? '')
+        return touched
+      })
+    }
     if (open.ok && saved.ok && warm.ok) {
       setCounts({ open: open.data?.total ?? 0, saved: saved.data?.total ?? 0, warm: warm.data?.jobs.length ?? 0 })
     }
@@ -92,6 +109,37 @@ function JobsView() {
   function changeFilters(next: JobFilterState) {
     setOffset(0)
     setFilters(next)
+  }
+
+  const directionIsDirty = mission ? directionDirty(direction, mission.preferences.direction) : false
+
+  /** PATCH only preferences.direction (the store merges it over the stored row). Resolves true on success. */
+  async function saveDirection(): Promise<boolean> {
+    if (!mission) return false
+    setDirectionSaving(true)
+    setDirectionStatus(null)
+    const r = await api<{ mission: CareerMission }>(`/api/career/missions/${mission.id}`, {
+      method: 'PATCH',
+      json: directionPatch(direction),
+    })
+    setDirectionSaving(false)
+    if (!r.ok || !r.data?.mission) {
+      setDirectionStatus({ kind: 'error', text: r.error ?? 'Save failed' })
+      return false
+    }
+    // The server's copy is the truth: ScoutPanel and the header read it from here.
+    setMission(r.data.mission)
+    setDirection(r.data.mission.preferences.direction ?? '')
+    setDirectionTouched(false)
+    setDirectionStatus({ kind: 'ok', text: 'Saved — leads the next Scout run' })
+    return true
+  }
+
+  /** Scout now: save an unsaved direction first; on failure show the error and stay closed. */
+  async function openScout() {
+    if (scouting) return setScouting(false)
+    if (directionIsDirty && !(await saveDirection())) return
+    setScouting(true)
   }
 
   function patchJob(id: string, patch: Partial<JobCardData>) {
@@ -129,11 +177,11 @@ function JobsView() {
           </Link>
           <button
             type="button"
-            onClick={() => setScouting((s) => !s)}
-            disabled={migrationMissing}
+            onClick={openScout}
+            disabled={migrationMissing || directionSaving}
             className="px-3 py-1.5 rounded-md bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-50"
           >
-            Scout now
+            {directionSaving ? 'Saving…' : 'Scout now'}
           </button>
         </div>
       </div>
@@ -160,10 +208,27 @@ function JobsView() {
         </div>
       )}
 
+      <div className="mb-4">
+        <DirectionCard
+          value={direction}
+          onChange={(v) => {
+            setDirection(v)
+            setDirectionTouched(true)
+            setDirectionStatus(null)
+          }}
+          onSave={saveDirection}
+          dirty={directionIsDirty}
+          saving={directionSaving}
+          disabled={migrationMissing || !mission}
+          status={directionStatus}
+        />
+      </div>
+
       {scouting && (
         <div className="mb-4">
           <ScoutPanel
             missionId={mission?.id ?? null}
+            direction={mission?.preferences.direction}
             onFinished={() => {
               loadJobs()
               loadContext()
@@ -193,7 +258,7 @@ function JobsView() {
           <p className="text-slate-700 font-medium">{total === 0 && filters === DEFAULT_FILTERS ? 'No jobs yet.' : 'Nothing matches these filters.'}</p>
           <p className="text-sm text-slate-500 mt-1">
             {total === 0 && filters === DEFAULT_FILTERS
-              ? 'Press Scout now to plan a search from your mission, check watched companies and search the web — or paste a posting URL above.'
+              ? 'Press Scout now to plan a search from what you’re scouting for and your mission, check watched companies and search the web — or paste a posting URL above.'
               : 'Loosen the freshness or disposition filter, or reset.'}
           </p>
         </div>

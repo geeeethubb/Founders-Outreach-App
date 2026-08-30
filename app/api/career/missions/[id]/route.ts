@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { isDynamicUsage } from '@/lib/http/dynamic'
-import { getMission, updateMission } from '@/lib/career/missions/store'
-import type { CareerMission } from '@/lib/career/types'
+import { getMission, updateMission, type MissionPatch } from '@/lib/career/missions/store'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,14 +21,23 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
 
 /**
  * Edit preferences, hard constraints, weights, status. Weights changing does
- * not re-run any agent — stored fit components are re-summed on read.
+ * not re-run any agent — stored fit components are re-summed on read. A
+ * partial `preferences` ({ preferences: { direction } }) merges over the
+ * stored preferences; sanitizeMissionPatch drops anything malformed.
  */
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    const body = (await request.json()) as Partial<CareerMission>
+    const body = (await request.json().catch(() => null)) as MissionPatch | null
+    if (!body || typeof body !== 'object' || Array.isArray(body)) return NextResponse.json({ error: 'Body must be a JSON object' }, { status: 400 })
+    if (body.preferences !== undefined && (body.preferences === null || typeof body.preferences !== 'object' || Array.isArray(body.preferences))) {
+      return NextResponse.json({ error: 'preferences must be an object' }, { status: 400 })
+    }
+    if (body.preferences?.direction != null && typeof body.preferences.direction !== 'string') {
+      return NextResponse.json({ error: 'preferences.direction must be a string or null' }, { status: 400 })
+    }
     const { mission, error } = await updateMission(user.id, params.id, body)
     if (error || !mission) return NextResponse.json({ error: error ?? 'Update failed' }, { status: 500 })
     return NextResponse.json({ mission })

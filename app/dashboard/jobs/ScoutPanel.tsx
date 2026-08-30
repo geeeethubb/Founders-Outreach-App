@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { summarizeStats, type ScoutStats } from '@/lib/career/scout/stats'
 import { api, fmtUsd } from '@/components/career/api'
 import InlineNotice from '@/components/career/InlineNotice'
+import { scoutingLine } from './direction'
 
 // The route clamps to these; the sliders never offer more than it will honour.
 const CAPS = { strategies: 2, rounds: 2, companies: 20, extract: 30 }
@@ -68,7 +69,18 @@ function Histogram({ title, record }: { title: string; record: Record<string, nu
   )
 }
 
-export default function ScoutPanel({ missionId, onFinished, onClose }: { missionId: string | null; onFinished: () => void; onClose: () => void }) {
+export default function ScoutPanel({
+  missionId,
+  direction,
+  onFinished,
+  onClose,
+}: {
+  missionId: string | null
+  /** mission.preferences.direction as the page holds it — never fetched again here. */
+  direction: string | null | undefined
+  onFinished: () => void
+  onClose: () => void
+}) {
   const [strategies, setStrategies] = useState(1)
   const [rounds, setRounds] = useState(1)
   const [companies, setCompanies] = useState(10)
@@ -104,9 +116,10 @@ export default function ScoutPanel({ missionId, onFinished, onClose }: { mission
       <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className="font-medium text-slate-900">Scout now</h2>
+          <p className={`text-xs mt-0.5 ${direction?.trim() ? 'text-slate-700 font-medium' : 'text-slate-500 italic'}`}>{scoutingLine(direction)}</p>
           <p className="text-xs text-slate-500 mt-0.5">
-            Plans search strategies from the mission, checks watched companies, searches the web, extracts and verifies postings. One run fits
-            the 300s web ceiling at these caps; the CLI (<code>npm run career:scout</code>) has no ceiling.
+            Plans search strategies from what you&apos;re scouting for and the mission, checks watched companies, searches the web, extracts and
+            verifies postings. One run fits the 300s web ceiling at these caps; the CLI (<code>npm run career:scout</code>) has no ceiling.
           </p>
         </div>
         <button type="button" onClick={onClose} className="text-xs text-slate-500 hover:text-slate-900">

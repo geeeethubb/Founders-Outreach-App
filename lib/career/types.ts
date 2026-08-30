@@ -31,6 +31,13 @@ export interface CareerMissionPreferences {
   work_modes: ('remote' | 'hybrid' | 'onsite')[]
   /** Free text the planner and fit evaluator read verbatim. */
   notes?: string
+  /**
+   * What the user wants to scout for, in their own words — industries, roles,
+   * a pivot ("life sciences / genomics research; my chemical engineering
+   * background transfers"). Leads the planner; the evidence explains why the
+   * person is credible for it. Empty → the planner infers from the evidence.
+   */
+  direction?: string | null
 }
 
 export interface HardConstraint {

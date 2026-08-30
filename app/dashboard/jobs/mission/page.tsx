@@ -13,6 +13,7 @@ import InlineNotice, { MigrationNotice } from '@/components/career/InlineNotice'
 import ListEditor from './ListEditor'
 import WeightsEditor from './WeightsEditor'
 import ConstraintsEditor from './ConstraintsEditor'
+import { DIRECTION_HINT, DIRECTION_PLACEHOLDER } from '../direction'
 
 interface MissionsResponse {
   missions: CareerMission[]
@@ -196,6 +197,17 @@ export default function MissionPage() {
           <label className="block mt-3 text-xs font-semibold text-slate-600">
             Objective
             <textarea value={draft.objective} onChange={(e) => patch({ objective: e.target.value })} rows={2} className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1 text-sm font-normal" />
+          </label>
+          <label className="block mt-3 text-xs font-semibold text-slate-600">
+            What I&apos;m scouting for (direction)
+            <textarea
+              value={prefs.direction ?? ''}
+              onChange={(e) => patchPrefs({ direction: e.target.value })}
+              rows={3}
+              placeholder={DIRECTION_PLACEHOLDER}
+              className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1 text-sm font-normal"
+            />
+            <span className="block mt-1 text-xs font-normal text-slate-500">{DIRECTION_HINT} Also editable on the Jobs page — it is one value.</span>
           </label>
         </Section>
 

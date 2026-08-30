@@ -30,11 +30,11 @@ import { buildFitEvaluationRow, evaluateFit, type FitEvaluation } from '../fit/e
 import { computeFeedbackAdjustment, renderFeedbackHints, type FeedbackRow } from '../fit/feedback'
 import { applyHardConstraints } from '../jobs/filters'
 import { descriptionSha } from '../jobs/snapshot'
-import { renderMission } from '../missions/store'
+import { renderMission, sanitizeDirection } from '../missions/store'
 import { findWarmPathCandidates } from '../network/candidates'
 import { renderCompanyResearchForPrompt } from '../research/company'
 import { DEFAULT_PACKAGE_BUDGET, startCareerRun, type CareerRun } from '../runs'
-import type { EvidenceBank, FitJudgment, JobEvidenceMap, JobFitEvaluation, WarmPath } from '../types'
+import type { CareerMission, EvidenceBank, FitJudgment, JobEvidenceMap, JobFitEvaluation, WarmPath } from '../types'
 import { fitJobInputFrom, loadFeedbackRows, loadJobContext, researchFromStored, researchInputFrom, type JobContext } from './load'
 import { persistCompanyResearch, replaceWarmPaths, upsertEvidenceMap, upsertFitEvaluation } from './persist'
 import { ensureExtracted, needsExtraction } from './extract'
@@ -128,6 +128,20 @@ export function packageToolContext(userId: string, runId: string | null): ToolCo
 export function evidenceVersion(bank: EvidenceBank): string {
   const ids = [...bank.experiences.map((e) => e.id), ...bank.facts.map((f) => f.id), ...bank.metrics.map((m) => m.id)].sort()
   return crypto.createHash('sha256').update(ids.join('|')).digest('hex').slice(0, 16)
+}
+
+/**
+ * Identity of a fit judgment: the prompt version plus the mission direction it
+ * was judged toward. Stored on the fit row's `prompt_version` (no migration —
+ * the column is text) and compared on reuse, so saving or editing the direction
+ * on the Jobs / Mission page invalidates every stored rank the same way a
+ * prompt bump does. The agent_runs trace keeps the bare prompt version.
+ */
+export function fitJudgmentVersion(mission: Pick<CareerMission, 'preferences'>): string {
+  const direction = sanitizeDirection(mission.preferences?.direction)
+  if (!direction) return fitEvaluatorPrompt.version
+  const sha = crypto.createHash('sha256').update(direction).digest('hex').slice(0, 12)
+  return `${fitEvaluatorPrompt.version}+direction.${sha}`
 }
 
 export function researchIsFresh(company: { researched_at?: string | null; research_version?: string | null } | null, now = new Date()): boolean {
@@ -256,7 +270,8 @@ export async function runJobIntelligence(params: IntelligenceParams): Promise<In
   // Discovery rejects these before storing; a manual add keeps them with a warning. Either way the rank must show it.
   const hardConstraintFailures = applyHardConstraints(job, mission.hard_constraints).failed.map((f) => f.label)
   const stored = context.existing.fit
-  if (!force.fit && stored && stored.prompt_version === fitEvaluatorPrompt.version) {
+  const judgmentVersion = fitJudgmentVersion(mission)
+  if (!force.fit && stored && stored.prompt_version === judgmentVersion) {
     const judgment = judgmentFromRow(stored)
     fit = { judgment, evaluation: evaluateFit({ judgment, weights: mission.fit_weights, feedbackAdjustment: adjustment.adjustment, hardConstraintFailures }), row: stored }
     fitFromStore = true
@@ -284,6 +299,7 @@ export async function runJobIntelligence(params: IntelligenceParams): Promise<In
             research_version: research ? `${companyResearcherPrompt.version}:${research.summary.slice(0, 80)}` : 'none',
             evidence_version: evidenceVersion(bank),
             mission_id: mission.id,
+            judgment_version: judgmentVersion,
           },
         }
       )
@@ -292,7 +308,7 @@ export async function runJobIntelligence(params: IntelligenceParams): Promise<In
         const evaluation = evaluateFit({ judgment: res.output, weights: mission.fit_weights, feedbackAdjustment: adjustment.adjustment, hardConstraintFailures })
         const row = buildFitEvaluationRow({
           userId: params.userId, jobId: job.id, missionId: mission.id, judgment: res.output, evaluation,
-          promptVersion: res.trace.prompt_version, agentRunId,
+          promptVersion: judgmentVersion, agentRunId,
         })
         let persisted: JobFitEvaluation | null = null
         if (!noDb) {

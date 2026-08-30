@@ -16,18 +16,32 @@ import type { JobExtraction } from '../lib/agents/job-extractor'
 import type { JobVerification } from '../lib/agents/job-verifier'
 import { createSourceRegistry } from '../lib/career/sources/registry'
 import type { FetchedPage, JobSourceAdapter, PageFetcher, RawJobPosting } from '../lib/career/sources/types'
-import { DEFAULT_MISSION_PREFERENCES, defaultMission } from '../lib/career/missions/store'
+import { DEFAULT_MISSION_PREFERENCES, defaultMission, renderMission, sanitizeMissionPatch, sanitizePreferences } from '../lib/career/missions/store'
 import { emptyBank } from '../lib/career/evidence/store'
 import type { CareerRun } from '../lib/career/runs'
 import type { NormalizedJob } from '../lib/career/jobs/normalize'
-import { fallbackStrategies, runJobScout, selectJobsToRank, type JobScoutDeps, type ScoutStore } from '../lib/career/scout/orchestrator'
+import { directionPhrases, fallbackStrategies, runJobScout, selectJobsToRank, type JobScoutDeps, type ScoutStore } from '../lib/career/scout/orchestrator'
 import { resolveScoutedPosting } from '../lib/career/scout/resolve'
 import { emptyStats, summarizeStats } from '../lib/career/scout/stats'
 import { constraintRejections, extractAndNormalize, orderForExtraction } from '../lib/career/scout/extract'
 import { toFetchPageResult } from '../lib/career/scout/tools'
 import { verifyJobs, type VerifiableRow, type VerifyStore } from '../lib/career/jobs/verify-batch'
 import { addJobFromUrl, EXCLUDED_PLATFORM_MESSAGE } from '../lib/career/jobs/manual'
-import type { ApplicationState, CareerMission } from '../lib/career/types'
+import type { ApplicationState, CareerMission, CareerMissionPreferences } from '../lib/career/types'
+
+// renderMission() of the default mission, pinned verbatim: the direction must
+// not change what every agent already reads when none is stated.
+const RENDERED_DEFAULT_MISSION = [
+  'OBJECTIVE: Find high-quality Summer 2027 internships where I will learn fast, own real work, and sit with intelligent colleagues on technically interesting, important problems — in the Bay Area or New York first, other strong coastal cities second.',
+  'SEASON: summer_2027',
+  'GEOGRAPHY TIER 1: San Francisco / Bay Area; New York City',
+  'GEOGRAPHY TIER 2: Boston; Seattle; Los Angeles; Washington DC — other large, vibrant East or West Coast cities — genuinely strong urban markets',
+  'COMPANY TYPES: high-quality startups, growth-stage technology companies, major industrial companies, energy / oil & gas, advanced manufacturing, industrial AI, chemicals, materials, CPG, healthcare, medical technology, pharma where relevant, robotics / automation, other technically interesting industries',
+  'OPTIMIZE FOR (in order): learning > ownership > intelligent colleagues > technically interesting work > mentorship > exposure to important problems > professional growth > strong career optionality > location > company quality > mission relevance',
+  'WORK MODES: onsite, hybrid, remote',
+  'NOTES: Do not equate prestige with quality. Learn adjacent categories rather than filtering on these strings. Roles may span technical, engineering, technical strategy, product, industrial innovation, operations technology, AI/manufacturing, analytical, or cross-functional work — when no direction is stated, infer plausible roles from the evidence bank; when one is, it decides the roles and the evidence explains why I am credible for them.',
+  'HARD CONSTRAINTS: Internships only; Not a different season; United States',
+].join('\n')
 
 let failures = 0
 function check(name: string, ok: boolean, detail = '') {
@@ -295,6 +309,80 @@ async function main() {
     check('job-first still runs on the fallback strategies', seen.length === 2 && seen.every((n) => n.startsWith('fallback')))
     check('the fallback is labelled in errors', r.errors.some((e) => /deterministic fallback strategies/.test(e)))
     check('fallback strategies carry the season and a tier-1 city', fallbackStrategies({ season: 'summer_2027', preferences: DEFAULT_MISSION_PREFERENCES }).every((s) => s.queries.some((q) => q.includes('Summer 2027')) && s.geo_focus[0] === 'San Francisco / Bay Area'))
+  }
+
+  // ─── B2. The stated direction ─────────────────────────────────────────────
+  // The founder describes what to scout for; it leads the rendered mission,
+  // the fallback strategies, and (via --direction) one CLI run — never the row.
+  console.log('mission: direction')
+  {
+    check('sanitizePreferences trims and collapses direction whitespace', sanitizePreferences({ direction: '  life  sciences /\n genomics   research ' }).direction === 'life sciences / genomics research')
+    check('sanitizePreferences caps direction at 1500 chars', (sanitizePreferences({ direction: 'x'.repeat(2000) }).direction ?? '').length === 1500)
+    const emoji = sanitizePreferences({ direction: 'a' + '😀'.repeat(1600) }).direction ?? ''
+    check('sanitizePreferences caps by code point, never splitting a surrogate pair', Array.from(emoji).length === 1500 && emoji.length === 2999 && emoji.isWellFormed() && emoji.endsWith('😀'), `${emoji.length} units, ${Array.from(emoji).length} code points`)
+    check('sanitizePreferences: empty / whitespace / missing / non-string direction → key omitted', !('direction' in sanitizePreferences({ direction: '   ' })) && !('direction' in sanitizePreferences({})) && !('direction' in sanitizePreferences({ direction: 42 as unknown as string })))
+    check('DEFAULT_MISSION_PREFERENCES.direction is null', DEFAULT_MISSION_PREFERENCES.direction === null)
+
+    const withoutDirection = renderMission(MISSION)
+    check('renderMission without a direction is unchanged (fixture equality)', withoutDirection === RENDERED_DEFAULT_MISSION, withoutDirection)
+    check('renderMission: notes are optional; no direction line ever appears', !withoutDirection.includes('DIRECTION'))
+
+    const DIRECTION = 'Life Sciences / genomic bio research — as a chemical engineer my experience is very transferable'
+    const directed = renderMission({ ...MISSION, preferences: { ...MISSION.preferences, direction: DIRECTION } })
+    const lines = directed.split('\n')
+    check('renderMission with a direction puts DIRECTION first', lines[0] === `DIRECTION (what I want to scout for — this leads the plan): ${DIRECTION}` && lines[1].startsWith('OBJECTIVE: '), lines[0])
+    check('renderMission with a direction relabels company types as default examples', directed.includes('COMPANY TYPES (default examples — the DIRECTION above takes precedence where they differ): high-quality startups'))
+    check('renderMission with a direction otherwise renders the same lines', lines.slice(1).map((l) => l.replace(/^COMPANY TYPES \([^)]*\)/, 'COMPANY TYPES').replace(/^NOTES \([^)]*\)/, 'NOTES')).join('\n') === withoutDirection)
+
+    check('directionPhrases: split on slashes / commas / and, filler and the credential clause dropped', directionPhrases(DIRECTION).join('|') === 'Life Sciences|genomic bio research', directionPhrases(DIRECTION).join('|'))
+    check('directionPhrases: "pivot into", "I want" and "or" handled, capped at 4', directionPhrases('I want to pivot into quantum computing, synthetic biology or robotics, energy storage, semiconductors').join('|') === 'quantum computing|synthetic biology|robotics|energy storage')
+    check('directionPhrases: null / empty → none', directionPhrases(null).length === 0 && directionPhrases('').length === 0)
+    check('directionPhrases: two-letter acronyms survive (AI/ML), lowercase fragments do not', directionPhrases('Robotics, and also open to AI/ML; fintech, or so').join('|') === 'Robotics|AI|ML|fintech', directionPhrases('Robotics, and also open to AI/ML; fintech, or so').join('|'))
+
+    const fb = fallbackStrategies({ season: 'summer_2027', preferences: { ...DEFAULT_MISSION_PREFERENCES, direction: DIRECTION } })
+    check('fallback with a direction: the direction strategy comes first, at priority 0.6, job_first', fb[0].name === 'fallback · stated direction' && fb[0].priority === 0.6 && fb[0].kind === 'job_first' && fb.length === 3)
+    check('fallback with a direction: a season query and an ATS-scoped query per phrase, none empty', fb[0].queries.length === 4 && fb[0].queries.includes('Life Sciences "Summer 2027" internship') && fb[0].queries.some((q) => q.startsWith('genomic bio research intern "Summer 2027" site:')) && fb[0].queries.every((q) => q.trim().length > 10), fb[0].queries.join(' | '))
+    check('fallback with a direction: target titles are the phrases + Intern', fb[0].target_titles.join('|') === 'Life Sciences Intern|genomic bio research Intern')
+    check('fallback without a direction is unchanged (two strategies)', fallbackStrategies({ season: 'summer_2027', preferences: DEFAULT_MISSION_PREFERENCES }).length === 2)
+
+    // directionOverride: the planner sees it; the mission object does not change.
+    const { store, rank, registry: reg, fetcher: f } = { ...memStore({ watchlist: [] }), registry, fetcher }
+    const before = JSON.stringify(MISSION)
+    let seenMission = ''
+    const progressLines: string[] = []
+    const seenStrategies: { name: string; queries: string[] }[] = []
+    let rankCalls = 0
+    const r = await runJobScout({ userId: USER, maxStrategies: 1, directionOverride: '  computational biology  ', onProgress: (s, d) => progressLines.push(`${s}: ${d}`) }, {
+      store, rank: async (...args) => { rankCalls++; return rank(...args) }, registry: reg, fetcher: f, extractor, verifier,
+      planner: async (input) => { seenMission = input.mission; return agentResult<JobMissionPlan>(null, 'job_mission_planner', 'x') },
+      session: async (p) => { seenStrategies.push({ name: p.strategy.name, queries: p.strategy.queries }); return sessionResult([]) },
+    })
+    check('directionOverride reaches the planner as the first mission line', seenMission.startsWith('DIRECTION (what I want to scout for — this leads the plan): computational biology\n'), seenMission.split('\n')[0])
+    check('directionOverride does not touch the mission object', JSON.stringify(MISSION) === before && MISSION.preferences.direction == null)
+    check('progress says which direction the plan started from', progressLines.some((l) => l === 'plan: planning from your direction: computational biology'), progressLines.join(' | '))
+    check('directionOverride reaches the fallback strategies too', seenStrategies[0]?.name === 'fallback · stated direction' && seenStrategies[0].queries.some((q) => q.includes('computational biology')), JSON.stringify(seenStrategies))
+    check('directionOverride: the fallback ran because the planner failed', r.errors.some((e) => /fallback/.test(e)))
+    check('directionOverride: nothing ranked when nothing was stored', rankCalls === 0)
+    {
+      // A run that DOES store jobs: ranking must be skipped and said, never run
+      // against a direction that was never saved (fit rows persist per mission).
+      const w = memStore({ watchlist: [{ id: 'c-acme', name: 'Acme', domain: 'acme.com', careers_url: null, ats_type: 'greenhouse', ats_identifier: 'acme', watch_status: 'target', watch_priority: 90 }] })
+      const rr = await runJobScout({ userId: USER, maxStrategies: 1, directionOverride: 'computational biology' }, { store: w.store, rank: w.rank, registry, fetcher, extractor, verifier, planner: async () => agentResult(PLAN, 'job_mission_planner'), session: async () => sessionResult(SCOUTED) })
+      check('directionOverride: jobs are stored but the ranking batch is never called', w.mem.jobs.length === 3 && w.mem.ranked.length === 0 && rr.stats.jobs_ranked === 0, `${w.mem.jobs.length} jobs, ${w.mem.ranked.length} rank calls`)
+      check('directionOverride: the skipped ranking is surfaced, not hidden', rr.errors.some((e) => e.startsWith('ranking skipped: --direction is not applied to fit')), rr.errors.join(' | '))
+    }
+    const undirected: string[] = []
+    await runJobScout({ userId: USER, maxStrategies: 1, rank: false, onProgress: (s, d) => undirected.push(`${s}: ${d}`) }, {
+      store, rank, registry: reg, fetcher: f, extractor, verifier,
+      planner: async () => agentResult<JobMissionPlan>(null, 'job_mission_planner', 'x'),
+      session: async () => sessionResult([]),
+    })
+    check('progress says when no direction is stated', undirected.includes('plan: planning from the evidence (no direction stated)'), undirected.join(' | '))
+
+    // A partial preferences patch merges over the stored preferences.
+    const patched = sanitizeMissionPatch({ preferences: { direction: 'genomics' } }, MISSION.preferences).preferences as CareerMissionPreferences
+    check('sanitizeMissionPatch merges a partial preferences patch over the base', patched.direction === 'genomics' && patched.company_types.length === MISSION.preferences.company_types.length && patched.notes === MISSION.preferences.notes)
+    check('sanitizeMissionPatch without a base takes the patch whole (lists empty)', (sanitizeMissionPatch({ preferences: { direction: 'genomics' } }).preferences as CareerMissionPreferences).company_types.length === 0)
   }
 
   // ─── C. Migration missing ─────────────────────────────────────────────────

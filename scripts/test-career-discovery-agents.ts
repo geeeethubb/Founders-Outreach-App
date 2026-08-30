@@ -9,6 +9,8 @@
 // judgment itself is measured by evals, not asserted here.
 
 import { validate as validatePlan } from '../lib/agents/job-mission-planner'
+import { jobMissionPlannerPrompt } from '../lib/agents/job-mission-planner/prompt'
+import { fitEvaluatorPrompt } from '../lib/agents/fit-evaluator/prompt'
 import { validateRound, buildScoutTools, type LookupBoardFn, type FetchPageFn, type ScoutToolLogEntry } from '../lib/agents/job-scout'
 import { runJobScoutSession, postingKey } from '../lib/agents/job-scout/session'
 import { validate as validateExtraction } from '../lib/agents/job-extractor'
@@ -281,6 +283,24 @@ const goodExtraction = {
   check('extractor: non-string list item rejected', validateExtraction({ ...goodExtraction, skills: ['a', 3] }) === null)
   check('extractor: nullable field with wrong type rejected', validateExtraction({ ...goodExtraction, deadline: 5 }) === null)
   check('extractor: empty summary rejected', validateExtraction({ ...goodExtraction, summary: ' ' }) === null)
+}
+
+// ─── Prompts: the stated direction leads (ADR-009: versions bumped) ─────────
+
+{
+  const planner = jobMissionPlannerPrompt.build({ mission: 'DIRECTION (what I want to scout for — this leads the plan): genomics', evidenceSummaries: '', skills: '', preferences: '', watchlist: [], recentFeedback: [] })
+  check('planner prompt: version bumped past 1.0.0', jobMissionPlannerPrompt.version !== '1.0.0' && jobMissionPlannerPrompt.version === '1.1.0', jobMissionPlannerPrompt.version)
+  check('planner prompt: the direction is the starting point', /DIRECTION line/.test(planner.system) && /STARTING POINT/.test(planner.system) && /WHY THIS PERSON IS CREDIBLE/.test(planner.system))
+  check('planner prompt: a pivot is planned, not retreated from', /a pivot — do NOT retreat to the\s+evidence's own industry/.test(planner.system) && /0\.3-0\.6 for a pure pivot/.test(planner.system))
+  check('planner prompt: seeds and strategies match the direction first', /matching the DIRECTION\s+first/.test(planner.system) && /strategies in question 2 follow the same order: the DIRECTION first/.test(planner.system))
+  check('planner prompt: adjacency applies to the direction; old-industry roles are off-target', /"genomics research" implies sequencing platforms/.test(planner.system) && /OFF-target unless the direction says "also open to…"/.test(planner.system))
+  check('planner prompt: without a direction, inference from the evidence stays', /When no DIRECTION is stated, infer the families from the evidence/.test(planner.system))
+  check('planner prompt: the mission text is passed through verbatim', planner.user.includes('DIRECTION (what I want to scout for — this leads the plan): genomics'))
+
+  const fit = fitEvaluatorPrompt.build({ mission: 'm', job: { title: 't', company: 'c', location_raw: null, location_tier: null, work_mode: 'unknown', employment_type: 'internship', season_relevance: 'summer_2027', posted_at: null, deadline: null, description_excerpt: '', min_qualifications: [], preferred_qualifications: [], graduation_eligibility: null, work_authorization: null, skills: [], responsibilities: [], industry: null, company_size_stage: null }, companyResearch: '', evidenceSummaries: '', preferences: '', feedbackContext: [] })
+  check('fit prompt: version bumped past 1.0.0', fitEvaluatorPrompt.version !== '1.0.0' && fitEvaluatorPrompt.version === '1.1.0', fitEvaluatorPrompt.version)
+  check('fit prompt: role_fit and mission_interest_fit are judged as transferability toward the direction', /TRANSFERABILITY toward that direction/.test(fit.system) && /judge role_fit and mission_interest_fit/.test(fit.system))
+  check('fit prompt: no penalty for the prior industry; old-industry roles score lower on mission_interest_fit', /NOT penalized on role_fit/.test(fit.system) && /scores LOWER on mission_interest_fit/.test(fit.system))
 }
 
 // ─── Verifier validate ───────────────────────────────────────────────────────

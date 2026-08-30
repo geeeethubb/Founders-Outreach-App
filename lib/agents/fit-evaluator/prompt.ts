@@ -79,7 +79,7 @@ ${job.description_excerpt || '(none)'}`
 }
 
 export const fitEvaluatorPrompt: VersionedPrompt<FitEvaluatorInput> = {
-  version: '1.0.0',
+  version: '1.1.0',
 
   build(input) {
     const dimensions = FIT_DIMENSIONS.map((d) => `  ${d}\n     ${FIT_DIMENSION_QUESTIONS[d]}`).join('\n\n')
@@ -123,6 +123,16 @@ RULES THAT OVERRIDE ENTHUSIASM
      needs is. If there is none, differentiation is low — say so.
 
   3. ROLE FIT IS ABOUT THE WORK, NOT THE TITLE. Read the responsibilities and the description.
+
+  4. THE DIRECTION IS WHERE THE PERSON WANTS TO GO. The MISSION may open with a DIRECTION line — what
+     they want to scout for, possibly a pivot away from the industry their evidence comes from. When it
+     is present, judge role_fit and mission_interest_fit as TRANSFERABILITY toward that direction: does
+     the background map to the actual work described? — never as a match to past titles or a past
+     industry. A posting squarely in the stated direction is NOT penalized on role_fit because the
+     person's prior industry differs; explain what transfers (unit operations, process and quality
+     systems, lab work, computation, data, AI tooling…) and where the gap is. A posting squarely in the
+     prior industry that the direction does not mention scores LOWER on mission_interest_fit, however
+     comfortable the role_fit looks, unless the direction says it is also open to it.
 
 ELIGIBILITY — a verdict, not a score
 
