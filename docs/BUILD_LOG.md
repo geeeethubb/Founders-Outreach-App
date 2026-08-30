@@ -54,6 +54,16 @@ both agents), `test:career-ui-direction` (new, wired into `test:career`). Live r
 
 ---
 
+### Which jobs get ranked
+
+The first direction-led run found the genomics postings (Ginkgo, Xaira, Amgen process
+development) but ranked none of them: `selectJobsToRank` picked the 12 best by *extracted >
+verified > explicit Summer 2027 > tier*, and the stored Kairos / Anduril postings say "Summer
+2027" while the new ones do not. `rankCandidatePriority` now adds +300 per direction term the
+posting carries (capped at two), above the season bonus and below extraction/verification, so a
+posting that speaks the direction's language is ranked first; without a direction the order is
+unchanged (tested).
+
 ### CLI user resolution
 
 The first live run from the direction went to the **other** profile on the database: every

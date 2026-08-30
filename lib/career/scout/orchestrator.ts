@@ -63,22 +63,59 @@ const RANK_MIN_WINDOW_MS = 30_000
  * then the closest tier (unknown last), then an internship-shaped title.
  * Ties keep store order, so the choice is stable across runs.
  */
-export function rankCandidatePriority(job: NormalizedJob): number {
+/**
+ * Content words of the stated direction, stemmed crudely (trailing s/es/ing
+ * dropped), so "genomics research" matches "Genomic", "researcher". Empty when
+ * there is no direction.
+ */
+export function directionTerms(direction: string | null | undefined): Set<string> {
+  const out = new Set<string>()
+  for (const phrase of directionPhrases(direction)) {
+    for (const w of phrase.toLowerCase().split(/[^a-z0-9+]+/)) {
+      if (w.length < 4 || DIRECTION_STOP.has(w)) continue
+      out.add(w.replace(/(ing|ies|es|s)$/, (m) => (m === 'ies' ? 'y' : '')))
+    }
+  }
+  return out
+}
+
+const DIRECTION_STOP = new Set(['into', 'with', 'where', 'that', 'this', 'from', 'also', 'open', 'very', 'internship', 'internships', 'intern', 'summer', 'role', 'roles', 'experience', 'transfers', 'transferable', 'engineer', 'engineering'])
+
+/** How many direction terms the posting's title, company or description carries (0 when no direction). */
+export function directionMatches(job: Pick<NormalizedJob, 'title' | 'company_name' | 'description_text'>, terms: Set<string>): number {
+  if (terms.size === 0) return 0
+  const hay = `${job.title} ${job.company_name} ${(job.description_text ?? '').slice(0, 1_500)}`.toLowerCase()
+  let n = 0
+  for (const t of terms) if (hay.includes(t)) n++
+  return n
+}
+
+export function rankCandidatePriority(job: NormalizedJob, terms: Set<string> = new Set()): number {
   const tier = job.location_tier ?? 4
+  // A posting that speaks the direction's language outranks an explicit
+  // Summer 2027 posting in the old industry (300 > 100), but never an
+  // unextracted or unverified one.
+  const direction = Math.min(directionMatches(job, terms), 2) * 300
   return (
     (job.extraction_version ? 10_000 : 0) +
     (job.verification_status === 'VERIFIED_OPEN' ? 1_000 : 0) +
+    direction +
     (job.season_relevance === 'summer_2027' ? 100 : 0) +
     (4 - tier) * 10 +
     (isInternshipLike(job) ? 1 : 0)
   )
 }
 
-/** The ids to rank, best first. Falls back to store order when ids and jobs do not line up (a partial upsert). */
-export function selectJobsToRank(jobs: NormalizedJob[], ids: string[], max: number): string[] {
+/**
+ * The ids to rank, best first — direction-relevant postings before the rest
+ * when a direction is stated. Falls back to store order when ids and jobs do
+ * not line up (a partial upsert).
+ */
+export function selectJobsToRank(jobs: NormalizedJob[], ids: string[], max: number, direction: string | null | undefined = null): string[] {
   if (ids.length !== jobs.length) return ids.slice(0, max)
+  const terms = directionTerms(direction)
   return jobs
-    .map((job, i) => ({ id: ids[i], i, priority: rankCandidatePriority(job) }))
+    .map((job, i) => ({ id: ids[i], i, priority: rankCandidatePriority(job, terms) }))
     .sort((a, b) => b.priority - a.priority || a.i - b.i)
     .slice(0, max)
     .map((x) => x.id)
@@ -562,7 +599,7 @@ export async function runJobScout(params: JobScoutParams, deps: JobScoutDeps = {
       progress('rank', `${Math.min(MAX_RANK_JOBS, up.ids.length)} jobs`)
       const rank = deps.rank ?? runIntelligenceBatch
       try {
-        const r = await rank(params.userId, selectJobsToRank(jobs, up.ids, MAX_RANK_JOBS), { concurrency: RANK_CONCURRENCY, deadlineMs: window, skip: { research: true }, label: `post-scout ranking · ${mission.name}` })
+        const r = await rank(params.userId, selectJobsToRank(jobs, up.ids, MAX_RANK_JOBS, mission.preferences.direction), { concurrency: RANK_CONCURRENCY, deadlineMs: window, skip: { research: true }, label: `post-scout ranking · ${mission.name}` })
         stats.jobs_ranked = Object.values(r.results).filter((x) => x.fit !== null).length
         stats.rank_cost_usd = Number(r.costUsd.toFixed(4))
         if (r.skipped.length) errors.push(`ranking: ${r.skipped.length} job(s) not started before the deadline`)

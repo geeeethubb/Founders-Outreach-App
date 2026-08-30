@@ -20,7 +20,7 @@ import { DEFAULT_MISSION_PREFERENCES, defaultMission, renderMission, sanitizeMis
 import { emptyBank } from '../lib/career/evidence/store'
 import type { CareerRun } from '../lib/career/runs'
 import type { NormalizedJob } from '../lib/career/jobs/normalize'
-import { directionPhrases, fallbackStrategies, runJobScout, selectJobsToRank, type JobScoutDeps, type ScoutStore } from '../lib/career/scout/orchestrator'
+import { directionMatches, directionPhrases, directionTerms, fallbackStrategies, runJobScout, selectJobsToRank, type JobScoutDeps, type ScoutStore } from '../lib/career/scout/orchestrator'
 import { resolveScoutedPosting } from '../lib/career/scout/resolve'
 import { emptyStats, summarizeStats } from '../lib/career/scout/stats'
 import { constraintRejections, extractAndNormalize, orderForExtraction } from '../lib/career/scout/extract'
@@ -284,6 +284,25 @@ async function main() {
     check('selection: ties keep store order', picked.indexOf('job-4') < picked.indexOf('job-9') && picked.indexOf('job-5') < picked.indexOf('job-10'))
     check('selection: fewer jobs than the cap → every id, best first', selectJobsToRank([thin, best], ['a', 'b'], 12).join(',') === 'b,a')
     check('selection: ids that do not line up with jobs fall back to store order', selectJobsToRank([best, thin], ['a'], 12).join(',') === 'a')
+    // A stated direction reorders the pick: a posting that speaks its language
+    // outranks an explicit Summer 2027 posting in the old industry, but never an
+    // unextracted or unverified one. Without a direction nothing changes.
+    {
+      const direction = "Pivot into Life Sciences / genomic bio research — computational or wet-lab R&D internships where a chemical engineer's process, lab and data experience transfers."
+      const terms = directionTerms(direction)
+      check('direction terms: genomic / research / life science present', ['genomic', 'research', 'life'].every((t) => terms.has(t)), [...terms].join(','))
+      check('direction terms: filler and credential words absent', !terms.has('into') && !terms.has('chemical') && !terms.has('engineer'), [...terms].join(','))
+      const genomics = j({ title: 'Automation Scientist Intern', company_name: 'Ginkgo Bioworks', description_text: 'Genomic research in an autonomous lab', season_relevance: 'unspecified', location_tier: 2 })
+      const nuclear = j({ title: 'Nuclear Engineering Internship - Summer 2027', company_name: 'Kairos Power', description_text: 'Reactor design', season_relevance: 'summer_2027', location_tier: 1 })
+      const thinGenomics = j({ ...genomics, extraction_version: null })
+      const unverifiedGenomics = j({ ...genomics, verification_status: 'UNVERIFIED' })
+      const withDir = selectJobsToRank([nuclear, genomics, thinGenomics, unverifiedGenomics], ['n', 'g', 'tg', 'ug'], 12, direction)
+      check('selection: direction-relevant posting ranks first despite no explicit season', withDir[0] === 'g', withDir.join(','))
+      check('selection: an unextracted or unverified match never beats an extracted verified posting', withDir.indexOf('n') < withDir.indexOf('tg') && withDir.indexOf('n') < withDir.indexOf('ug'), withDir.join(','))
+      const noDir = selectJobsToRank([nuclear, genomics], ['n', 'g'], 12)
+      check('selection: without a direction the old order holds (season, then tier)', noDir.join(',') === 'n,g', noDir.join(','))
+      check('selection: directionMatches counts terms in title/company/description', directionMatches(genomics, terms) >= 2 && directionMatches(nuclear, terms) === 0)
+    }
   }
 
   // ─── B2. rank: false ─────────────────────────────────────────────────────
