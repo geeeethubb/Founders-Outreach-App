@@ -262,7 +262,25 @@ export interface EvidenceBank {
 
 // ─── Companies (extension of the existing `companies` row) ───────────────────
 
-export type WatchStatus = 'target' | 'watching' | 'opening_available' | 'ignored'
+/**
+ * What the user wants from a company — INTENT, never state (migration 016).
+ *
+ *   target     the user said they want to work here   (only a user sets this)
+ *   watching   the user said keep an eye on it        (only a user sets this)
+ *   suggested  the scout thinks it may be worth a look — a hypothesis
+ *   ignored    the user said no
+ *
+ * Whether a company has an opening right now is `open_roles_count` +
+ * `last_careers_check_at`. Resolve any stored value through
+ * `lib/career/companies/intent.ts` rather than comparing strings.
+ */
+export type CompanyIntent = 'target' | 'watching' | 'suggested' | 'ignored'
+
+/** Stored `companies.watch_status`. Includes the pre-016 'opening_available', which readers map to 'watching'. */
+export type WatchStatus = CompanyIntent | 'opening_available'
+
+/** Who put a company on the list. `watch_source` says who last set the status; this says where it came from. */
+export type WatchOrigin = 'user' | 'planner' | 'scout' | 'outreach' | 'import'
 
 export interface CompanyCareersExtension {
   careers_url: string | null
@@ -272,6 +290,12 @@ export interface CompanyCareersExtension {
   watch_priority: number | null
   watch_note: string | null
   watch_source: 'planner' | 'user' | 'scout' | null
+  /** 016. How the company first entered the list; drives the "suggested by Scout" badge. */
+  watch_origin?: WatchOrigin | null
+  /** 016. When the current status was set — how "the user changed it after discovery" is knowable. */
+  watch_status_at?: string | null
+  /** 016. Openings found at the last check. State, not preference. */
+  open_roles_count?: number
   last_careers_check_at: string | null
   careers_check_note: string | null
   company_type: string | null
