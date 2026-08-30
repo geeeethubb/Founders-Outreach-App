@@ -1014,6 +1014,104 @@ The importer now sees existing experiences and facts and files restatements agai
 
 ---
 
+### ADR-039 — The user's choices are facts; the scout's are hypotheses
+
+**Context.** The Job Mission Planner names 15–40 companies per run and
+`seedWatchlistFromPlan` stored every one as `watch_status = 'target'` — the
+status the Companies page defines as *"you want to work here — checked first,
+every scout run."* Scout-discovered companies were written the same way. On the
+founder's database that produced **160 targets, none of them chosen by the
+founder**, and a loop that fed itself: the scout invented a company, the company
+became a preference, the next run prioritised it over discovery, and the
+"preference" hardened. A watchlist that was supposed to be memory had become the
+search universe — for a user whose actual knowledge is *industries, role
+families, company archetypes and what they liked last time*, not company names.
+
+Two smaller faults sat inside the same column. `watch_status` also carried
+`opening_available`, so a board check with an opening **overwrote** the user's
+`target`; and `watch_priority` was read descending by the store and the scout
+but ascending by the Companies page, so the UI ranked the least important
+companies first.
+
+**Decision.**
+
+1. **`watch_status` is INTENT, and only a person writes the strong values.**
+   `target` and `watching` require an explicit user action; agents may write
+   exactly one value, `suggested` ("Explore"), and may never raise, lower or
+   resurrect a row the user has touched — including `ignored`, which is
+   permanent until the user says otherwise. The rule lives in one place,
+   `lib/career/companies/intent.ts` (`resolveAgentIntent`, `AGENT_INTENT`), not
+   in each writer.
+2. **An opening is state, not intent.** `open_roles_count` and
+   `last_careers_check_at` say whether a company is hiring now; a check never
+   touches `watch_status` again. The Companies page's "Opening available"
+   section is derived, so a target with an opening is still a target.
+3. **Priority means one thing: higher is more important, 0–100** — enforced by
+   `clampPriority`/`byCheckOrder` and asserted by tests, because a field whose
+   UI and orchestrator disagree is worse than no field.
+4. **Discovery is budgeted, not list-driven.** A run checks every Target, then
+   Watching, then a *rotating, least-recently-checked sample* of Explore capped
+   at a share of the budget (`selectCompaniesToCheck`), so a hundred accumulated
+   guesses can never starve fresh market discovery — and the planner is handed
+   the four groups separately (targets / watching / explore / ignored) plus the
+   **characteristics** learned from them (`learnCompanyAttributes`: company
+   types, industry tags and the companies behind the user's own promotions and
+   job verdicts), so it can look for *more companies like these* instead of
+   re-proposing the same names.
+
+**Consequences.** Migration 016 demotes every planner- and scout-written target
+to `suggested` while leaving rows whose `watch_source = 'user'` untouched — the
+only reliable marker of an explicit choice, because the PATCH route stamps it.
+"Target" becomes rare and meaningful. Scout output arrives as inspiration the
+user can promote in one click, and promotion is what teaches the next run.
+
+---
+
+### ADR-040 — A scout run is a durable record, not an HTTP request
+
+**Context.** `POST /api/career/scout` executed the whole scout inside one
+request: plan, ATS checks, web search, extraction, verification, ranking, and
+only then a single write. Vercel's 300-second ceiling forced a 270-second
+internal deadline, so the browser run was structurally shallower than
+`npm run career:scout`, a refresh lost the run, and a run that died lost every
+posting it had already paid to extract. The panel narrated fake progress on a
+25-second timer and, when the request timed out, told the user their jobs were
+"already in the list" — where the inbox's default filters (`freshness=likely`,
+`disposition=new,saved`, `sort=fit`) then hid the unverified and unranked ones.
+
+**Decision.** The run row is the unit of work.
+
+- `POST /api/career/scout` **enqueues**: it creates the `scouting_runs` row
+  (`status='queued'`, the run parameters, a single-use claim token), dispatches
+  a worker request, and answers in about a second with the `runId`.
+- `POST /api/career/scout/worker` claims the run by token (so a duplicate
+  dispatch cannot execute the same work twice), runs the *same* orchestrator the
+  CLI runs, and writes `stage`, `heartbeat_at` and a bounded `progress` payload
+  as it goes. Its deadline comes from the environment: Vercel's ceiling when
+  deployed, the CLI's when not.
+- `GET /api/career/scout/runs/[id]` is the only progress source — so the UI
+  survives a refresh, a closed tab and a navigation, because status lives in
+  Postgres, not React. It also reaps runs whose heartbeat died (→ `partial` when
+  jobs were stored, `failed` otherwise) and re-dispatches a queued run whose
+  worker never arrived.
+- The orchestrator **persists incrementally**: after company-first and after
+  each strategy it extracts, clusters, verifies and stores that batch, and
+  records every job it touched in `scouting_run_jobs` — including ones it
+  re-saw, which `discovery_run_id` could never express. A run that dies keeps
+  everything it had already found.
+- `/dashboard/jobs?run=<id>` shows exactly that run's jobs **without the inbox
+  defaults**, beside the curated inbox rather than replacing it.
+
+**Consequences.** "Scout says it added 14 things — where are they?" is now a
+link. A partial run is an honest state with a number attached rather than a
+vague sentence. The browser and the CLI share one engine, one run vocabulary and
+one results view. The limitation that remains: a single worker invocation still
+cannot exceed its platform's function ceiling, so a deployed deep run finishes
+`partial` and the CLI (or a re-run) continues — resuming a partial run *inside*
+the same run row is left undone deliberately, and documented rather than faked.
+
+---
+
 ## 4. Providers
 
 ```ts

@@ -691,6 +691,44 @@ RLS follows the V1 pattern on every table; child tables (`job_sources`, `job_sna
 
 ---
 
+### Scout durability and company intent — `016_scout_durability_and_company_intent.sql` (shipped)
+
+Reasoning: [ADR-039](ARCHITECTURE.md#adr-039) and [ADR-040](ARCHITECTURE.md#adr-040).
+
+```
+companies  + open_roles_count   openings at the last check — STATE, not preference
+           + watch_origin       user | planner | scout | outreach | import  (how it arrived)
+           + watch_status_at    when the current intent was set
+           watch_status is now INTENT ONLY:
+             target     the user wants to work here      only a user writes this
+             watching   the user asked to keep an eye on  only a user writes this
+             suggested  the scout's hypothesis            the ONLY value an agent may write
+             ignored    the user said no                  agents may never resurrect it
+           ('opening_available' is still accepted so a half-deployed build cannot 500;
+            readers map it to 'watching' and nothing writes it after 016.)
+
+scouting_runs + stage · progress (jsonb: stage, detail, counts, last 40 events)
+              + heartbeat_at · worker_started_at · claim_token (single use) · params
+              status: queued | running | succeeded | partial | failed | cancelled
+
+scouting_run_jobs (run_id, job_id) · user_id · inserted   one row per job a run TOUCHED
+```
+
+**Why `scouting_run_jobs` exists.** `job_opportunities.discovery_run_id` names only
+the run that first inserted a job, so "what did this run find?" could not include a
+posting the run re-saw. The join table answers it directly, and the migration
+backfills it from `discovery_run_id`.
+
+**The data migration.** Rows with `watch_status = 'target'` and
+`watch_source in ('planner','scout')` become `suggested`; rows with
+`watch_source = 'user'` are untouched, because the companies PATCH route stamps that
+value and it is therefore the only reliable record of an explicit choice.
+`opening_available` rows keep their opening in `open_roles_count` and fall back to
+`watching` (user rows) or `suggested`. On the founder's database that reclassified
+160 AI-invented "targets" and left zero user targets — which is the honest state.
+
+---
+
 ### Evidence canonical layer — `015_evidence_canonical.sql` (shipped, applied 2026-08-28)
 
 Eight tables and tombstone / canonical columns on the 014 evidence tables. Reasoning:

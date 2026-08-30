@@ -11,6 +11,9 @@ import { spawnSync } from 'child_process'
 const SUITES = [
   'scripts/test-career-applications.ts',
   'scripts/test-career-identity.ts',
+  'scripts/test-career-companies.ts',
+  'scripts/test-career-scout-run.ts',
+  'scripts/test-career-tmp.ts',
   'scripts/test-career-ui-direction.ts',
   'scripts/test-career-evidence.ts',
   'scripts/test-career-provenance.ts',

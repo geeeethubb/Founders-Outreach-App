@@ -28,7 +28,10 @@ export interface EnsureCompanyInput {
   website_url?: string | null
 }
 
-const WATCH_RANK: Record<WatchStatus, number> = { ignored: 0, watching: 1, target: 2, opening_available: 3 }
+// Intent strength (migration 016). `opening_available` is a legacy value that
+// meant state, not intent; readers map it to 'watching'.
+// Canonical ranking lives in lib/career/companies/intent.ts.
+const WATCH_RANK: Record<WatchStatus, number> = { ignored: 0, suggested: 1, watching: 2, target: 3, opening_available: 2 }
 
 /**
  * Find-or-create a company by domain, else normalized name — the same keys

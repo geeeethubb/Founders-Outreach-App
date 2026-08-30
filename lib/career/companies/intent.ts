@@ -166,15 +166,24 @@ export function selectCompaniesToCheck<T extends SelectableCompany>(companies: T
     return { selected: [], counts: { target: 0, watching: 0, suggested: 0 }, skipped: eligible, reason: 'no company-first budget this run' }
   }
 
-  // Explore gets a share of the budget, but only what is left after the user's
-  // own choices — and at least `minExplore` when any exist, so exploration
-  // never stops entirely once the user has picked a few favourites.
-  const exploreCap = byIntent.suggested.length === 0 ? 0 : Math.max(Math.min(minExplore, byIntent.suggested.length), Math.floor(budget * exploreShare))
-  const userRoom = Math.max(0, budget - exploreCap)
+  const userRows = [...byIntent.target, ...byIntent.watching]
 
-  const chosenUser = [...byIntent.target, ...byIntent.watching].slice(0, userRoom)
-  const exploreRoom = Math.max(0, budget - chosenUser.length)
-  const chosenExplore = byIntent.suggested.slice(0, Math.min(exploreRoom, Math.max(exploreCap, exploreRoom - (byIntent.target.length + byIntent.watching.length - chosenUser.length))))
+  // Explore is capped at a share of the budget and stays capped even when the
+  // user's own rows do not fill the rest: the leftover slots are NOT handed to
+  // a hundred old guesses, they are returned to the run for market discovery.
+  // The cap can never squeeze out the user's rows either — with one slot and
+  // one target, the target gets it.
+  const exploreCap =
+    byIntent.suggested.length === 0
+      ? 0
+      : Math.min(
+          Math.max(minExplore, Math.floor(budget * exploreShare)),
+          byIntent.suggested.length,
+          Math.max(0, budget - (userRows.length > 0 ? 1 : 0))
+        )
+
+  const chosenUser = userRows.slice(0, Math.max(0, budget - exploreCap))
+  const chosenExplore = byIntent.suggested.slice(0, Math.min(exploreCap, Math.max(0, budget - chosenUser.length)))
   const selected = [...chosenUser, ...chosenExplore]
 
   const counts = {
@@ -182,9 +191,11 @@ export function selectCompaniesToCheck<T extends SelectableCompany>(companies: T
     watching: selected.filter((c) => normalizeIntent(c.watch_status) === 'watching').length,
     suggested: selected.filter((c) => normalizeIntent(c.watch_status) === 'suggested').length,
   }
+  const unused = budget - selected.length
   const reason =
     `${counts.target} target · ${counts.watching} watching · ${counts.suggested} explore (rotating, least recently checked)` +
-    (eligible > selected.length ? ` · ${eligible - selected.length} left for a later run` : '')
+    (eligible > selected.length ? ` · ${eligible - selected.length} left for a later run` : '') +
+    (unused > 0 ? ` · ${unused} slot${unused === 1 ? '' : 's'} returned to market discovery` : '')
   return { selected, counts, skipped: eligible - selected.length, reason }
 }
 
