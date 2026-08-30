@@ -7,6 +7,7 @@
 //
 // Writes .career-out/evidence/benchmark-<stamp>.json. Never mutates rows.
 
+import { defaultProfiles } from './lib/cli-user'
 import { config } from 'dotenv'
 import path from 'path'
 import fs from 'fs'
@@ -118,7 +119,7 @@ async function main() {
     const { createServiceClient } = await import('../lib/supabase/server')
     let userId = arg('user')
     if (!userId) {
-      const { data } = await createServiceClient().from('profiles').select('id').limit(1)
+      const { data } = await defaultProfiles()
       userId = (data?.[0]?.id as string | undefined) ?? null
     }
     if (!userId) throw new Error('no profile found; pass --user <id> or --fixture')

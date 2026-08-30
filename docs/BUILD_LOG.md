@@ -6,6 +6,128 @@ architecturally and why.
 
 ---
 
+## 2026-08-30 — "What I'm scouting for": a stated direction leads the job search
+
+**Type:** feature · **Behavior change:** the Jobs page has a free-text direction; when set, the
+Job Mission Planner starts from it (a pivot is planned as a transfer, not retreated from), the
+Fit Evaluator judges transferability toward it, and stored fit rows are invalidated when it
+changes. Empty → everything behaves exactly as before.
+
+### Why
+
+The planner inferred role families **from the evidence** ("never from a fixed taxonomy"), so a
+chemical engineer's bank implied process / manufacturing / industrial-AI roles. The founder
+wants to pivot ("Life Sciences / genomic bio research — my experience is very transferable")
+and had no input that could say so; the Mission page's objective was one line among many.
+
+### What was built
+
+- `career_missions.preferences.direction` (jsonb, no migration). `sanitizeDirection` trims,
+  collapses whitespace, caps at 1,500 chars (surrogate-safe), null when empty. `updateMission`
+  now **merges** a partial `preferences` patch over the stored row — a real bug: a partial patch
+  used to wipe the other lists.
+- `renderMission` puts `DIRECTION (what I want to scout for — this leads the plan)` first and
+  relabels company types as default examples the direction overrides; the default NOTES line no
+  longer says "infer roles from the evidence" when a direction exists. Without a direction the
+  output is byte-identical (pinned fixture in `test-career-scout`).
+- **Job Mission Planner 1.1.0**: with a direction, role families serve it and each carries *why
+  this person is credible* from the evidence; a pivot names the roles an intern with this
+  background can win in that industry, with honest 0.3–0.6 confidence; seeds and strategies
+  match the direction first; roles squarely in the old industry are off-target unless the
+  direction says "also open to". **Fit Evaluator 1.1.0**: `role_fit` and `mission_interest_fit`
+  are transferability toward the direction, never past-title match. Both bumps invalidate
+  stored fit rows; the intelligence orchestrator also folds a hash of the direction into the
+  fit cache key so a *changed* direction re-ranks.
+- Deterministic floor: `fallbackStrategies` prepends a "stated direction" job-first strategy
+  built from the direction's key phrases (`directionPhrases`) when the planner fails.
+  `npm run career:scout -- --direction "…"` overrides for one run (never persisted; ranking is
+  skipped under an override so no fit row is stored against a direction the mission does not have).
+- UI: `DirectionCard` on the Jobs page (save → "leads the next Scout run"; **Scout now** saves a
+  dirty textarea first and refuses to run on a failed save); the same field on the Mission page's
+  Goal section; the Scout panel shows "Scouting for: …" or "No direction stated — planning from
+  your evidence".
+
+### Tests
+
+`test:career-scout` (+ direction block), `test:career-discovery` (prompt 1.1.0 assertions for
+both agents), `test:career-ui-direction` (new, wired into `test:career`). Live run below.
+
+---
+
+### CLI user resolution
+
+The first live run from the direction went to the **other** profile on the database: every
+Career OS CLI defaulted to `profiles … limit(1)`, the first row in arbitrary order. It was
+stopped after the planner started (one `scouting_runs` row and one default mission were created
+under that account; nothing else). `scripts/lib/cli-user.ts` now resolves `--user` →
+`CAREER_USER_ID` → the only profile → otherwise lists the profiles and refuses. All nine CLIs
+use it.
+
+### Review fixes: a saved direction now invalidates stored fit rows
+
+- `fitJudgmentVersion(mission)` (`lib/career/intelligence/orchestrator.ts`) is the identity a fit
+  row is stored and reused under: the Fit Evaluator prompt version, plus `+direction.<sha12>` of
+  the sanitized direction when one is set. No migration — `job_fit_evaluations.prompt_version` is
+  text. Editing the direction therefore forces re-evaluation on the next rank; the `agent_runs`
+  trace keeps the bare prompt version. The agent cache key carries it too.
+- `renderMission` relabels NOTES as defaults under a direction, and the default notes say the
+  evidence-inference rule applies only when no direction is stated.
+- `sanitizePreferences` emits `direction` only when non-null (as `notes`), so a preferences write
+  without one is byte-for-byte what it was.
+- `scripts/test-career-ui-direction.ts` joined `test:career` and gained checks for all three.
+
+## 2026-08-29 — The applicant's real name on every cover letter, and a Redo path
+
+**Type:** fix + feature · **Behavior change:** cover letters, their DOCX header and signature,
+and the outreach sign-off resolve the applicant's name through one resolver that can never
+return an email local-part; every package has an explicit "Redo package (new version)"
+
+### What was observed
+
+The founder's first live cover letter opened "Dear … zuyu.alex06" and signed "zuyu.alex06".
+The signup trigger (`001_initial.sql`) sets `profiles.name` to the email local-part, and
+`letterSigner` in `lib/career/package/orchestrator.ts` trusted `profiles.name` first, falling
+back to the master résumé's name line only when it was null. `lib/outreach/sender.ts` already
+rejected that shape for the outreach loop; the letter loop did not share the rule.
+
+### What changed
+
+- **`lib/career/identity.ts`** (new): `resolveApplicantName({ profileName, bank, env })` →
+  `{ name, source }` with source ∈ profile · resume · bank · env · fallback, in that order;
+  `looksLikePersonName` and `nameFromBank` moved here (re-exported from `sender.ts`);
+  `isEmailLikeName` for the repair; `printableName` as the boundary guard. `sender.ts`'s
+  `resolveSenderFrom` delegates to it (new `resume` source; its last-resort literal kept).
+- **Every name boundary** goes through it: `letterSigner` (now also reports `nameSource`, and
+  `finishPackage` warns when it is the fallback), `runCoverLetterPipeline` (signature and
+  `safeNames`), `generateCoverLetter`, `regenerateLetterDocuments`, `buildLetterDocuments`,
+  `buildCoverLetterDocx`. The résumé engine is untouched — the master document already carries
+  the real name (ADR-033).
+- **`finishPackage({ letterFromStored })`** + `reuseCoverLetter` in `package/letter.ts`: a new
+  `cover_letters` row and fresh documents from stored text, no writer call; approved/edited
+  status travels with the verbatim body.
+- **`lib/career/package/redo.ts`** (new): `redoPackage` (the generate path as version N+1;
+  locked packages untouched) and `clonePackageVersion` (N+1 carrying the old reviewed patch
+  and snapshots, positioned for `finishPackage`). Route `POST /api/career/packages/[id]/redo`.
+- **UI:** the Package tab has one "Redo package (new version)" confirm box for every status
+  but generating, with the locked-documents hint; the letter panel's button is "Redo letter
+  only"; every Applications row links "Redo package" to `?tab=package&redo=1`.
+- **`npm run career:fix-names [-- --dry-run] [--user <id>]`** (`scripts/career-fix-names.ts`
+  → `lib/career/package/repair.ts`): rewrites email-like name tokens in every `cover_letters`
+  text column to the resolved name, and for the current letter of a locked / ready package
+  creates a new version rendered from the corrected text. Prints letter · package · fields ·
+  new version · docs · QA. Superseded packages get text-only correction.
+- **Tests:** `scripts/test-career-identity.ts` (new, offline, in `test:career`);
+  `test-career-letter` and `test-career-package` assert a `zuyu.alex06` signer with a résumé
+  name line produces "Zuyu Liu" in the letter text, the gate's safe names, and the rendered
+  DOCX header and signature.
+
+### Founder action
+
+`npm run career:fix-names -- --dry-run`, then without the flag. `profiles.name` itself is not
+changed by this; setting it to the real name on the profile makes `source: profile` win.
+
+---
+
 ## 2026-08-28 — Corroboration: one fact, two sources, and a support level the numbers decide
 
 **Type:** fix + feature · **Behavior change:** a pasted text that restates a bank fact no

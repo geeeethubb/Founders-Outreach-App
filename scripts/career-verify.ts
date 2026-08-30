@@ -6,6 +6,7 @@
 // Prints every row whose status changed and the applications the system
 // closed because their posting closed. Exit 2 when migration 014 is missing.
 
+import { defaultProfiles } from './lib/cli-user'
 import { config } from 'dotenv'
 import path from 'path'
 config({ path: path.join(process.cwd(), '.env.local') })
@@ -32,7 +33,7 @@ async function main() {
 
   let userId = opt('user')
   if (!userId) {
-    const { data: profiles } = await createServiceClient().from('profiles').select('id').limit(1)
+    const { data: profiles } = await defaultProfiles()
     if (!profiles?.length) {
       console.error('no profiles row exists')
       process.exitCode = 1

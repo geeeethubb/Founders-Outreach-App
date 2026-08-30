@@ -25,14 +25,15 @@ or fills one of my Templates; multi-contact runs land in Draft Emails for review
 
 **C. Find internships**
 `Evidence (once) → Jobs → Mission → Scout now → react to cards → Save`
-Use to build and keep a ranked, verified list of Summer 2027 openings. Companies holds the
-watchlist the scout checks first. Love / Not interested feedback re-ranks instantly.
+Builds a ranked, verified list of Summer 2027 openings. Companies holds the watchlist the
+scout checks first. Love / Not interested feedback re-ranks instantly.
 
 **D. Prepare an application**
 `Job → Generate package → review résumé diff → build documents → cover letter → Ready to apply → Open application → I applied`
-Use for a job worth applying to. The résumé is tailored conservatively — every changed line
-shows its evidence and a verifier verdict, and unsupported changes keep the original. I apply on
-the company's site, then mark it applied; the submitted PDFs are locked forever.
+For a job worth applying to. The résumé is tailored conservatively — every changed line shows
+its evidence and a verifier verdict; unsupported changes keep the original. I apply on the
+company's site, then mark it applied; the submitted PDFs are locked forever. *Redo package*
+(job's Package tab, or the Applications row) builds a new version beside them.
 
 **E. Keep the system honest about me**
 `Evidence (résumé, facts, skills, stories, preferences) · My Profile (identity, Gmail)`
@@ -46,9 +47,9 @@ Everything the job-search agents may claim about me comes from approved Evidence
 |---|---|---|
 | **Dashboard** | Counters + shortcuts for the older loop (contacts, emails sent, replies). Doesn't know about Scout/Outreach. | Rarely; a rough glance. |
 | **Scout** | Describe a mission → ranked prospects with why-them / why-me → build a draft per person. Can write in a campaign's voice. | Start here for any people search. Results vanish on refresh; drafts survive on Outreach. |
-| **Jobs** | Ranked, verified internship postings; Scout now; Add by URL; feedback; Generate package. Mission editor lives here. | Daily triage in recruiting season. |
+| **Jobs** | Ranked, verified internship postings; **What I'm scouting for** (leads the search — a pivot goes here); Scout now; Add by URL; feedback; Generate package. Mission editor lives here. | Daily triage in recruiting season. |
 | **Applications** | Tracker: Saved → Applied → OA → Interview → Offer/Rejected, with notes and the exact documents submitted. | After applying or hearing back. |
-| **Companies** | Watchlist (target / watching / opening available). "Check now" reads one company's job board today. | Add dream companies; check one board without a full run. |
+| **Companies** | Watchlist (target / watching / opening available). "Check now" reads one company's board. | Add dream companies; check one board. |
 | **Evidence** | The Personal Evidence Bank. **Canonical**: organization → role → facts, each with its sources. **Review**: suggested merges and conflicts. Plus experiences, bullets, facts, skills, stories, preferences with approval. | Setup; after any import (check Review); when I gain a project or skill. |
 | **Outreach** | Review queue + funnel for every Scout draft: edit, approve, send, interpret replies, one follow-up suggestion, record outcome. | After every Scout run; after sends. |
 | **Contacts** | Address book: add by LinkedIn URL (Apollo), bulk, or manually; older "research" summaries; add to campaigns. | To add a known person or look one up. |
@@ -74,6 +75,7 @@ changes*, *Mark READY TO APPLY*, *I applied* · Evidence → *Approve all*, *Upl
 - **Make Scout sound like me** → Campaigns → paste a reference email → pick it on Scout
 - **See who replied / answer them** → Conversations (Outreach shows the interpretation)
 - **Find internships** → Jobs → Scout now
+- **Pivot what the scout looks for (e.g. into genomics)** → Jobs → What I'm scouting for → Save
 - **Change cities, priorities, fit weights** → Jobs → Mission
 - **Watch a company for an opening** → Companies → Add company
 - **Build a résumé + cover letter for a job** → Jobs → open job → Package tab
@@ -131,6 +133,6 @@ application exists once I track it or generate a package, and locks its document
 - **Two "Saved"s on Jobs**: the card's *Save* marks the job; the *Saved* application state means a tracked application. They are independent.
 - **Two sync buttons**: Conversations' *Sync from Gmail* pulls replies; Outreach's *Sync replies* does that **and** updates outreach states. Run the Outreach one.
 - **Campaign stats miss Scout sends**: emails sent from Scout/Outreach don't count toward a campaign, even when written in its voice.
-- **Compose leaves orphans**: single-contact "Generate fresh" saves all three variants; the two unsent ones sit in Draft Emails, and *Approve All* would send them.
-- **Preferences live in two places**: Evidence → Preferences (weights) and Jobs → Mission (the hard constraints and fit weights that actually gate and rank). Edit the Mission page.
+- **Compose leaves orphans**: single-contact "Generate fresh" saves all three variants; the two unsent sit in Draft Emails, where *Approve All* would send them.
+- **Preferences live in two places**: Evidence → Preferences (weights) and Jobs → Mission (the constraints and weights that gate and rank). Edit the Mission page.
 - **A merged experience looks gone**: it is hidden, not deleted — its facts now sit under the surviving row, and every apply is preceded by a snapshot.

@@ -7,6 +7,7 @@
 // Unlike the eval harness this does not judge anything — it produces the product
 // output a person would actually read, and tells you what it cost.
 
+import { defaultProfiles } from './lib/cli-user'
 import { config } from 'dotenv'
 import path from 'path'
 import fs from 'fs'
@@ -29,7 +30,7 @@ async function main() {
   setApolloBudget(Number(process.env.SCOUT_APOLLO_BUDGET ?? 60))
 
   const supabase = createServiceClient()
-  const { data: profiles } = await supabase.from('profiles').select('id').limit(1)
+  const { data: profiles } = await defaultProfiles()
   if (!profiles?.length) {
     console.error('no profiles row exists to own the run')
     process.exit(1)

@@ -9,6 +9,7 @@
 // deleted by an apply: merged rows are tombstoned and a snapshot of the
 // whole bank is written before the first write.
 
+import { defaultProfiles } from './lib/cli-user'
 import { config } from 'dotenv'
 import fs from 'fs'
 import path from 'path'
@@ -33,7 +34,7 @@ async function main() {
 
   let userId = opt('user')
   if (!userId) {
-    const { data } = await createServiceClient().from('profiles').select('id').limit(1)
+    const { data } = await defaultProfiles()
     userId = (data?.[0]?.id as string | undefined) ?? null
   }
   if (!userId) { console.error('no user'); process.exitCode = 1; return }

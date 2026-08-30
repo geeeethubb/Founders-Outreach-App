@@ -3,6 +3,12 @@
 //   npx tsx scripts/career-scout.ts
 //   npx tsx scripts/career-scout.ts --strategies 3 --rounds 2 --companies 25 --extract 40
 //   npx tsx scripts/career-scout.ts --no-verify --mission <id> --user <id> --deadline 600
+//   npx tsx scripts/career-scout.ts --direction "life sciences / genomics research"
+//
+// --direction replaces the mission's stored direction for THIS run only; it
+// is never written back. It leads the plan, retrieval and fallback strategies;
+// post-scout ranking is skipped for such a run (fit rows persist against the
+// saved mission), so save the direction on the Jobs page to rank against it.
 //
 // Unlike the web route this has no 300s ceiling (--deadline is seconds,
 // default the DEFAULT_SCOUT_BUDGET). Exit 2 when migration 014 has not been
@@ -11,6 +17,7 @@
 // Exit codes are set via process.exitCode, never process.exit(): on Node 24 an
 // exit while a Supabase socket is still closing trips a libuv assertion.
 
+import { defaultProfiles } from './lib/cli-user'
 import { config } from 'dotenv'
 import path from 'path'
 config({ path: path.join(process.cwd(), '.env.local') })
@@ -53,7 +60,7 @@ async function main() {
 
   let userId = opt('user')
   if (!userId) {
-    const { data: profiles } = await createServiceClient().from('profiles').select('id').limit(1)
+    const { data: profiles } = await defaultProfiles()
     if (!profiles?.length) {
       console.error('no profiles row exists')
       process.exitCode = 1
@@ -66,11 +73,19 @@ async function main() {
   // Vercel, and the first live CLI run spent 226s in the planner alone and then
   // hit the deadline before extracting or ranking anything.
   const deadlineMs = num('deadline', Math.max(1200, DEFAULT_SCOUT_BUDGET.deadlineMs / 1000)) * 1000
-  console.log(`\nJOB SCOUT — user ${userId}\n`)
+  const directionOverride = opt('direction')
+  console.log(`\nJOB SCOUT — user ${userId}`)
+  if (directionOverride !== null) {
+    console.log(`direction (this run only, from --direction): ${directionOverride}`)
+    console.log('note: post-scout ranking is skipped for a --direction run (fit rows persist against the saved mission); save the direction on /dashboard/jobs to rank against it')
+  }
+  else console.log('direction: from the stored mission (see the [plan] line below)')
+  console.log('')
   const started = Date.now()
   const result = await runJobScout({
     userId,
     missionId: opt('mission'),
+    ...(directionOverride !== null ? { directionOverride } : {}),
     budget: { deadlineMs },
     maxStrategies: num('strategies', 3),
     maxRoundsPerStrategy: num('rounds', 2),

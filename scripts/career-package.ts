@@ -15,6 +15,7 @@
 // Every agent call is cached on disk by content, so a second run of the same
 // inputs costs nothing. Live calls need ANTHROPIC_API_KEY in .env.local.
 
+import { defaultProfiles } from './lib/cli-user'
 import { config } from 'dotenv'
 import fs from 'fs'
 import path from 'path'
@@ -43,7 +44,7 @@ async function dbMode(jobId: string): Promise<void> {
 
   let userId = opt('user')
   if (!userId) {
-    const { data } = await createServiceClient().from('profiles').select('id').limit(1)
+    const { data } = await defaultProfiles()
     userId = (data?.[0] as { id: string } | undefined)?.id
   }
   if (!userId) throw new Error('no user — pass --user <id>')

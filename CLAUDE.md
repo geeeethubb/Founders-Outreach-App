@@ -246,6 +246,7 @@ and that column holds an RFC822 Message-ID this app generates.
 | `loadEvidenceBank(...).canonical` | `true` = migration 015 tables exist. It is not `migrationMissing` (which is about 014). A 014-only database returns `canonical: false` and empty 015 arrays, never an error. |
 | A `status = 'merged'` evidence row | A tombstone, kept so provenance and snapshots resolve. The loader filters them; a raw query must too. Never delete one — restore from `evidence_snapshots` instead. |
 | A fact with a source at confidence 0.5 | That source restated the *event* without the numbers. It corroborates the claim, not the metric; `support_count` ignores it. |
+| A CLI without `--user` | The founder's database has **two** profiles. `scripts/lib/cli-user.ts` uses `--user`, then `CAREER_USER_ID`, then the only profile, else it lists the profiles and stops. It used to take `profiles … limit(1)` — the first row in arbitrary order — and once ran a job scout under the other account. |
 | Bash heredocs on this machine | Unescape backslashes (`\\b` in a heredoc lands as a backspace byte). Write files with the Write/Edit tools; keep heredocs for short backslash-free scripts. |
 
 ---

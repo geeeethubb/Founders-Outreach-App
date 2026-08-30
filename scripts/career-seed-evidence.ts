@@ -15,6 +15,7 @@
 // exit while a Supabase socket is still closing trips a libuv assertion and
 // the process dies 127 instead of the code it meant to return.
 
+import { defaultProfiles } from './lib/cli-user'
 import { config } from 'dotenv'
 import fs from 'fs'
 import path from 'path'
@@ -47,7 +48,7 @@ async function main() {
   if (!userId && dry) userId = 'dry-run'
   if (!userId) {
     const supabase = createServiceClient()
-    const { data: profiles } = await supabase.from('profiles').select('id').limit(1)
+    const { data: profiles } = await defaultProfiles()
     if (!profiles?.length) {
       console.error('no profiles row exists to own the bank')
       process.exitCode = 1

@@ -177,6 +177,10 @@ npx tsc --noEmit     # typecheck
 Database migrations in `supabase/migrations/` are applied by hand in the Supabase SQL editor,
 in numeric order.
 
+The Career OS CLIs (`career:scout`, `career:verify`, `career:package`, `evidence:*`, …) act on one
+profile: pass `--user <id>` or set `CAREER_USER_ID` in `.env.local`; with several profiles and
+neither, they list the profiles and stop.
+
 ---
 
 ## Security
