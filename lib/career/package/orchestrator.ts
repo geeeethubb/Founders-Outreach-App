@@ -25,7 +25,8 @@ import { jobTermsFor, tailorJobFromOpportunity, type EvidenceMapForTailor } from
 import type { LetterDeps } from '../letter/pipeline'
 import type { ToolContext } from '@/lib/agents/runtime/types'
 import type { ApplicationPackage, ApplicationState, DocumentQaReport, PackageStatus, ResumePatchChange } from '../types'
-import { contactFromParagraphMap, generateCoverLetter } from './letter'
+import { resolveApplicantName } from '../identity'
+import { contactFromParagraphMap, generateCoverLetter, reuseCoverLetter, type LetterDocumentsResult, type StoredLetterText } from './letter'
 import {
   ensureJobSnapshot, getCoverLetter, getPackage, insertPackage, insertResumePatch, loadProfile, loadResumePatch, nextPackageVersion,
   supersedePackages, updatePackage, updateResumePatch, type LetterSigner,
@@ -211,11 +212,16 @@ export function letterResearchFor(ctx: JobContext, pkg: Pick<ApplicationPackage,
   return { points: groundedPoints(snap).map((p) => ({ id: p.id, text: p.text })), summary }
 }
 
+/**
+ * Who signs. The name goes through resolveApplicantName — profiles.name is
+ * the email local-part for anyone the signup trigger named, and the first
+ * live letter opened "zuyu.alex06" because this used to trust it first.
+ */
 export async function letterSigner(userId: string, ctx: JobContext): Promise<LetterSigner> {
   const profile = await loadProfile(userId)
   const contact = contactFromParagraphMap(ctx.bank.masterDocument?.paragraph_map ?? [])
-  const name = profile.name ?? ctx.bank.masterDocument?.paragraph_map.find((e) => e.kind === 'name')?.text ?? 'Applicant'
-  return { name, email: contact.email ?? profile.email ?? '', phone: contact.phone ?? '', linkedin: contact.linkedin ?? profile.linkedin_url }
+  const { name, source } = resolveApplicantName({ profileName: profile.name, bank: ctx.bank })
+  return { name, nameSource: source, email: contact.email ?? profile.email ?? '', phone: contact.phone ?? '', linkedin: contact.linkedin ?? profile.linkedin_url }
 }
 
 export async function finishPackage(params: {
@@ -223,6 +229,13 @@ export async function finishPackage(params: {
   packageId: string
   ctx?: ToolContext
   deps?: PackageDeps
+  /**
+   * Carry an existing letter's text into this version instead of calling the
+   * writer — no model call, no cost beyond rendering. The name-repair script
+   * and a no-cost redo use it; the letter's grounding and review status ride
+   * along unchanged because the body is verbatim.
+   */
+  letterFromStored?: StoredLetterText | null
   onProgress?: (stage: PackageStage, detail: string) => void
 }): Promise<PackageResult> {
   const progress = params.onProgress ?? (() => {})
@@ -282,15 +295,24 @@ export async function finishPackage(params: {
     progress('cover_letter', context.job.company_name)
     await updatePackage(pkg.id, { stage: 'cover_letter' })
     const signer = await letterSigner(params.userId, context)
-    const letter = await generateCoverLetter({
-      bank: context.bank,
-      job: context.job,
-      research: letterResearchFor(context, pkg),
-      evidenceMap: context.existing.evidenceMap ?? { why_i_fit: null, fact_ids: [], story_ids: [], top_experience_ids: [] },
-      user: signer, ctx, run, deps: params.deps?.letter, output,
-      persist: { userId: params.userId, jobId: pkg.job_id, packageId: pkg.id },
-      onStep: (s) => progress('cover_letter', `attempt ${s.attempt}: ${s.detail}`),
-    })
+    if (signer.nameSource === 'fallback') warnings.push(`no applicant name could be resolved — the letter is signed "${signer.name}"; set your name on the profile or import a résumé with a name line`)
+    const persist = { userId: params.userId, jobId: pkg.job_id, packageId: pkg.id }
+    let letter: { fullText: string | null; error: string | null; row: { id: string } | null; documents: LetterDocumentsResult | null; flagged: boolean; errors: string[] }
+    if (params.letterFromStored) {
+      progress('cover_letter', `reusing the stored letter text (no writer call)`)
+      const reused = await reuseCoverLetter({ stored: params.letterFromStored, user: signer, company: context.job.company_name, output, persist })
+      letter = { fullText: reused.fullText, error: null, row: reused.row, documents: reused.documents, flagged: reused.flagged, errors: reused.errors }
+    } else {
+      const gen = await generateCoverLetter({
+        bank: context.bank,
+        job: context.job,
+        research: letterResearchFor(context, pkg),
+        evidenceMap: context.existing.evidenceMap ?? { why_i_fit: null, fact_ids: [], story_ids: [], top_experience_ids: [] },
+        user: signer, ctx, run, deps: params.deps?.letter, output, persist,
+        onStep: (s) => progress('cover_letter', `attempt ${s.attempt}: ${s.detail}`),
+      })
+      letter = { fullText: gen.letter.fullText, error: gen.letter.error, row: gen.row, documents: gen.documents, flagged: gen.flagged, errors: gen.errors }
+    }
     errors.push(...letter.errors)
     if (letter.documents) {
       warnings.push(...letter.documents.warnings)
@@ -301,7 +323,7 @@ export async function finishPackage(params: {
       cover_docx_path: letter.documents?.docxPath ?? null, cover_pdf_path: letter.documents?.pdfPath ?? null,
       cover_filename: letter.documents?.filenames.docx ?? null, qa: setQa(), cost_usd: costBase + run.costUsd(),
     })
-    if (!letter.letter.fullText) return fail(`cover letter: ${letter.letter.error ?? 'no letter produced'}`)
+    if (!letter.fullText) return fail(`cover letter: ${letter.error ?? 'no letter produced'}`)
     if (letter.flagged) warnings.push('cover letter has grounding findings — review before finalizing')
 
     // ─── Blocking QA stops here, visibly ───

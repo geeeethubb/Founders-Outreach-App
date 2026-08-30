@@ -11,6 +11,7 @@ import type { AgentResult, ToolContext } from '@/lib/agents/runtime/types'
 import { buildBankPool, factsById } from '../evidence/render'
 import { getRelevantPersonalEvidence } from '../evidence/retrieval'
 import { retrievalTargetForLetterJob } from '../evidence/retrieval-targets'
+import { printableName } from '../identity'
 import { gateCoverLetter, revisionNotesFrom, type LetterGrounding } from './grounding'
 import type { CoverLetterClaim, EvidenceBank, JobEvidenceMap } from '../types'
 
@@ -143,17 +144,21 @@ export function buildLetterInput(params: Omit<CoverLetterParams, 'ctx' | 'deps' 
   }
 }
 
+/** greeting + paragraphs + closing + signature. The signature is never an email local-part. */
 export function assembleLetter(out: Pick<CoverLetterOutput, 'greeting' | 'paragraphs' | 'closing'>, name: string): string {
-  return [out.greeting, ...out.paragraphs, out.closing, name].join('\n\n')
+  return [out.greeting, ...out.paragraphs, out.closing, printableName(name)].join('\n\n')
 }
 
 export async function runCoverLetterPipeline(params: CoverLetterParams): Promise<CoverLetterResult> {
   const writer = params.deps?.writer ?? ((input, ctx) => runCoverLetterWriter(input, ctx))
-  const base = buildLetterInput(params)
+  // A caller that was handed profiles.name unresolved (an eval fixture, an old
+  // signer) still gets the résumé's name here, not "zuyu.alex06".
+  const name = printableName(params.user.name, params.bank)
+  const base = buildLetterInput({ ...params, user: { name } })
   const pools = {
     companyPool: companyPoolFor(params.job, params.companyResearch),
     personalPool: buildBankPool(params.bank),
-    safeNames: [params.user.name, params.job.company, params.job.title, params.job.location ?? ''],
+    safeNames: [name, params.job.company, params.job.title, params.job.location ?? ''],
     postingPool: [params.job.summary, params.job.postingText ?? ''].filter((s) => s.trim().length > 0),
   }
 
@@ -203,7 +208,7 @@ export async function runCoverLetterPipeline(params: CoverLetterParams): Promise
     closing: last.out.closing,
     claims: last.out.claims,
     grounding: last.grounding,
-    fullText: assembleLetter(last.out, params.user.name),
+    fullText: assembleLetter(last.out, name),
     wordCount: last.out.wordCount,
     flagged: !last.grounding.ok,
     attempts: runs.length,

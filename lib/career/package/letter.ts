@@ -17,10 +17,11 @@ import { NO_RENDERER_ERROR, renderDocxToPdf } from '../documents/pdf'
 import { pdfInfo, type PdfInfo } from '../documents/pdf-text'
 import { qaCoverLetterDocument } from '../documents/qa'
 import { DEFAULT_LENGTH } from '@/lib/agents/cover-letter-writer'
+import { printableName } from '../identity'
 import { runCoverLetterPipeline, type CompanyResearchForLetter, type CoverLetterResult, type EvidenceMapForLetter, type LetterDeps } from '../letter/pipeline'
 import type { CareerRun } from '../runs'
 import type { CoverLetter, DocumentQaReport, EvidenceBank, ResumeParagraphMapEntry } from '../types'
-import { insertCoverLetter, nextLetterVersion, type LetterSigner } from './persist'
+import { insertCoverLetter, nextLetterVersion, updateCoverLetter, type LetterSigner } from './persist'
 import { scratchDir, writeOutput, type DocumentOutput } from './resume'
 
 export interface LetterJob {
@@ -70,8 +71,9 @@ export interface LetterDocumentsResult {
 export async function buildLetterDocuments(params: LetterDocumentsParams): Promise<LetterDocumentsResult> {
   const warnings: string[] = []
   const filenames = coverLetterFilenames(params.company)
+  const name = printableName(params.user.name)
   const docx = await buildCoverLetterDocx({
-    name: params.user.name,
+    name,
     email: params.user.email,
     phone: params.user.phone,
     linkedin: params.user.linkedin ?? undefined,
@@ -80,7 +82,7 @@ export async function buildLetterDocuments(params: LetterDocumentsParams): Promi
     greeting: params.greeting,
     paragraphs: params.paragraphs,
     closing: params.closing,
-    signatureName: params.user.name,
+    signatureName: name,
   })
 
   const tmp = scratchDir()
@@ -175,6 +177,9 @@ export interface GenerateLetterResult {
 
 export async function generateCoverLetter(params: GenerateLetterParams): Promise<GenerateLetterResult> {
   const errors: string[] = []
+  // Resolved once, against the bank, so the pipeline's signature and the
+  // rendered header agree — and neither is the email local-part.
+  const user: LetterSigner = { ...params.user, name: printableName(params.user.name, params.bank) }
   const draft = (length: { min: number; max: number }, revisionNotes?: string[]) =>
     runCoverLetterPipeline({
       bank: params.bank,
@@ -182,7 +187,7 @@ export async function generateCoverLetter(params: GenerateLetterParams): Promise
       companyResearch: params.research,
       evidenceMap: params.evidenceMap,
       ctx: params.ctx,
-      user: { name: params.user.name },
+      user: { name: user.name },
       deps: params.deps,
       length,
       revisionNotes,
@@ -190,7 +195,7 @@ export async function generateCoverLetter(params: GenerateLetterParams): Promise
     })
   const buildDocs = (l: CoverLetterResult) =>
     l.fullText && l.greeting && l.closing
-      ? buildLetterDocuments({ greeting: l.greeting, paragraphs: l.paragraphs, closing: l.closing, user: params.user, company: params.job.company_name, output: params.output })
+      ? buildLetterDocuments({ greeting: l.greeting, paragraphs: l.paragraphs, closing: l.closing, user, company: params.job.company_name, output: params.output })
       : Promise.resolve(null)
 
   let letter = await draft(params.length ?? LETTER_LENGTH)
@@ -264,10 +269,81 @@ export function splitLetterText(text: string, name: string): { greeting: string;
   return { greeting, paragraphs: blocks, closing }
 }
 
-export async function regenerateLetterDocuments(params: { letter: CoverLetter; user: LetterSigner; company: string; output: DocumentOutput }): Promise<LetterDocumentsResult> {
-  const { letter } = params
-  const parts = letter.edited_text
-    ? splitLetterText(letter.edited_text, params.user.name)
+/** greeting / paragraphs / closing of a stored row: the human's edited text when there is one, else the writer's parts. */
+export function storedLetterParts(letter: StoredLetterText, name: string): { greeting: string; paragraphs: string[]; closing: string } {
+  return letter.edited_text
+    ? splitLetterText(letter.edited_text, name)
     : { greeting: letter.greeting ?? 'Dear Hiring Manager,', paragraphs: letter.paragraphs, closing: letter.closing ?? 'Sincerely,' }
-  return buildLetterDocuments({ ...parts, user: params.user, company: params.company, output: params.output })
+}
+
+export async function regenerateLetterDocuments(params: { letter: CoverLetter; user: LetterSigner; company: string; output: DocumentOutput }): Promise<LetterDocumentsResult> {
+  const user: LetterSigner = { ...params.user, name: printableName(params.user.name) }
+  return buildLetterDocuments({ ...storedLetterParts(params.letter, user.name), user, company: params.company, output: params.output })
+}
+
+// ─── Reuse a stored letter (no writer call) ──────────────────────────────────
+
+/** The text of a letter already written, carried into a new package version as it stands. */
+export type StoredLetterText = Pick<CoverLetter, 'greeting' | 'paragraphs' | 'closing' | 'full_text' | 'edited_text' | 'word_count' | 'claims' | 'grounding' | 'review_status' | 'prompt_version'>
+
+export interface ReuseLetterParams {
+  stored: StoredLetterText
+  user: LetterSigner
+  company: string
+  output: DocumentOutput
+  /** Write the cover_letters row. Omit for the no-DB path. */
+  persist?: { userId: string; jobId: string; packageId: string } | null
+}
+
+export interface ReuseLetterResult {
+  row: CoverLetter | null
+  documents: LetterDocumentsResult
+  flagged: boolean
+  errors: string[]
+  fullText: string
+}
+
+function blockingCountOf(g: unknown): number {
+  const b = (g as { blocking?: unknown[] } | null)?.blocking
+  return Array.isArray(b) ? b.length : 0
+}
+
+/**
+ * A new cover_letters row and fresh documents from text that already exists —
+ * the name-repair path, and any redo that must not spend a model call. The
+ * grounding result and the review status travel with the text: nothing about
+ * the letter's claims changed, only who signs it. The body is verbatim; the
+ * signature line is rebuilt from the resolved name.
+ */
+export async function reuseCoverLetter(params: ReuseLetterParams): Promise<ReuseLetterResult> {
+  const errors: string[] = []
+  const user: LetterSigner = { ...params.user, name: printableName(params.user.name) }
+  const { stored } = params
+  const parts = storedLetterParts(stored, user.name)
+  const fullText = [parts.greeting, ...parts.paragraphs, parts.closing, user.name].join('\n\n')
+  const documents = await buildLetterDocuments({ ...parts, user, company: params.company, output: params.output })
+
+  let row: CoverLetter | null = null
+  if (params.persist) {
+    const version = await nextLetterVersion(params.persist.userId, params.persist.jobId)
+    const carried = stored.review_status === 'approved' || stored.review_status === 'edited'
+    const ins = await insertCoverLetter({
+      user_id: params.persist.userId, job_id: params.persist.jobId, package_id: params.persist.packageId, version,
+      greeting: parts.greeting, paragraphs: parts.paragraphs, closing: parts.closing, full_text: fullText,
+      word_count: stored.word_count, claims: stored.claims ?? [], grounding: stored.grounding,
+      // An approved or edited letter stays so: the human's decision was about the body, which is unchanged.
+      review_status: carried ? stored.review_status : 'pending',
+      prompt_version: stored.prompt_version, agent_run_id: null,
+    })
+    if (ins.error) errors.push(`cover letter persist: ${ins.error}`)
+    row = ins.letter
+    if (row && stored.edited_text) {
+      // insertCoverLetter's row type omits edited_text; the review UI shows it when the status is 'edited'.
+      const w = await updateCoverLetter(row.id, { edited_text: fullText })
+      if (w.error) errors.push(`cover letter edited_text: ${w.error}`)
+      else row = { ...row, edited_text: fullText }
+    }
+  }
+  const flagged = blockingCountOf(stored.grounding) > 0 || spilledPastOnePage(documents.qa)
+  return { row, documents, flagged, errors, fullText }
 }

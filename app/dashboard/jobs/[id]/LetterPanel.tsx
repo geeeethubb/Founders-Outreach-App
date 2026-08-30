@@ -169,8 +169,8 @@ export default function LetterPanel({
               Reject
             </button>
           )}
-          <button type="button" disabled={busy !== null} onClick={() => send('regenerate', { method: 'POST', json: { regenerate: true } })} className="text-xs px-2.5 py-1 rounded-md border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-50">
-            {busy === 'regenerate' ? 'Writing… (a minute)' : 'Regenerate'}
+          <button type="button" disabled={busy !== null} title="Writes a new letter version for this package; the résumé is untouched. For a full redo use the package's Redo above." onClick={() => send('regenerate', { method: 'POST', json: { regenerate: true } })} className="text-xs px-2.5 py-1 rounded-md border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+            {busy === 'regenerate' ? 'Writing… (a minute)' : 'Redo letter only'}
           </button>
         </div>
       )}

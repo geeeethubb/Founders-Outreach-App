@@ -7,6 +7,7 @@
 // 422/409 answers carry qa, findings and messages — shown verbatim, never hidden.
 
 import { useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import type { Application, DocumentQaReport, JobOpportunity } from '@/lib/career/types'
 import { api, fmtUsd } from '@/components/career/api'
 import type { LetterView, PackageSummary, PackageView } from '@/components/career/packageTypes'
@@ -46,6 +47,9 @@ export default function PackagePanel({ jobId, job, packages, view, application, 
   const [stage, setStage] = useState<string | null>(null)
   const [ackLetter, setAckLetter] = useState(false)
   const [confirmApplied, setConfirmApplied] = useState(false)
+  // The Applications page links here with ?redo=1: open the confirm box, do not redo on arrival.
+  const search = useSearchParams()
+  const [confirmRedo, setConfirmRedo] = useState(search.get('redo') === '1')
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const latest = packages[0] ?? null
@@ -83,12 +87,20 @@ export default function PackagePanel({ jobId, job, packages, view, application, 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [generating, latest?.id, status])
 
+  /**
+   * A first package, or a redo. A redo goes through POST …/packages/[id]/redo: a NEW
+   * version beside the current one — the current one becomes superseded unless it is
+   * locked, in which case it stays exactly as submitted. Same pipeline either way.
+   */
   async function generate() {
     setBusy('generate')
     setNotice(null)
     setFailedQa(null)
+    setConfirmRedo(false)
     setStage('started')
-    const r = await api<{ package_id: string; status: string; error: string | null; errors: string[]; warnings: string[]; costUsd: number }>('/api/career/packages', { json: { job_id: jobId } })
+    const r = latest
+      ? await api<{ package_id: string; status: string; error: string | null; errors: string[]; warnings: string[]; costUsd: number }>(`/api/career/packages/${latest.id}/redo`, { method: 'POST', json: {} })
+      : await api<{ package_id: string; status: string; error: string | null; errors: string[]; warnings: string[]; costUsd: number }>('/api/career/packages', { json: { job_id: jobId } })
     setBusy(null)
     setStage(null)
     if (!r.ok && !r.body?.package_id) {
@@ -216,8 +228,41 @@ export default function PackagePanel({ jobId, job, packages, view, application, 
 
           {locked && (
             <InlineNotice kind="info">
-              This package is <strong>locked</strong>: it is the record of what you submitted. It can no longer be edited or regenerated.
+              This package is <strong>locked</strong>: it is the record of what you submitted. It can no longer be edited in place —
+              a redo creates a new version beside it.
             </InlineNotice>
+          )}
+
+          {/* Redo — reachable for every status but generating. Always a new version; never an edit in place. */}
+          {status !== 'generating' && (
+            <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
+              {!confirmRedo ? (
+                <p className="text-xs text-slate-500">
+                  Need to start over?{' '}
+                  <button type="button" disabled={busy !== null} onClick={() => setConfirmRedo(true)} className="underline text-slate-700 hover:text-slate-900 disabled:opacity-50">
+                    Redo package (new version)
+                  </button>
+                  {' '}— researches, tailors and writes again as v{(latest?.version ?? 0) + 1}.
+                  {locked ? ' Documents already submitted stay locked; the new version sits beside them.' : ' The current version becomes superseded.'}
+                </p>
+              ) : (
+                <div className="text-sm text-slate-700">
+                  <p className="font-medium">Redo this package as v{(latest?.version ?? 0) + 1}?</p>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Intelligence is reused when fresh; the résumé is re-tailored and stops at your review; the cover letter is rewritten after you approve the résumé.
+                    {locked ? ' The submitted documents are never touched.' : ' The current version becomes superseded.'} Nothing is submitted anywhere.
+                  </p>
+                  <div className="mt-2 flex gap-2">
+                    <button type="button" disabled={busy !== null} onClick={generate} className="px-2.5 py-1 rounded-md bg-indigo-600 text-white text-xs hover:bg-indigo-700 disabled:opacity-50">
+                      Yes, redo as a new version
+                    </button>
+                    <button type="button" onClick={() => setConfirmRedo(false)} className="text-xs text-slate-500">
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           )}
 
           {/* (e) failed */}
@@ -232,7 +277,7 @@ export default function PackagePanel({ jobId, job, packages, view, application, 
                   </button>
                 )}
                 <button type="button" disabled={busy !== null} onClick={generate} className="px-2.5 py-1 rounded-md border border-rose-300 text-xs text-rose-800 hover:bg-rose-100 disabled:opacity-50">
-                  Regenerate package (new version)
+                  Redo package (new version)
                 </button>
               </div>
             </InlineNotice>
@@ -335,15 +380,6 @@ export default function PackagePanel({ jobId, job, packages, view, application, 
             </div>
           )}
 
-          {(status === 'ready_for_review' || status === 'ready_to_apply' || status === 'superseded') && !locked && (
-            <p className="text-xs text-slate-400">
-              Need a fresh start?{' '}
-              <button type="button" disabled={busy !== null} onClick={generate} className="underline hover:text-slate-700 disabled:opacity-50">
-                Regenerate as a new version
-              </button>{' '}
-              — the current one becomes superseded.
-            </p>
-          )}
         </>
       )}
 

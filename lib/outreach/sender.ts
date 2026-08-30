@@ -2,16 +2,22 @@
 // a short "who I am" for the signature line; both used to be literals.
 //
 // Resolution order, all deterministic:
-//   name     profiles.name when it LOOKS like a person's name (a space, no
-//            '@', no digits — "zuyu.alex06", which the signup trigger derives
-//            from the email local-part, is rejected) → a bank education/other
-//            fact of the form "Firstname Lastname is a …" → OUTREACH_SENDER_NAME
+//   name     lib/career/identity.ts resolveApplicantName: profiles.name when
+//            it LOOKS like a person's name ("zuyu.alex06", which the signup
+//            trigger derives from the email local-part, is rejected) → the
+//            master résumé's name line → a bank education fact of the form
+//            "Firstname Lastname is a … student" → OUTREACH_SENDER_NAME
 //            → the last-resort literal.
 //   signoff  profiles.major + the bank's education title → "undergraduate,
 //            chemical engineering"; falls back to the historical literal.
 
 import { createServiceClient } from '@/lib/supabase/server'
 import type { EvidenceBank } from '@/lib/career/types'
+import { looksLikePersonName, nameFromBank, resolveApplicantName, type ApplicantNameSource } from '@/lib/career/identity'
+
+// The name rules live in lib/career/identity.ts so the cover letter and the
+// outreach sign-off can never disagree. Re-exported: callers import from here.
+export { looksLikePersonName, nameFromBank }
 
 /** Last-resort fallback: the founder's name, kept only so an empty profile still signs. */
 const FALLBACK_NAME = 'Zuyu Liu'
@@ -21,33 +27,7 @@ export interface Sender {
   name: string
   signoffContext: string
   /** Where the name came from, for the trace. */
-  nameSource: 'profile' | 'bank' | 'env' | 'fallback'
-}
-
-/** A person's name: at least two words, letters only (with ' - .), no '@', no digits. */
-export function looksLikePersonName(value: string | null | undefined): boolean {
-  const v = (value ?? '').trim()
-  if (!v || !v.includes(' ') || v.includes('@') || /\d/.test(v)) return false
-  const words = v.split(/\s+/)
-  return words.length >= 2 && words.length <= 4 && words.every((w) => /^[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ'’.-]*$/.test(w))
-}
-
-// "Zuyu Liu is a Chemical Engineering student at …" — the sentence must be
-// about a student, so "Procter Gamble is a consumer goods company" (an
-// organization, not a person) can never become the sender's name.
-const NAME_IN_FACT = /^([A-Z][a-zà-ÿ'-]+ [A-Z][a-zà-ÿ'-]+) (?:is|was) (?:a|an|the) [^.]*\b(?:student|undergraduate|candidate|major|majoring|studying)\b/
-
-/** "Zuyu Liu is a Chemical Engineering student…" → "Zuyu Liu". Approved education facts only; deterministic. */
-export function nameFromBank(bank: EvidenceBank | null | undefined): string | null {
-  if (!bank) return null
-  const candidates = bank.facts
-    .filter((f) => f.approved && f.status !== 'merged' && f.category === 'education')
-    .sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id))
-  for (const f of candidates) {
-    const m = NAME_IN_FACT.exec(f.statement.trim())
-    if (m) return m[1]
-  }
-  return null
+  nameSource: ApplicantNameSource
 }
 
 function degreeLevel(title: string): string | null {
@@ -85,12 +65,11 @@ export function signoffFrom(major: string | null | undefined, bank: EvidenceBank
 /** Pure part, so tests and the benchmark can run without a database. */
 export function resolveSenderFrom(profile: { name?: string | null; major?: string | null } | null, bank?: EvidenceBank | null): Sender {
   const signoffContext = signoffFrom(profile?.major ?? null, bank)
-  if (looksLikePersonName(profile?.name)) return { name: profile!.name!.trim(), signoffContext, nameSource: 'profile' }
-  const fromBank = nameFromBank(bank)
-  if (fromBank) return { name: fromBank, signoffContext, nameSource: 'bank' }
-  const env = (process.env.OUTREACH_SENDER_NAME ?? '').trim()
-  if (looksLikePersonName(env)) return { name: env, signoffContext, nameSource: 'env' }
-  return { name: FALLBACK_NAME, signoffContext, nameSource: 'fallback' }
+  const resolved = resolveApplicantName({ profileName: profile?.name ?? null, bank })
+  // The outreach loop keeps its historical literal as the last resort; the
+  // letter loop signs 'Applicant' instead, so a wrong letter is visibly wrong.
+  if (resolved.source === 'fallback') return { name: FALLBACK_NAME, signoffContext, nameSource: 'fallback' }
+  return { name: resolved.name, signoffContext, nameSource: resolved.source }
 }
 
 export async function resolveSender(userId: string, bank?: EvidenceBank | null): Promise<Sender> {

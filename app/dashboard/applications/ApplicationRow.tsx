@@ -126,6 +126,14 @@ export default function ApplicationRow({
               Posting ↗
             </a>
           )}
+          {/* Opens the job's Package tab with the redo confirm box; a redo is always a new version beside this one. */}
+          <Link
+            href={`/dashboard/jobs/${row.job_id}?tab=package&redo=1`}
+            title={row.locked ? 'Documents already submitted stay locked; the redo becomes a new version beside them' : 'Regenerate the package as a new version'}
+            className="text-slate-600 hover:underline"
+          >
+            Redo package
+          </Link>
           <button onClick={() => setOpen((o) => !o)} className="text-slate-500 hover:text-slate-900">
             {open ? 'Hide' : 'Details'}
           </button>

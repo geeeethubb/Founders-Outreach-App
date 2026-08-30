@@ -16,10 +16,11 @@ import { buildFixtureBank, CTX } from './test-career-tailor'
 import { DEFAULT_LENGTH, MAX_SLACK, validateCoverLetterOutput, type CoverLetterInput, type CoverLetterOutput } from '../lib/agents/cover-letter-writer'
 import { coverLetterWriterPrompt } from '../lib/agents/cover-letter-writer/prompt'
 import { companyPoolFor, runCoverLetterPipeline } from '../lib/career/letter/pipeline'
-import { generateCoverLetter, ONE_PAGE_RETRY_LENGTH, ONE_PAGE_REVISION_NOTE, spilledPastOnePage } from '../lib/career/package/letter'
+import { generateCoverLetter, ONE_PAGE_RETRY_LENGTH, ONE_PAGE_REVISION_NOTE, reuseCoverLetter, spilledPastOnePage } from '../lib/career/package/letter'
+import { documentText, readDocx } from '../lib/career/documents/docx-read'
 import { selectPdfRenderer, shutdownPdfRenderers } from '../lib/career/documents/pdf'
 import type { AgentResult } from '../lib/agents/runtime/types'
-import type { DocumentQaReport } from '../lib/career/types'
+import type { DocumentQaReport, ResumeDocument } from '../lib/career/types'
 import { foreignProperNouns, pickInternship } from '../evals/career/cover-letter'
 import { issuesAreFactual, plantFabrications } from '../evals/career/factuality'
 import { alternateFromFacts } from '../evals/career/minimal-edit'
@@ -156,6 +157,36 @@ async function main() {
     check('grounding retry keeps the initial note and adds the findings', seen.length === 2 && seen[1][0] === ONE_PAGE_REVISION_NOTE && seen[1].length === 2, JSON.stringify(seen[1]))
   }
 
+  // ─── the applicant's name: profiles.name is the email local-part; the letter must not be ───
+  {
+    const master: ResumeDocument = {
+      id: 'doc-1', user_id: 'u', label: 'master', is_master: true, filename: 'r.docx', storage_path: null, sha256: 'x', byte_size: 1, page_count: 1, uploaded_at: 'now',
+      paragraph_map: [{ index: 0, kind: 'name', text: 'Zuyu Liu' }, { index: 1, kind: 'contact', text: 'zuyu.alex06@gmail.com' }],
+    }
+    const named = { ...bank, masterDocument: master }
+    const filler = words(60)
+    // The writer mentions the applicant by real name in the body; the gate must treat it as a safe name.
+    const writer = async () => stub({
+      greeting: 'Dear Northbank Hiring Team,', closing: 'Sincerely,', claims: [], wordCount: 250, dropped_claims: 0,
+      paragraphs: [`Zuyu Liu is the name on my résumé. Northbank opened a resin line in Newark in 2025. ${filler}`, filler, filler, filler],
+    })
+    const r = await runCoverLetterPipeline({
+      bank: named, ctx: CTX, user: { name: 'zuyu.alex06' }, deps: { writer },
+      job: { title: 'Intern', company: 'Northbank Specialty Materials', location: null, summary: 's' },
+      companyResearch: { summary: '', points: [{ id: 'point:0', text: 'Northbank opened a resin line in Newark in 2025.' }] },
+      evidenceMap: { why_i_fit: null, fact_ids: [], story_ids: [], top_experience_ids: [] },
+    })
+    check('a profile local-part is resolved to the résumé name in the signature', r.fullText !== null && r.fullText.endsWith('Zuyu Liu') && !/zuyu\.alex06/.test(r.fullText), r.fullText?.slice(-40))
+    check('the real name is a safe name for the gate', r.grounding?.ok === true, JSON.stringify(r.grounding?.blocking))
+    const bare = await runCoverLetterPipeline({
+      bank, ctx: CTX, user: { name: 'zuyu.alex06' }, deps: { writer },
+      job: { title: 'Intern', company: 'Northbank Specialty Materials', location: null, summary: 's' },
+      companyResearch: { summary: '', points: [{ id: 'point:0', text: 'Northbank opened a resin line in Newark in 2025.' }] },
+      evidenceMap: { why_i_fit: null, fact_ids: [], story_ids: [], top_experience_ids: [] },
+    })
+    check('with nothing to resolve from, the signature is the fallback, never the local-part', bare.fullText !== null && !/zuyu\.alex06/.test(bare.fullText) && bare.fullText.endsWith('Applicant'), bare.fullText?.slice(-40))
+  }
+
   // ─── the one-page band ───
   {
     check('DEFAULT_LENGTH is the one-page band', DEFAULT_LENGTH.min === 200 && DEFAULT_LENGTH.max === 290)
@@ -233,6 +264,31 @@ async function main() {
         user: { name: 'Zuyu Liu', email: 'z@example.com', phone: '', linkedin: null },
       })
       check('a still-two-page letter is kept and flagged, never discarded', r2.onePageRetried && r2.flagged && r2.documents !== null && (r2.documents.qa.page_count ?? 0) > 1 && r2.letter.fullText !== null, JSON.stringify({ pages: r2.documents?.qa.page_count, flagged: r2.flagged }))
+
+      // ─── the rendered header and signature carry the résumé's name, not the profile local-part ───
+      const master: ResumeDocument = {
+        id: 'doc-1', user_id: 'u', label: 'master', is_master: true, filename: 'r.docx', storage_path: null, sha256: 'x', byte_size: 1, page_count: 1, uploaded_at: 'now',
+        paragraph_map: [{ index: 0, kind: 'name', text: 'Zuyu Liu' }],
+      }
+      const short = async () => stub({ greeting: 'Dear Acme Hiring Team,', closing: 'Sincerely,', claims: [], wordCount: 180, dropped_claims: 0, paragraphs: [words(45, 'a'), words(45, 'b'), words(45, 'c'), words(45, 'd')] })
+      const r3 = await generateCoverLetter({
+        bank: { ...bank, masterDocument: master }, ctx: CTX, deps: { writer: short }, output: { kind: 'dir', dir: path.join(dir, 'named') }, persist: null,
+        job: { title: 'Intern', company_name: 'Acme', location_raw: null, description_text: 'x', responsibilities: [] },
+        research: { points: [], summary: '' },
+        evidenceMap: { why_i_fit: null, fact_ids: [], story_ids: [], top_experience_ids: [] },
+        user: { name: 'zuyu.alex06', email: 'zuyu.alex06@gmail.com', phone: '', linkedin: null },
+      })
+      const text = r3.documents?.docxPath ? documentText(await readDocx(fs.readFileSync(r3.documents.docxPath))) : ''
+      check('letter text is signed with the résumé name', r3.letter.fullText?.endsWith('Zuyu Liu') === true, r3.letter.fullText?.slice(-30))
+      check('rendered DOCX header and signature carry the real name', /Zuyu Liu/.test(text) && !/\bzuyu\.alex06\b(?!@)/.test(text), text.slice(0, 80))
+      check('the email address itself still appears on the contact line', /zuyu\.alex06@gmail\.com/.test(text))
+
+      // ─── reuse: a stored letter re-rendered under the right name, no writer ───
+      const stored = { greeting: 'Dear Acme Hiring Team,', paragraphs: [words(45, 'a'), words(45, 'b')], closing: 'Sincerely,', full_text: 'x', edited_text: null, word_count: 90, claims: [], grounding: { ok: true, blocking: [], warnings: [] }, review_status: 'approved' as const, prompt_version: '1' }
+      const reused = await reuseCoverLetter({ stored, user: { name: 'zuyu.alex06', email: 'z@example.com', phone: '', linkedin: null }, company: 'Acme', output: { kind: 'dir', dir: path.join(dir, 'reused') }, persist: null })
+      const reusedText = reused.documents.docxPath ? documentText(await readDocx(fs.readFileSync(reused.documents.docxPath))) : ''
+      check('reuseCoverLetter renders without a writer and never the local-part', reused.documents.docxPath !== null && !/zuyu\.alex06/.test(reusedText) && !/zuyu\.alex06/.test(reused.fullText), reused.fullText.slice(-30))
+      check('reuseCoverLetter keeps the body verbatim', reused.fullText.includes(stored.paragraphs[0]) && !reused.flagged)
       fs.rmSync(dir, { recursive: true, force: true })
     }
   }

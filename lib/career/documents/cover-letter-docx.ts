@@ -9,6 +9,7 @@
 // interviews.
 
 import { AlignmentType, Document, Packer, Paragraph, TextRun } from 'docx'
+import { printableName } from '../identity'
 
 export interface CoverLetterDocxInput {
   name: string
@@ -46,8 +47,12 @@ export function formatLetterDate(d: Date): string {
 
 export async function buildCoverLetterDocx(input: CoverLetterDocxInput): Promise<Buffer> {
   const contact = [input.email, input.phone, input.linkedin].filter((s): s is string => !!s && s.trim().length > 0).join(' | ')
+  // The header and the signature are the two places the name is printed; an
+  // email local-part is refused at this last boundary regardless of the caller.
+  const name = printableName(input.name)
+  const signature = printableName(input.signatureName)
   const children: Paragraph[] = [
-    para(input.name, { bold: true }),
+    para(name, { bold: true }),
     para(contact),
     para(''),
     para(input.date),
@@ -58,7 +63,7 @@ export async function buildCoverLetterDocx(input: CoverLetterDocxInput): Promise
     para(input.greeting),
     ...input.paragraphs.map((p) => para(p)),
     para(input.closing),
-    para(input.signatureName),
+    para(signature),
   ]
 
   const doc = new Document({

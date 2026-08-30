@@ -8,6 +8,7 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { isMissingSchema } from '../evidence/store'
 import { buildSnapshot } from '../jobs/snapshot'
+import type { ApplicantNameSource } from '../identity'
 import type { VerifiedChange } from '../tailor/pipeline'
 import type { ApplicationPackage, CoverLetter, JobOpportunity, JobSnapshot, ResumePatch, ResumePatchChange } from '../types'
 
@@ -191,7 +192,10 @@ export async function updateCoverLetter(id: string, patch: Partial<CoverLetter>)
 // ─── Profile ─────────────────────────────────────────────────────────────────
 
 export interface LetterSigner {
+  /** Resolved through lib/career/identity.ts — never the email local-part. */
   name: string
+  /** Where the name came from; surfaced as a warning when it is the fallback. */
+  nameSource?: ApplicantNameSource
   email: string
   phone: string
   linkedin: string | null

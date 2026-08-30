@@ -20,7 +20,8 @@ import { fitJobInputFrom, letterPointsFromFacts, researchFromStored } from '../l
 import { evidenceVersion, researchIsFresh } from '../lib/career/intelligence/orchestrator'
 import { evidenceMapRow } from '../lib/career/intelligence/persist'
 import { letterResearchFor } from '../lib/career/package/orchestrator'
-import { contactFromParagraphMap, letterJobSummary, splitLetterText } from '../lib/career/package/letter'
+import { contactFromParagraphMap, letterJobSummary, splitLetterText, storedLetterParts } from '../lib/career/package/letter'
+import { nameFromResume, resolveApplicantName } from '../lib/career/identity'
 import { buildDocumentPatch, droppedByShrink, generateResumeDocuments, type ChangeWithId } from '../lib/career/package/resume'
 import { safeToApprove } from '../lib/career/package/review'
 import { downloadUrl, shapePackageView } from '../lib/career/package/view'
@@ -196,6 +197,14 @@ async function main(): Promise<void> {
   check('fitJobInputFrom trims the description to 3000', fitJobInputFrom(job).description_excerpt.length === 3000)
   const split = splitLetterText('Dear Hiring Manager,\n\nPara one.\n\nPara two.\n\nSincerely,\n\nZuyu Liu', 'Zuyu Liu')
   check('splitLetterText recovers greeting / paragraphs / closing', split.greeting === 'Dear Hiring Manager,' && split.paragraphs.length === 2 && split.closing === 'Sincerely,', JSON.stringify(split))
+  // The applicant's name: the real master résumé carries it on its name line, and a
+  // profile whose name is the email local-part ("zuyu.alex06") must resolve to it.
+  check('the master résumé name line resolves to the real name', nameFromResume(bank) === 'Zuyu Liu', String(nameFromResume(bank)))
+  const resolved = resolveApplicantName({ profileName: 'zuyu.alex06', bank, env: null })
+  check('an email-name profile resolves to the résumé name', resolved.name === 'Zuyu Liu' && resolved.source === 'resume', JSON.stringify(resolved))
+  const storedLetter = { greeting: 'Dear Hiring Manager,', paragraphs: ['Para one.', 'Para two.'], closing: 'Sincerely,', full_text: null, edited_text: 'Dear Team,\n\nEdited para.\n\nBest regards,\n\nzuyu.alex06', word_count: 2, claims: [], grounding: null, review_status: 'edited' as const, prompt_version: '1' }
+  const parts = storedLetterParts(storedLetter, 'zuyu.alex06')
+  check('storedLetterParts prefers the edited text and drops the old signature', parts.greeting === 'Dear Team,' && parts.paragraphs.join() === 'Edited para.' && parts.closing === 'Best regards,', JSON.stringify(parts))
   const contact = contactFromParagraphMap([{ index: 1, kind: 'contact', text: 'zuyu@example.com | (217) 555-0100 | linkedin.com/in/zuyu-liu' }])
   check('contactFromParagraphMap parses email, phone, linkedin', contact.email === 'zuyu@example.com' && contact.phone === '(217) 555-0100' && contact.linkedin === 'linkedin.com/in/zuyu-liu', JSON.stringify(contact))
   check('letterJobSummary prefers responsibilities', letterJobSummary({ title: 't', company_name: 'c', location_raw: null, description_text: 'desc', responsibilities: ['a', 'b'] }) === 'a; b')
@@ -240,6 +249,17 @@ async function main(): Promise<void> {
   const produced = await extractBulletTexts(fs.readFileSync(docs.docxPath as string))
   check('pending change did not reach the document', !produced.some((p) => /pending$/.test(p.text)))
   check('approved change is in the document', produced.some((p) => /Also verified\./.test(p.text)))
+
+  // ─── the cover letter renders under the résumé's name even when the profile name is the email local-part ───
+  console.log('buildLetterDocuments (dir mode) with an email-name signer')
+  const { buildLetterDocuments } = await import('../lib/career/package/letter')
+  const { documentText, readDocx } = await import('../lib/career/documents/docx-read')
+  const signer = { name: resolveApplicantName({ profileName: 'zuyu.alex06', bank, env: null }).name, email: 'zuyu.alex06@gmail.com', phone: '', linkedin: null }
+  const letterDocs = await buildLetterDocuments({ greeting: 'Dear Acme Hiring Team,', paragraphs: ['One.', 'Two.'], closing: 'Sincerely,', user: signer, company: 'Acme Robotics, Inc.', output: { kind: 'dir', dir: path.join(OUT, 'letter') } })
+  const letterText = letterDocs.docxPath ? documentText(await readDocx(fs.readFileSync(letterDocs.docxPath))) : ''
+  check('letter DOCX header and signature carry "Zuyu Liu"', letterText.startsWith('Zuyu Liu') && letterText.trim().endsWith('Zuyu Liu'), letterText.slice(0, 60))
+  check('letter DOCX never prints the local-part as a name', !/\bzuyu\.alex06\b(?!@)/.test(letterText))
+  check('letter filename follows the pattern', letterDocs.filenames.docx === 'Zuyu_Liu_Acme_Robotics_Cover_Letter.docx', letterDocs.filenames.docx)
   if (renderer) {
     check('pdf produced and one page', docs.pdfPath !== null && docs.qa.page_count === 1, `pages=${docs.qa.page_count} shrink=${docs.shrink_attempts}`)
     check('QA ok with a renderer', docs.qa.ok, docs.qa.checks.filter((c) => !c.pass).map((c) => `${c.name}: ${c.detail}`).join(' | '))
