@@ -92,10 +92,15 @@ update companies
 
 -- (c) THE FIX: a company the planner or the scout invented was never a user
 --     preference. Rows the user touched (watch_source = 'user') are untouched.
+--
+--     'watching' is demoted for the same reason and one more: `markCareersChecked`
+--     used to write it whenever a board check found no openings, so an agent's
+--     bookkeeping could look like "the user asked me to keep an eye on this" —
+--     and the attribute learner would then take it as a stated preference.
 update companies
    set watch_status = 'suggested',
        watch_status_at = coalesce(watch_status_at, now())
- where watch_status = 'target'
+ where watch_status in ('target','watching')
    and watch_source in ('planner','scout');
 
 update companies set watch_status_at = coalesce(watch_status_at, updated_at, now())
