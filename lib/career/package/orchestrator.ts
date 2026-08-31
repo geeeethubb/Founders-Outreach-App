@@ -122,6 +122,15 @@ export async function generatePackage(params: {
       userId: params.userId, jobId: params.jobId, packageId: pkg.id, baseDocumentId: context.bank.masterDocument?.id ?? null,
       noChangeReason: tailored.no_change_reason, summary: tailored.summary, editDistance: tailored.distance.distance,
       tailorVersion: tailored.tailor_version, verifierVersion: tailored.verifier_version, agentRunId, changes: tailored.changes,
+      hiringArgument: tailored.hiring_argument || null,
+      roleThemes: tailored.role_themes,
+      lowValueBulletIds: tailored.low_value_bullet_ids,
+      meaningfulChanges: tailored.counts.meaningful,
+      cosmeticChanges: tailored.counts.cosmetic,
+      // Null rather than 0 when the tailor named no supported theme: a coverage
+      // of "0 of 0" is not a bad score, it is an absent measurement.
+      coverageBefore: tailored.coverage.supported ? tailored.coverage.beforeShare : null,
+      coverageAfter: tailored.coverage.supported ? tailored.coverage.afterShare : null,
     })
     if (!patch.patch) return fail(`resume patch persist: ${patch.error}`)
     if (patch.error) errors.push(`resume patch changes: ${patch.error}`)

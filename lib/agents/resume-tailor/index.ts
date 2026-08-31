@@ -32,10 +32,29 @@ export interface RejectedChange {
   reason: string
 }
 
+/**
+ * One thing the employer is hiring for, judged three ways. `supported` is about
+ * the EVIDENCE BANK, not the résumé — a theme the bank cannot support is not a
+ * tailoring failure, and counting it as one would push the tailor toward
+ * claiming things. Coverage is therefore only ever computed over supported
+ * themes.
+ */
+export interface RoleTheme {
+  theme: string
+  supported_by_evidence: boolean
+  strong_in_master: boolean
+  strong_after: boolean
+}
+
 export interface ResumeTailorOutput {
   changes: ProposedChange[]
   /** What the tailor tried and validation refused, so the UI can say so. */
   rejected: RejectedChange[]
+  /** The case this résumé makes to this employer — decided before any text was written. */
+  hiring_argument: string
+  role_themes: RoleTheme[]
+  /** Bullets that are low value for THIS job, whether or not they were touched. */
+  low_value_bullet_ids: string[]
   no_change_reason: string | null
   summary: string
   /** Changes dropped because they named an id the code never supplied. */
@@ -70,10 +89,37 @@ export const OUTPUT_SCHEMA = {
         ],
       },
     },
-    no_change_reason: { type: ['string', 'null'], description: 'Set when changes is empty.' },
+    hiring_argument: {
+      type: 'string',
+      description: 'One sentence: the case this résumé makes to THIS employer. Decide it before writing any change.',
+    },
+    role_themes: {
+      type: 'array',
+      description: 'The 5-8 things this employer is hiring for. Judge every one, including those the evidence cannot support.',
+      items: {
+        type: 'object',
+        properties: {
+          theme: { type: 'string' },
+          supported_by_evidence: { type: 'boolean', description: 'Can the evidence bank support this at all?' },
+          strong_in_master: { type: 'boolean', description: 'Does the CURRENT résumé already make this case well?' },
+          strong_after: { type: 'boolean', description: 'Does it after your changes?' },
+        },
+        required: ['theme', 'supported_by_evidence', 'strong_in_master', 'strong_after'],
+      },
+    },
+    low_value_bullet_ids: {
+      type: 'array',
+      items: { type: 'string' },
+      description: 'Bullets that are low value for this job, whether or not you changed them.',
+    },
+    no_change_reason: {
+      type: ['string', 'null'],
+      description:
+        'Set when changes is empty. Must state the role themes, current coverage, the best alternate evidence available, and why using it would not improve the résumé.',
+    },
     summary: { type: 'string' },
   },
-  required: ['changes', 'no_change_reason', 'summary'],
+  required: ['changes', 'hiring_argument', 'role_themes', 'low_value_bullet_ids', 'no_change_reason', 'summary'],
 }
 
 function strings(v: unknown): string[] {
@@ -224,6 +270,9 @@ export function validateTailorOutput(raw: unknown, input: ResumeTailorInput): Re
   return {
     changes,
     rejected,
+    hiring_argument: prose(r.hiring_argument),
+    role_themes: roleThemes(r.role_themes),
+    low_value_bullet_ids: Array.from(new Set(strings(r.low_value_bullet_ids))),
     no_change_reason:
       changes.length === 0
         ? noChange || (rejected.length ? `The tailor proposed ${rejected.length} change(s); none passed validation.` : 'The tailor proposed no changes.')
@@ -231,6 +280,64 @@ export function validateTailorOutput(raw: unknown, input: ResumeTailorInput): Re
     summary: prose(r.summary),
     dropped_unknown_ids: droppedUnknown,
     truncated,
+  }
+}
+
+/**
+ * Themes, kept only when they name something. The three booleans default to
+ * false, which is the conservative reading in every direction: an unsupported
+ * theme cannot inflate coverage, and a theme the model forgot to mark
+ * `strong_after` counts as not covered rather than silently as a win.
+ */
+function roleThemes(v: unknown): RoleTheme[] {
+  if (!Array.isArray(v)) return []
+  const out: RoleTheme[] = []
+  const seen = new Set<string>()
+  for (const raw of v) {
+    if (!raw || typeof raw !== 'object') continue
+    const r = raw as Record<string, unknown>
+    const theme = prose(r.theme)
+    if (!theme) continue
+    const key = theme.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push({
+      theme,
+      supported_by_evidence: r.supported_by_evidence === true,
+      strong_in_master: r.strong_in_master === true,
+      strong_after: r.strong_after === true,
+    })
+  }
+  return out
+}
+
+/**
+ * Role-theme coverage, over SUPPORTED themes only.
+ *
+ * Counting unsupported themes would make coverage a number the résumé can only
+ * improve by claiming things the evidence does not carry — which is the one
+ * outcome this whole system exists to prevent. `supported` is reported beside
+ * the ratios so a low denominator is visible rather than flattering.
+ */
+export function themeCoverage(themes: RoleTheme[]): {
+  total: number
+  supported: number
+  before: number
+  after: number
+  beforeShare: number
+  afterShare: number
+} {
+  const supported = themes.filter((t) => t.supported_by_evidence)
+  const before = supported.filter((t) => t.strong_in_master).length
+  const after = supported.filter((t) => t.strong_after).length
+  const share = (n: number) => (supported.length === 0 ? 0 : n / supported.length)
+  return {
+    total: themes.length,
+    supported: supported.length,
+    before,
+    after,
+    beforeShare: share(before),
+    afterShare: share(after),
   }
 }
 

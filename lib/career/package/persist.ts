@@ -85,6 +85,16 @@ export interface PatchWithChanges {
   changes: ResumePatchChange[]
 }
 
+/**
+ * Postgres/PostgREST saying "that column is not there". Deliberately narrower
+ * than `isMissingSchema` elsewhere: a MISSING TABLE must stay fatal, because
+ * retrying the insert without a few fields would not help and would bury the
+ * real problem.
+ */
+function isMissingColumn(message: string): boolean {
+  return /column .* does not exist|could not find the '[^']+' column|schema cache/i.test(message)
+}
+
 export async function insertResumePatch(params: {
   userId: string
   jobId: string
@@ -97,18 +107,47 @@ export async function insertResumePatch(params: {
   verifierVersion: string | null
   agentRunId: string | null
   changes: VerifiedChange[]
+  /** Migration 018. Absent on a caller that has not been updated; the columns are nullable. */
+  hiringArgument?: string | null
+  roleThemes?: unknown[]
+  lowValueBulletIds?: string[]
+  meaningfulChanges?: number
+  cosmeticChanges?: number
+  coverageBefore?: number | null
+  coverageAfter?: number | null
 }): Promise<{ patch: PatchWithChanges | null } & WriteResult> {
   const db = createServiceClient()
-  const { data, error } = await db
-    .from('resume_patches')
-    .insert({
-      user_id: params.userId, job_id: params.jobId, package_id: params.packageId, base_resume_document_id: params.baseDocumentId,
-      status: 'proposed', no_change_reason: params.noChangeReason, summary: params.summary || null,
-      edit_distance: Math.round(params.editDistance * 10000) / 10000, tailor_version: params.tailorVersion,
-      verifier_version: params.verifierVersion, agent_run_id: params.agentRunId,
-    } as never)
-    .select('*')
-    .single()
+
+  const base = {
+    user_id: params.userId, job_id: params.jobId, package_id: params.packageId, base_resume_document_id: params.baseDocumentId,
+    status: 'proposed', no_change_reason: params.noChangeReason, summary: params.summary || null,
+    edit_distance: Math.round(params.editDistance * 10000) / 10000, tailor_version: params.tailorVersion,
+    verifier_version: params.verifierVersion, agent_run_id: params.agentRunId,
+  }
+  const v2 = {
+    hiring_argument: params.hiringArgument ?? null,
+    role_themes: params.roleThemes ?? [],
+    low_value_bullet_ids: params.lowValueBulletIds ?? [],
+    meaningful_changes: params.meaningfulChanges ?? 0,
+    cosmetic_changes: params.cosmeticChanges ?? 0,
+    coverage_before: params.coverageBefore ?? null,
+    coverage_after: params.coverageAfter ?? null,
+  }
+
+  // Migrations here are applied BY HAND, so there is always a window in which
+  // the code knows about a column the database does not have. Losing a whole
+  // generated package — minutes of work and real money — because migration 018
+  // has not been pasted in yet would be the wrong trade every time. So: write
+  // the full row, and if Postgres says the column does not exist, write the row
+  // the pre-018 schema accepts and say so in `error`. The package survives; the
+  // argument and the coverage numbers are what is missing, and they are visibly
+  // missing rather than silently.
+  let { data, error } = await db.from('resume_patches').insert({ ...base, ...v2 } as never).select('*').single()
+  let degraded: string | null = null
+  if (error && isMissingColumn(error.message)) {
+    degraded = `resume_patches is pre-018 (${error.message}) — the patch was saved without its hiring argument, role themes or coverage. Apply supabase/migrations/018_tailoring_hiring_argument.sql.`
+    ;({ data, error } = await db.from('resume_patches').insert(base as never).select('*').single())
+  }
   if (error) return { patch: null, ...fail(error.message) }
   const patch = data as ResumePatch
 
@@ -133,10 +172,10 @@ export async function insertResumePatch(params: {
     review_status: c.review_status,
     final_text: c.final_text,
   }))
-  if (!rows.length) return { patch: { patch, changes: [] }, ...ok }
+  if (!rows.length) return { patch: { patch, changes: [] }, ...(degraded ? fail(degraded) : ok) }
   const { data: inserted, error: cErr } = await db.from('resume_patch_changes').insert(rows as never[]).select('*')
   if (cErr) return { patch: { patch, changes: [] }, ...fail(cErr.message) }
-  return { patch: { patch, changes: (inserted ?? []) as ResumePatchChange[] }, ...ok }
+  return { patch: { patch, changes: (inserted ?? []) as ResumePatchChange[] }, ...(degraded ? fail(degraded) : ok) }
 }
 
 export async function loadResumePatch(userId: string, patchId: string): Promise<{ patch: PatchWithChanges | null } & WriteResult> {

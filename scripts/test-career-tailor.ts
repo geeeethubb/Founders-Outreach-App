@@ -11,12 +11,12 @@
 import { RESUME_ITEMS } from '../evals/phase3/user-profile'
 import { extractQuantities } from '../lib/outreach/grounding'
 import { buildBankPool, buildExperiencePool } from '../lib/career/evidence/render'
-import { precheckChange } from '../lib/career/tailor/precheck'
+import { classifyChange, countByKind, precheckChange } from '../lib/career/tailor/precheck'
 import { editLevelFor, validateChangeShape, MAX_NON_REORDER_CHANGES } from '../lib/career/tailor/rules'
 import { bulletDistance, patchDistance, wordsChanged } from '../lib/career/tailor/distance'
 import { buildTailorInput, jobTermsFor } from '../lib/career/tailor/render'
 import { runTailoringPipeline, applyReviewDecisions, finalBulletsFor, verifyEditedText, verifyChange } from '../lib/career/tailor/pipeline'
-import { validateTailorOutput, shapeContextFrom, prose } from '../lib/agents/resume-tailor'
+import { validateTailorOutput, shapeContextFrom, prose, themeCoverage } from '../lib/agents/resume-tailor'
 import { validateVerifierOutput, overallFromClauses, type ResumeFactVerifierOutput } from '../lib/agents/resume-fact-verifier'
 import { validateCoverLetterOutput, type CoverLetterInput } from '../lib/agents/cover-letter-writer'
 import { gateCoverLetter } from '../lib/career/letter/grounding'
@@ -240,12 +240,26 @@ async function main() {
     }
     const shape = validateChangeShape({ ...reword('x'), change_type: 'new', edit_level: 4, bullet_id: null, evidence_fact_ids: [`${CS}_f0`] }, shapeContextFrom(tailorInput))
     check('new requires two facts', !shape.ok && /at least 2/.test(shape.reason))
-    // Nine rewords across nine experiences: the cap is per patch, one change per bullet.
-    const nine = RESUME_ITEMS.slice(0, 9).map((item, i) =>
-      reword(item.summary, { bullet_id: `${item.id}_b0`, experience_id: item.id, original_text: item.summary, evidence_fact_ids: [`${item.id}_f0`], confidence: i / 10 })
+    // The cap is per patch, one change per bullet, so this needs one experience
+    // each. Sized from the constant rather than hardcoded: this assertion used to
+    // say "nine", and when MAX_NON_REORDER_CHANGES rose from 6 to 14 for Tailoring
+    // V2 it stopped testing truncation at all and simply passed nine through.
+    const overCap = Math.min(RESUME_ITEMS.length, MAX_NON_REORDER_CHANGES + 3)
+    const expectTruncated = overCap - MAX_NON_REORDER_CHANGES
+    const many = RESUME_ITEMS.slice(0, overCap).map((item, i) =>
+      reword(item.summary, { bullet_id: `${item.id}_b0`, experience_id: item.id, original_text: item.summary, evidence_fact_ids: [`${item.id}_f0`], confidence: (i + 1) / (overCap + 1) })
     )
-    const capped = validateTailorOutput({ changes: nine, no_change_reason: null, summary: '' }, tailorInput)
-    check('tailor validate truncates to the cap by confidence', capped?.changes.length === MAX_NON_REORDER_CHANGES && capped.truncated === 3 && capped.changes.every((c) => c.confidence >= 0.3), `${capped?.changes.length} kept, ${capped?.truncated} truncated, ${capped?.rejected.map((r) => r.reason).join(' | ')}`)
+    const capped = validateTailorOutput({ changes: many, no_change_reason: null, summary: '' }, tailorInput)
+    const lowest = capped ? Math.min(...capped.changes.map((c) => c.confidence)) : 0
+    check(
+      'tailor validate truncates to the cap, dropping the least confident',
+      expectTruncated <= 0
+        ? capped?.changes.length === overCap && capped.truncated === 0
+        : capped?.changes.length === MAX_NON_REORDER_CHANGES &&
+          capped.truncated === expectTruncated &&
+          lowest > (expectTruncated / (overCap + 1)),
+      `${overCap} in, ${capped?.changes.length} kept, ${capped?.truncated} truncated, lowest confidence ${lowest.toFixed(2)}`
+    )
     const twice = validateTailorOutput({ changes: [reword(CS_ORIGINAL), { ...reword(CS_ORIGINAL), change_type: 'reorder', edit_level: 1, proposed_text: null, evidence_fact_ids: [] }], no_change_reason: null, summary: '' }, tailorInput)
     check('tailor validate keeps one change per bullet', twice?.changes.length === 1 && twice.rejected.some((r) => /one change per bullet/.test(r.reason)), `${twice?.changes.length}`)
     const none = validateTailorOutput({ changes: [], no_change_reason: 'The master already fits this role', summary: 's' }, tailorInput)
@@ -279,7 +293,8 @@ async function main() {
             reword(CS_ORIGINAL.replace('$4M+', '$9M'), { bullet_id: `${CS}_b0`, confidence: 0.6 }),
             { ...reword(null as unknown as string), bullet_id: 'uiuc_catalysis_b0', experience_id: 'uiuc_catalysis', change_type: 'reorder' as const, edit_level: 1 as const, proposed_text: null, position: 0, original_text: null },
           ],
-          rejected: [], no_change_reason: null, summary: 'stub', dropped_unknown_ids: 0, truncated: 0,
+          rejected: [], hiring_argument: 'stub argument', role_themes: [], low_value_bullet_ids: [],
+          no_change_reason: null, summary: 'stub', dropped_unknown_ids: 0, truncated: 0,
         },
         'resume_tailor'
       )
@@ -407,6 +422,57 @@ async function main() {
   {
     const terms = jobTermsFor({ title: 't', company: 'c', key_requirements: ['Six Sigma Black Belt certification', 'SAP PM'], responsibilities: [], description_excerpt: '' })
     check('jobTermsFor includes sub-phrases', terms.includes('Six Sigma') && terms.includes('SAP PM'), terms.join('|'))
+  }
+
+  // ─── Tailoring V2: what kind of change was that, really? ───
+  //
+  // The baseline this replaces reported "32 changes applied" over 14 patches, of
+  // which every single reword was bolding a number already in the bullet. These
+  // assertions are the ones that make that visible instead of flattering.
+  {
+    const orig = 'Screened 40+ aMOC surface configurations using 73k CPU-hours of ASE/VASP.'
+    const bolded = 'Screened 40+ aMOC surface configurations using **73k CPU-hours** of ASE/VASP.'
+    const reargued = 'Ran 73k CPU-hours of ASE/VASP screening to rank 40+ catalyst surfaces for scale-up.'
+
+    const kind = (type: string, proposed: string | null, original: string | null) =>
+      classifyChange({ change_type: type as never, proposed_text: proposed }, original)
+
+    check('bolding a number already there is emphasis, not a rewrite', kind('reword', bolded, orig) === 'emphasis')
+    check('re-arguing the same fact is a rewrite', kind('reword', reargued, orig) === 'rewrite')
+    check('a reword identical to the original is emphasis, not a rewrite', kind('reword', orig, orig) === 'emphasis')
+    // Without the original there is no way to tell, and the honest default is the
+    // one that does NOT credit the patch with work it may not have done.
+    check('an unknown original counts as a rewrite, never as emphasis', kind('reword', bolded, null) === 'rewrite')
+    for (const t of ['reorder', 'swap', 'new', 'remove']) {
+      check(`${t} classifies as itself`, kind(t, 'x', orig) === t)
+    }
+
+    const counts = countByKind(['emphasis', 'emphasis', 'reorder', 'swap', 'new', 'remove', 'rewrite'])
+    check('meaningful excludes emphasis', counts.meaningful === 5 && counts.cosmetic === 2, JSON.stringify(counts.byKind))
+    const allCosmetic = countByKind(['emphasis', 'emphasis', 'emphasis'])
+    check('a patch of nothing but emphasis has changed nothing', allCosmetic.meaningful === 0 && allCosmetic.cosmetic === 3)
+    check('no changes is zero of both, not a crash', countByKind([]).meaningful === 0 && countByKind([]).cosmetic === 0)
+  }
+
+  // ─── Tailoring V2: role-theme coverage ───
+  {
+    const t = (theme: string, supported: boolean, before: boolean, after: boolean) => ({
+      theme, supported_by_evidence: supported, strong_in_master: before, strong_after: after,
+    })
+    // Two supported themes, one covered before, both after. The unsupported one
+    // must not enter the denominator: if it did, coverage would be a number the
+    // résumé could only raise by claiming something the evidence cannot carry.
+    const cov = themeCoverage([
+      t('process safety', true, true, true),
+      t('scale-up', true, false, true),
+      t('10 years of PLC programming', false, false, false),
+    ])
+    check('coverage counts supported themes only', cov.supported === 2 && cov.total === 3, JSON.stringify(cov))
+    check('coverage before and after are shares of the supported set', cov.beforeShare === 0.5 && cov.afterShare === 1)
+    check('an unsupported theme cannot be "covered" into the numerator', cov.before === 1 && cov.after === 2)
+    const none = themeCoverage([t('nothing the bank supports', false, false, false)])
+    check('no supported theme is 0, not a divide by zero', none.supported === 0 && none.beforeShare === 0 && none.afterShare === 0)
+    check('no themes at all is safe', themeCoverage([]).supported === 0)
   }
 
   console.log(`\n${passed} passed, ${failed} failed`)

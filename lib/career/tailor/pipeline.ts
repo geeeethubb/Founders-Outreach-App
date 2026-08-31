@@ -15,7 +15,7 @@
 // fact. Nothing is discarded silently: a rejected change stays in the list
 // with its reason, so the review screen can say what the tailor tried.
 
-import { runResumeTailor, type ResumeTailorInput, type ResumeTailorOutput, type RejectedChange } from '@/lib/agents/resume-tailor'
+import { runResumeTailor, themeCoverage, type ResumeTailorInput, type ResumeTailorOutput, type RejectedChange, type RoleTheme } from '@/lib/agents/resume-tailor'
 import {
   meetsLevel4Bar,
   runResumeFactVerifier,
@@ -27,7 +27,7 @@ import type { AgentResult, ToolContext } from '@/lib/agents/runtime/types'
 import { buildExperiencePool } from '../evidence/render'
 import { bulletsForExperience } from '../evidence/store'
 import { patchDistance, type PatchDistance } from './distance'
-import { isEmphasisOnly, isWordingUnchanged, precheckChange, summarizeFindings, type Finding } from './precheck'
+import { classifyChange, countByKind, isEmphasisOnly, isWordingUnchanged, precheckChange, summarizeFindings, type ChangeKind, type Finding } from './precheck'
 import { buildTailorInput, buildVerifierInput, jobTermsFor, type EvidenceMapForTailor } from './render'
 import type { EvidenceBank, ProposedChange, ReviewStatus, VerificationResult, VerifiedClause } from '../types'
 
@@ -59,6 +59,19 @@ const DEFAULT_DEPS: TailorDeps = {
 export interface TailoringResult {
   changes: VerifiedChange[]
   rejected: RejectedChange[]
+  /** The case the tailor decided to make, before it wrote anything. */
+  hiring_argument: string
+  role_themes: RoleTheme[]
+  low_value_bullet_ids: string[]
+  /**
+   * What changed, counted the way a reader would count it. `edit_distance`
+   * cannot tell a re-argued bullet from a bolded number, and the baseline was
+   * 15 bolded numbers out of 15 rewords, so it is reported alongside — never
+   * instead of — these.
+   */
+  counts: { byKind: Record<ChangeKind, number>; meaningful: number; cosmetic: number }
+  /** Role-theme coverage over evidence-SUPPORTED themes, before and after. */
+  coverage: ReturnType<typeof themeCoverage>
   no_change_reason: string | null
   summary: string
   distance: PatchDistance
@@ -207,6 +220,11 @@ export async function runTailoringPipeline(params: TailoringParams): Promise<Tai
   const empty = (error: string | null): TailoringResult => ({
     changes: [],
     rejected: [],
+    hiring_argument: '',
+    role_themes: [],
+    low_value_bullet_ids: [],
+    counts: countByKind([]),
+    coverage: themeCoverage([]),
     no_change_reason: error ? null : 'The tailor proposed no changes.',
     summary: '',
     distance: { distance: 0, changedFraction: 0, reordered: false },
@@ -236,9 +254,21 @@ export async function runTailoringPipeline(params: TailoringParams): Promise<Tai
   const master = params.bank.experiences.flatMap((e) => bulletsForExperience(params.bank, e.id).filter((b) => b.is_on_master && b.approved).map((b) => b.text))
   const distance = patchDistance(master, final.flatMap((f) => f.bullets))
 
+  // Counted over changes that SURVIVED verification and will reach the document
+  // — a rejected swap is not a swap the résumé made. `original_text` is what
+  // separates a rewrite from a bolded number, so it is read from the verified
+  // change rather than from the bank.
+  const applied = changes.filter((c) => c.review_status !== 'auto_rejected')
+  const counts = countByKind(applied.map((c) => classifyChange(c, c.original_text)))
+
   return {
     changes,
     rejected: out.rejected,
+    hiring_argument: out.hiring_argument,
+    role_themes: out.role_themes,
+    low_value_bullet_ids: out.low_value_bullet_ids,
+    counts,
+    coverage: themeCoverage(out.role_themes),
     no_change_reason: out.no_change_reason,
     summary: out.summary,
     distance,

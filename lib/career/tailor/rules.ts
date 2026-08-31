@@ -9,14 +9,34 @@
 
 import type { ChangeType, EditLevel, ProposedChange } from '../types'
 
-/** Ordering changes are free; everything else is rationed. */
-export const MAX_NON_REORDER_CHANGES = 6
+// ─── Budgets ─────────────────────────────────────────────────────────────────
+//
+// These three numbers were 6 / 1 / 0.25, and they are the structural half of why
+// tailoring did nothing. Measured over the 14 patches this database holds:
+//
+//   32 changes proposed, 32 SUPPORTED, 0 rejected by the verifier
+//   change types used: reorder 17, reword 15 — swap 0, new 0, remove 0
+//   15 of 15 rewords had >80 % word overlap with the original
+//   4 of 14 patches proposed nothing at all
+//
+// Nothing was leaking. The tailor was asking for very little, and the budget
+// agreed with it. Factuality was never the binding constraint — the verifier
+// rejected nothing — so raising these does not trade safety for relevance. The
+// mechanism that keeps résumés truthful is the independent Fact Verifier plus
+// `validateChangeShape` below, and both are untouched.
 
-/** Level 4 (a new bullet) is rare by design and verified strictly. */
-export const MAX_LEVEL4 = 1
+/** Ordering and removal are free; everything else is rationed. */
+export const MAX_NON_REORDER_CHANGES = 14
 
-/** Reword no more than roughly this share of a bullet's words unless swapping. */
-export const MAX_REWORD_FRACTION = 0.25
+/** A new bullet is built only from two or more approved facts, and verified strictly. */
+export const MAX_LEVEL4 = 3
+
+/**
+ * Reword no more than this share of a bullet's words unless swapping. At 0.25 a
+ * bullet could not be re-argued, only re-punctuated; the ceiling on a rewrite is
+ * the evidence it cites, not its edit distance.
+ */
+export const MAX_REWORD_FRACTION = 0.6
 
 const LEVEL_BY_TYPE: Record<ChangeType, EditLevel> = {
   keep: 0,
@@ -153,7 +173,8 @@ export function renderRules(): string {
     .map((p) => `${p.from}→${p.to}`)
     .join(', ')
   return [
-    `- At most ${MAX_NON_REORDER_CHANGES} changes other than reorder/remove. At most ${MAX_LEVEL4} new bullet.`,
+    `- At most ${MAX_NON_REORDER_CHANGES} changes other than reorder/remove. At most ${MAX_LEVEL4} new bullets. These are CEILINGS, not targets — and not a hint that you should stop early.`,
+    '- A reword that only adds ** around words already there is an EMPHASIS change. It is allowed and it is cheap, but it is not tailoring, and a patch made only of these counts as having changed nothing.',
     '- Edit levels are fixed by change_type: keep=0, reorder=1, remove=1, reword=2, swap=3, new=4.',
     '- reorder/reword/swap/remove name the bullet_id being changed. new names none.',
     '- swap names source_bullet_id: an approved ALTERNATE bullet (not on the master) of the SAME experience, and proposed_text is that alternate text verbatim.',

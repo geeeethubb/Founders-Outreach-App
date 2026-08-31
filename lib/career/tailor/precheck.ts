@@ -156,6 +156,73 @@ export function isEmphasisOnly(original: string | null, proposed: string | null)
   return stripMarkdown(original).trim() === stripMarkdown(proposed).trim() && original.trim() !== proposed.trim()
 }
 
+// ─── What kind of change was that, really? ───────────────────────────────────
+//
+// `change_type` says what the tailor DID; it does not say whether the résumé now
+// makes a different argument. Every one of the 15 rewords in the V1 baseline was
+// `**`-marking a number that was already in the bullet:
+//
+//   "…using ASE/VASP (73k CPU-hours), screening 40+…"
+//   "…using ASE/VASP (**73k CPU-hours**), screening 40+…"
+//
+// That is a legitimate emphasis move and it is not a rewrite, so reporting both
+// as "2 changes applied" made a no-op look like work. These live here, next to
+// `isEmphasisOnly`, rather than in rules.ts — precheck already imports rules, so
+// the reverse would be a cycle, and a second copy of this comparison would drift
+// from the one the precheck actually uses.
+
+export type ChangeKind = 'reorder' | 'emphasis' | 'rewrite' | 'swap' | 'new' | 'remove'
+
+/**
+ * The change as a reader of the résumé would describe it. `original` is the
+ * bullet's text before the patch; without it a reword cannot be told from an
+ * emphasis move, so it is reported as a rewrite rather than flattered.
+ */
+export function classifyChange(
+  change: Pick<ProposedChange, 'change_type' | 'proposed_text'>,
+  original: string | null
+): ChangeKind {
+  switch (change.change_type) {
+    case 'reorder':
+      return 'reorder'
+    case 'swap':
+      return 'swap'
+    case 'new':
+      return 'new'
+    case 'remove':
+      return 'remove'
+    case 'reword':
+      return isEmphasisOnly(original, change.proposed_text) || isWordingUnchanged(original, change.proposed_text)
+        ? 'emphasis'
+        : 'rewrite'
+    default:
+      return 'rewrite'
+  }
+}
+
+/**
+ * Kinds that change what the résumé ARGUES, as opposed to how it is typeset.
+ * Emphasis is deliberately absent: bolding a metric helps a skimming reader and
+ * costs nothing, but a patch of nothing but emphasis has tailored nothing.
+ */
+export const MEANINGFUL_KINDS: ReadonlyArray<ChangeKind> = ['reorder', 'rewrite', 'swap', 'new', 'remove']
+
+export function isMeaningful(kind: ChangeKind): boolean {
+  return MEANINGFUL_KINDS.includes(kind)
+}
+
+/** Counts by kind, plus how many of them were meaningful. Never optimise the raw total. */
+export function countByKind(kinds: ChangeKind[]): {
+  byKind: Record<ChangeKind, number>
+  meaningful: number
+  cosmetic: number
+} {
+  const byKind: Record<ChangeKind, number> = { reorder: 0, emphasis: 0, rewrite: 0, swap: 0, new: 0, remove: 0 }
+  for (const k of kinds) byKind[k]++
+  const meaningful = kinds.filter(isMeaningful).length
+  return { byKind, meaningful, cosmetic: kinds.length - meaningful }
+}
+
 /**
  * The words are the original's — bold moved or nothing moved at all. The
  * factuality eval found the tailor proposing a "reword" that was verbatim the
