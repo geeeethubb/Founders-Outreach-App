@@ -891,3 +891,175 @@ third run also found nothing on the job-first surface: the Mission Planner's out
 schema validation and the orchestrator fell back to boards only. That is now fixed twice — the
 planner's output budget was raised (its plan was truncating), and a failed planner degrades to
 two deterministic fallback strategies instead of no job-first at all.
+
+## 14. Job Discovery V2 — the recall suite (`eval:career-recall`)
+
+> *"This redesign MUST have coverage evaluations. 'Scout feels better' is not an evaluation."*
+> The number that made it necessary: a live inventory of **284 postings from 34 companies**,
+> **107 of them (38%) from GE Vernova alone**, and nothing in the pipeline noticed
+> ([JOB_DISCOVERY_V2_AUDIT.md](JOB_DISCOVERY_V2_AUDIT.md) §0).
+
+```
+npx tsx scripts/career-eval-recall.ts                         # the whole suite
+npx tsx scripts/career-eval-recall.ts --max-pages 2           # prove the metric bites
+npx tsx scripts/career-eval-recall.ts --platforms greenhouse,workday,phenom
+```
+
+> **The npm alias is not wired yet.** `package.json` belongs to another workstream this wave, so
+> the line `"eval:career-recall": "tsx scripts/career-eval-recall.ts"` still has to be added, and
+> `scripts/career-eval-recall.ts` added to the `SUITES` list in `scripts/test-career-all.ts` — it
+> is offline, keyless and ~450 ms, so it belongs in `npm run test:career` as a gate rather than
+> living as a command someone remembers to type. Until then, invoke it directly as above.
+
+**Offline and free.** No network, no API key, no database, no model call, ~350 ms. It runs the
+product's own stages — `buildNormalizedJob` → `clusterJobs` → `applyHardConstraints` →
+`scoreRelevance`, plus the real `simplifySource()` with its cache primed — over a corpus checked
+in under `evals/career/fixtures/recall/`. Results land in `.career-out/eval/recall/results.json`.
+
+### 14.1 The corpus
+
+Recorded live on **2026-08-31** from public, unauthenticated endpoints only (Workday `cxs`,
+Greenhouse `boards-api`, Phenom `/widgets`, and the SimplifyJobs Summer 2027 listings file). No
+login, no CAPTCHA, robots.txt respected. Lever `v0` and Ashby `posting-api` were probed in the
+same session — 19 climate, materials and chemicals startups answered and only four had any
+internship posted that day, all four of them Greenhouse — so the boards fixture replays **three**
+platforms, not six. That is a gap in the fixture, recorded in `benchmark.json`'s `probe_notes`
+and stated here rather than implied by a longer list of endpoint names.
+
+| File | What it is |
+|---|---|
+| `simplify-sample.json` | 462 rows drawn from the live feed — 392 open Summer 2027 (every other row, **proportions preserved**), 40 closed rows, 30 other-season rows. The 11 MB source file is never committed. |
+| `benchmark.json` | **44 hand-curated entries** across 22 companies and all eight role areas, each citing company, title and URL. The one that matters for this founder: real chemical, process, materials, manufacturing, energy, CPG and pharma internships. |
+| `ats-boards.json` | 32 whole board listings, 293 postings verbatim, on **three** platforms — workday (27 boards), greenhouse (4), phenom (1). The benchmark is a **subset**; the other 107 rows are the non-internship and off-discipline postings a real board also returns. |
+| `precision-labels.json` | All 293 postings, hand-reviewed internship labels, 8 overrides recorded with reasons. |
+| `paid-provider.json` | The paid slot: wired, registered, reported unconfigured, and empty until a key exists. It names **`DATAFORSEO_LOGIN`** — the credential of the provider this wave actually wires (`lib/career/sources/dataforseo.ts`), so the coverage line "set X to enable" points at a variable that exists. |
+
+Each benchmark entry carries `{ id, company, title, url, source, canonical_url, active,
+why_relevant }` plus `role_area` and `reachable_by`.
+
+### 14.2 The metrics
+
+Pure functions in `evals/career/recall/metrics.ts`. **Recall is the headline**, matched by
+canonical URL first and normalised company+title second, and it is reported twice: over the whole
+corpus, and over only the entries a **configured** source can reach. The second carries the
+target, and the qualifier is printed with the number every time — claiming 100% coverage of a
+corpus containing two Merck co-ops visible only through an endpoint nobody has adapted would be a
+lie told with a true number. Alongside it: precision (over the hand-labelled slice only, with the
+unlabelled count printed beside it), duplicate rate, stale/closed rate, unique companies, source
+diversity, role-family diversity and canonical-URL rate.
+
+**A gated ratio needs a floor under its denominator, or it is a dial.** The set of reachable
+entries is chosen by `RECALL_CONFIGURED_PLATFORMS` in `evals/career/recall/sources.ts`, so the
+single edit that shrinks it — dropping `workday` takes 34 of the 44 entries out — would leave
+reachable recall reading 100% while the product's coverage collapsed. Three further targets close
+that: the reachable set must still cover **≥ 90% of the corpus**; the platform list must **match
+the adapter ids `lib/career/sources/registry.ts` actually ships** (`configuredPlatformDrift()`
+reads them, and fails in both directions — an adapter that vanishes, and an adapter that ships
+without joining the eval); and the corpus itself must hold **≥ 40 entries**. A `--platforms`
+override prints a WHAT-IF banner and taints the closing line, because a run of a hypothetical
+configuration must never read as a statement about the product.
+
+**Precision is reported twice, and the first number carries a qualifier.** In the shipped
+configuration every adapter runs its own `internshipsOnly` title pre-filter
+(`lib/career/sources/fetch.ts` `internshipLike`, imported by the fixture sources rather than
+reimplemented), which removes **106 of the 107** hand-labelled negatives before
+`buildNormalizedJob` ever sees them — so 99.0% over that pool had a ceiling of one possible error
+and says little about the pipeline. The suite therefore drains the same boards a **second time
+whole** (`internshipsOnly: false`), where all 107 negatives must be rejected by the product's own
+classifier and hard constraints. Both numbers are printed side by side and both are in
+`results.json`.
+
+A found entry is one discovery **returned**, not one it **kept**. `retained` is separate: a
+posting dropped by the mission's own country or season constraint was still discovered, and
+folding that into recall would grade a correct filter as a broken crawler. The suite's mission
+keeps the shipped `DEFAULT_HARD_CONSTRAINTS` — internships only, not a different season, US — and
+the entries those drop are printed **by name with the constraint that removed each one**, since
+"found 42, retained 37" is the exact shape a filter regression hides inside.
+
+### 14.3 Targets and the measured result (2026-08-31)
+
+| Target | Required | Measured |
+|---|---|---|
+| recall over the reachable corpus | ≥ 90% | **100.0%** (42/42; 2 Phenom-only entries excluded and named) |
+| benchmark the configured sources can reach | ≥ 90% of the corpus | **42/44 = 95.5%** |
+| eval platforms match the shipped adapters | exact match | **6 adapters, in sync** |
+| benchmark corpus size | ≥ 40 entries | **44 entries, 22 companies** |
+| unique companies in the top 50 | ≥ 20 | **25** (corpus offers 78, so the target applies) |
+| largest single company's share of the top 50 | ≤ 25% | **AMD 6/50 = 12%** (the live run was GE Vernova at 38%) |
+| areas represented in the top 50 | ≥ 5 of 8 | **8 of 8** |
+| surfaces represented in the top 50 | ≥ 2 | **3** — workday 25, simplify 22, greenhouse 3 |
+| closed postings shown as open | 0 | **0** of 423 |
+
+Reported, not gated: 571 raw postings → 547 opportunities after clustering → 423 accepted;
+duplicate rate **4.2%**; canonical-URL rate **100%**.
+
+Precision, with its qualifier attached:
+
+| Pool | Precision | What it measures |
+|---|---|---|
+| as shipped (`internshipsOnly: true`) | **99.0%** (96/97 labelled) | the pipeline *after* the adapters' own title pre-filter removed **106 of 107** labelled negatives |
+| boards drained whole (`internshipsOnly: false`) | **98.0%** (96/98 labelled) | the product's own classifier and hard constraints, with **107 of 107** negatives reaching them |
+
+Five of the 42 found benchmark entries are dropped by the mission's own hard constraints and are
+printed by name on every run: Moderna *Co-Op, CMC Development (Spring 2027)* (Not a different
+season), and Applied Materials *Process Engineer Intern*, Merck *Reliability Engineer Intern*,
+Rockwell Automation *EHS Co-op/Intern*, Pfizer *2027 Internship – Grange Castle* (United States).
+
+Two labelled negatives survive the whole-board drain, and they are different in kind:
+
+- **A real product bug.** Emerson *"Associate Director, Internships & Work-Based Education"* —
+  `detectEmploymentType` skips its seniority guard whenever the title also matches the intern
+  pattern, so a director-level role that *administers* an internship programme is classified as an
+  internship. The word in the title is the programme, not the job. (`Director of Internship
+  Programs`, `Manager, Internship Program` and `Senior Manager Intern Recruiting` all reproduce
+  it.) Fixing it belongs to whoever owns `lib/career/jobs/normalize.ts`; this suite only measures.
+- **A labelled disagreement, kept as one.** Sanofi *"Digital Innovative Solutions Student Worker"*
+  — a rolling part-time student job by the fixture's definition, an internship by the product's:
+  `INTERN_RE` lists `student worker` deliberately. It stays labelled `not_internship` with the
+  disagreement written into the fixture rather than relabelled to raise the number.
+
+The suite is not vacuous: capping paging at two pages per source (`--max-pages 2`) drops recall to
+**40.5%** and exits 1; `--platforms greenhouse` now exits 1 on the reachable-set floor (8/44 =
+18.2%) instead of passing at a hollow 100%. Adding `phenom` to `--platforms` moves the two Merck
+co-ops into the denominator and finds both — which is the shape of every future adapter's arrival,
+and that run is labelled WHAT-IF throughout.
+
+### 14.4 The diversity regression
+
+The founder's own test, in `evals/career/recall/diversity-regression.ts`: an evidence bank
+representing them (chemical engineering + manufacturing + AI + entrepreneurship) drives
+`buildSearchOntology`, whose role families become the mission's stated subject; discovery runs
+broad over the corpus; the top 50 is asserted to span several areas and not to be dominated by a
+handful of companies.
+
+Two things it deliberately does **not** do. It never reranks for diversity —
+`lib/career/discovery/diversity.ts` says in its own header that hiding one employer's postings
+makes the number look better while the search stays exactly as narrow, so the top 50 is whatever
+relevance produced, with ties broken on score, then recency, then alphabetically. And the
+company-count assertion is **gated on the corpus supporting it**: a benchmark holding twelve
+employers cannot be failed for producing twelve, and a test that fires when the ground truth is
+thin teaches its operator to ignore it.
+
+### 14.5 The honest limitation
+
+**Coverage cannot be proven complete. It can only be measured against a corpus.**
+
+This suite reports a **floor** on what discovery finds and a **regression detector** for what it
+stops finding — not a coverage guarantee. The corpus is what one person, working public endpoints
+by hand on one day, was able to write down; postings nobody looked for are invisible to it in
+exactly the way they are invisible to the product. Three Oracle Recruiting boards alone reported
+**1,751 postings** that no configured source can read, and they sit in the corpus as
+`coverage_gaps` — counted, named, and excluded from every ratio rather than quietly absent.
+
+One number in the coverage table is not the eval's to fix, and is footnoted on every run rather
+than quietly corrected: the `simplify` row's **seen** is inflated. `simplifySource()` reports the
+whole matching set on *every* page while `lib/career/discovery/coverage.ts` sums `seen` across
+pages, so a two-page drain of 392 matching rows prints 784. The `ats:` rows report per call, which
+is what `discovery-types.ts` defines `seen` to mean.
+
+Two further honesty notes. Recall reaching 100% on the default configuration is expected, because
+the benchmark entries were drawn from the same boards the fixture sources replay: the number's
+value is that it *moves* when paging, filtering or dedupe regress, not that it certifies breadth.
+And the ranked list still drifts — "Video Production Intern" and "Product Development Intern" reach
+the top 20 on term overlap alone, which is `scoreRelevance` working as written and worth a
+separate look.

@@ -1,0 +1,9 @@
+{
+  "version": "recall-paid-provider-2",
+  "generated_at": "2026-08-31",
+  "note": "The paid-provider slot of the benchmark corpus: wired, and deliberately empty until a key exists. No paid job-data provider is configured in this repository, so nothing here was purchased, cached or replayed. The recall suite still registers this source so the coverage table names it - an unconfigured surface must be SKIPPED AND NAMED, never silently absent (CLAUDE.md principle 8). When a key is added, record the provider's results here in the same shape as `entries` and the suite starts scoring them without a code change.",
+  "env_var": "DATAFORSEO_LOGIN",
+  "env_var_note": "The credential of the paid provider this wave actually wires: lib/career/sources/dataforseo.ts (Google Jobs via DataForSEO) declares costModel.envVar = 'DATAFORSEO_LOGIN' and needs DATAFORSEO_PASSWORD beside it, both documented in .env.local.example. An earlier revision of this file named CAREER_JOBS_PROVIDER_KEY, which existed nowhere in the repository - so the coverage line 'set X to enable' was advice that led nowhere. If the wired provider changes, this one field is the edit; nothing else in the suite names a provider.",
+  "provider": "dataforseo_google_jobs",
+  "entries": []
+}

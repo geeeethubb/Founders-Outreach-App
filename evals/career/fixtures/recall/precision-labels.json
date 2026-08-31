@@ -1,0 +1,1782 @@
+{
+ "version": "recall-labels-1",
+ "generated_at": "2026-08-31",
+ "method": "Every posting in ats-boards.json carries a hand-reviewed internship label. The starting proposal was a plain English word test written for this file alone — never the product's own classifier, which is what precision is measuring. Every title where a person disagreed with the proposal is listed under `overridden_from` with the reason.",
+ "labels": [
+  {
+   "url": "https://dupont.wd5.myworkdayjobs.com/en-US/Jobs/job/Wimington-Delaware/Process-R-D-Senior-Scientist_249728W",
+   "company": "DuPont",
+   "title": "Process R&D Senior Scientist",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://dupont.wd5.myworkdayjobs.com/en-US/Jobs/job/Wimington-Delaware/Process-R-D-Technologist---DuPont-Water-Solutions_249729W",
+   "company": "DuPont",
+   "title": "Process R&D Technologist",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://dupont.wd5.myworkdayjobs.com/en-US/Jobs/job/Avils-Asturias/HR-Shared-Services-Coordinator--m-f-d-_250204W",
+   "company": "DuPont",
+   "title": "HR Shared Services Coordinator (m/f/d)",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://dupont.wd5.myworkdayjobs.com/en-US/Jobs/job/Wimington-Delaware/Global-Tax-Accounting-Lead_248557W",
+   "company": "DuPont",
+   "title": "Global Tax Accounting Lead",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://dupont.wd5.myworkdayjobs.com/en-US/Jobs/job/Wimington-Delaware/Director---Tax-Planning---Tax-M-A_250112W",
+   "company": "DuPont",
+   "title": "Director - Tax Planning / Tax M&A",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://dupont.wd5.myworkdayjobs.com/en-US/Jobs/job/Wimington-Delaware/Contract-Administration-and-Events-Administrative-Assistant_250121W",
+   "company": "DuPont",
+   "title": "Contract Administration and Events Administrative Assistant",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://dupont.wd5.myworkdayjobs.com/en-US/Jobs/job/Hillsdale-Michigan/Control-Systems-Technician---Process-Automation_249060W",
+   "company": "DuPont",
+   "title": "Control Systems Technician - Process Automation",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://dupont.wd5.myworkdayjobs.com/en-US/Jobs/job/Valley-View-Ohio/Technical-Service-Technician_250031W",
+   "company": "DuPont",
+   "title": "Technical Service Technician",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://dupont.wd5.myworkdayjobs.com/en-US/Jobs/job/Hyderabad-Telangana/Dispute-Analyst_250021W",
+   "company": "DuPont",
+   "title": "Dispute Analyst",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://dupont.wd5.myworkdayjobs.com/en-US/Jobs/job/Midland-Michigan/MOLYKOTE--Specialty-Lubricants-Application-Engineer--AE-_249163W",
+   "company": "DuPont",
+   "title": "Application Engineer - Specialty Lubricants",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://dupont.wd5.myworkdayjobs.com/en-US/Jobs/job/Hyderabad-Telangana/Analyst---Controls---Governance--Shared-Services--C-G-Finance-_249143W",
+   "company": "DuPont",
+   "title": "Finance Internal Auditor (C&G, Finance)",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://dupont.wd5.myworkdayjobs.com/en-US/Jobs/job/Pudong-Shanghai/Customer-Service-Representative_249826W-1",
+   "company": "DuPont",
+   "title": "Customer Service Representative",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://dupont.wd5.myworkdayjobs.com/en-US/Jobs/job/Valley-View-Ohio/Contract-Manufacturing-Manager_250014W",
+   "company": "DuPont",
+   "title": "Contract Manufacturing Manager",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://dupont.wd5.myworkdayjobs.com/en-US/Jobs/job/Wimington-Delaware/Chief-Operations-Officer---The-Innovation-Space_250114W",
+   "company": "DuPont",
+   "title": "Chief Operations Officer - The Innovation Space",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://dupont.wd5.myworkdayjobs.com/en-US/Jobs/job/Barueri-So-Paulo/Estagirio-de-comrcio-exterior_250119W",
+   "company": "DuPont",
+   "title": "Estagiário de comércio exterior",
+   "label": "internship",
+   "overridden_from": "not_internship",
+   "note": "Portuguese: foreign-trade trainee placement."
+  },
+  {
+   "url": "https://dupont.wd5.myworkdayjobs.com/en-US/Jobs/job/Auburn-Hills-Michigan/Maintenance-Technician_249629W",
+   "company": "DuPont",
+   "title": "Maintenance Technician",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://dupont.wd5.myworkdayjobs.com/en-US/Jobs/job/Mechelen-Antwerp/EMEA-Specification-Sales-Leader--m-f-d-_250073W",
+   "company": "DuPont",
+   "title": "EMEA Specification Sales Leader (m/f/d)",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://dupont.wd5.myworkdayjobs.com/en-US/Jobs/job/Braine-lAlleud-Brabant-wallon/Customer-Service-Representative---Healthcare-Liveo---EMEA---m-f-d-_249697W",
+   "company": "DuPont",
+   "title": "Customer Service Representative – Healthcare Liveo™ (EMEA) (m/f/d)",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://dupont.wd5.myworkdayjobs.com/en-US/Jobs/job/Braine-lAlleud-Brabant-wallon/Customer-Relationship-Manager---Healthcare-Advanced-Materials--m-f-d-_249834W",
+   "company": "DuPont",
+   "title": "Customer Relationship Manager – Healthcare Advanced Materials (m/f/d)",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://dupont.wd5.myworkdayjobs.com/en-US/Jobs/job/Braine-lAlleud-Brabant-wallon/Customer-Relationship-Manager---Life-Sciences--m-f-d-_249836W",
+   "company": "DuPont",
+   "title": "Customer Relationship Manager – Life Sciences (m/f/d)",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://3m.wd1.myworkdayjobs.com/en-US/Search/job/US-Minnesota-Maplewood/Internship---2027-Undergraduate-IT-Intern_R01170403-1",
+   "company": "3M",
+   "title": "Internship - 2027 Undergraduate IT Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://3m.wd1.myworkdayjobs.com/en-US/Search/job/CN-Shanghai/IATD-AE-Lab-Testing-Summer-Intern_R01165418",
+   "company": "3M",
+   "title": "IATD AE Lab Testing Summer Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://3m.wd1.myworkdayjobs.com/en-US/Search/job/US-Illinois-Dekalb/Sr-Engineer--Supply-Chain-Network-Optimization---Distribution-Science_R01156666",
+   "company": "3M",
+   "title": "Sr Industrial Engineer, Optimization",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://3m.wd1.myworkdayjobs.com/en-US/Search/job/US-Texas-Austin/Product-Developer-Embedded-Software_R01168176-1",
+   "company": "3M",
+   "title": "Embedded Linux Engineer",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://3m.wd1.myworkdayjobs.com/en-US/Search/job/DE-Neuss/Werkstudent--m-w----Elektrotechnik---Elektronik---Forschung---Entwicklung_R01165172-1",
+   "company": "3M",
+   "title": "Werkstudent (m/w/*) Hochfrequenztechnik / Elektronik - Forschung & Entwicklung",
+   "label": "internship",
+   "overridden_from": "not_internship",
+   "note": "German 'Werkstudent' is a paid student working position."
+  },
+  {
+   "url": "https://3m.wd1.myworkdayjobs.com/en-US/Search/job/DE-Neuss/Werkstudent-Marketing---Kommunikation---Channel-Partner-Communications--m-w---_R01168511-1",
+   "company": "3M",
+   "title": "Werkstudent Marketing & Kommunikation / Channel Partner Communications (m/w/*)",
+   "label": "internship",
+   "overridden_from": "not_internship",
+   "note": "German 'Werkstudent' is a paid student working position."
+  },
+  {
+   "url": "https://3m.wd1.myworkdayjobs.com/en-US/Search/job/DE-Kempten/Schlerpraktikum-am-Standort-in-Kempten--m-w---_R01159369",
+   "company": "3M",
+   "title": "Schülerpraktikum am Standort in Kempten (m/w/*)",
+   "label": "internship",
+   "overridden_from": "not_internship",
+   "note": "German school work-placement."
+  },
+  {
+   "url": "https://3m.wd1.myworkdayjobs.com/en-US/Search/job/CN-Shanghai/IP-Counsel_R01163521",
+   "company": "3M",
+   "title": "IP Counsel",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://3m.wd1.myworkdayjobs.com/en-US/Search/job/CN-Guangdong-Shenzhen/Sales-account-manager_R01163675",
+   "company": "3M",
+   "title": "Sales account manager",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://3m.wd1.myworkdayjobs.com/en-US/Search/job/CN-NingBo-Remote/-_R01165110",
+   "company": "3M",
+   "title": "工业胶带及胶粘剂部门高级客户经理-宁波地区",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://3m.wd1.myworkdayjobs.com/en-US/Search/job/CN-WuHan-Remote/Account-Manager_R01165933-1",
+   "company": "3M",
+   "title": "Account Manager",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://3m.wd1.myworkdayjobs.com/en-US/Search/job/CN-Shanghai/CHK-CBG-Design-Manager_R01165164",
+   "company": "3M",
+   "title": "CHK CBG Design Manager",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://3m.wd1.myworkdayjobs.com/en-US/Search/job/CN-Shanghai/Area-Portfolio-Leader_R01166146-1",
+   "company": "3M",
+   "title": "Area Portfolio Leader",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://3m.wd1.myworkdayjobs.com/en-US/Search/job/CN-ShenZhen-Remote/_R01167392",
+   "company": "3M",
+   "title": "高级客户经理",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://3m.wd1.myworkdayjobs.com/en-US/Search/job/CN-Guangdong-Virtual/Account-Manager_R01168887",
+   "company": "3M",
+   "title": "Account Manager",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://3m.wd1.myworkdayjobs.com/en-US/Search/job/CN-Shanghai/Sr-Account-Manager_R01169010-1",
+   "company": "3M",
+   "title": "Sr. Account Manager",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://3m.wd1.myworkdayjobs.com/en-US/Search/job/CN-Shanghai-Remote/--_R01169207",
+   "company": "3M",
+   "title": "客户经理（单面胶带与胶水销售专员）",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://3m.wd1.myworkdayjobs.com/en-US/Search/job/CN-Shanghai/Channel-Marketing-Manager_R01169457-1",
+   "company": "3M",
+   "title": "Channel Marketing Manager",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://3m.wd1.myworkdayjobs.com/en-US/Search/job/CN-Beijing/C-I-Key-Account-Business-Development-Manager_R01169749-1",
+   "company": "3M",
+   "title": "C&I Key Account Business Development Manager",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://3m.wd1.myworkdayjobs.com/en-US/Search/job/PH-Taguig/Intercompany-Outbound-Analyst_R01164288",
+   "company": "3M",
+   "title": "Intercompany Outbound Analyst",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://illumina.wd1.myworkdayjobs.com/en-US/illumina-careers/job/US---California---San-Diego/Senior-Internal-Auditor-II---IT--San-Diego-Hybrid-_42464-JOB-1",
+   "company": "Illumina",
+   "title": "Senior Internal Auditor II - IT (San Diego/Hybrid)",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://illumina.wd1.myworkdayjobs.com/en-US/illumina-careers/job/England---Cambridge/Associate-Director--Regulatory-Legal-Counsel_42744-JOB-1",
+   "company": "Illumina",
+   "title": "Associate Director, Regulatory Legal Counsel",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://illumina.wd1.myworkdayjobs.com/en-US/illumina-careers/job/Singapore---Woodlands---NorthTech/Logistics-Coordinator-2_43121-JOB",
+   "company": "Illumina",
+   "title": "Logistics Coordinator 2",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://illumina.wd1.myworkdayjobs.com/en-US/illumina-careers/job/Singapore---Woodlands---NorthTech/Logistics-Specialist--12-months-contract-_43150-JOB-2",
+   "company": "Illumina",
+   "title": "Logistics Specialist (12 months contract)",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://illumina.wd1.myworkdayjobs.com/en-US/illumina-careers/job/Singapore---Woodlands---NorthTech/Logistics-Specialist_43206-JOB",
+   "company": "Illumina",
+   "title": "Logistics Specialist",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://illumina.wd1.myworkdayjobs.com/en-US/illumina-careers/job/US---Bay-Area---Hayward/Senior-Staff-Supplier-Relationship_43086-JOB-1",
+   "company": "Illumina",
+   "title": "Senior Staff Supplier Relationship",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://illumina.wd1.myworkdayjobs.com/en-US/illumina-careers/job/India---Bengaluru---Manyata/Software-Quality-Engineer-2_42968-JOB",
+   "company": "Illumina",
+   "title": "Software Quality Engineer 2",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://illumina.wd1.myworkdayjobs.com/en-US/illumina-careers/job/US---California---San-Diego/Sr-Scientist----Electrochemist_42266-JOB",
+   "company": "Illumina",
+   "title": "Sr. Scientist  - Electrochemist",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://illumina.wd1.myworkdayjobs.com/en-US/illumina-careers/job/India---Bengaluru---Manyata/Senior-Software-Quality-Engineer_42964-JOB",
+   "company": "Illumina",
+   "title": "Senior Software Quality Engineer",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://illumina.wd1.myworkdayjobs.com/en-US/illumina-careers/job/US---California---San-Diego/Vice-President--Clinical-Solutions-Product-Development_42756-JOB",
+   "company": "Illumina",
+   "title": "Vice President, Clinical Solutions Product Development",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://illumina.wd1.myworkdayjobs.com/en-US/illumina-careers/job/India---Bengaluru---Manyata/Senior-Software-Quality-Engineer_42967-JOB",
+   "company": "Illumina",
+   "title": "Senior Software Quality Engineer",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://illumina.wd1.myworkdayjobs.com/en-US/illumina-careers/job/US---Wisconsin---Madison/Process-Engineer-II_43173-JOB-1",
+   "company": "Illumina",
+   "title": "Process Engineer II",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://illumina.wd1.myworkdayjobs.com/en-US/illumina-careers/job/US---California---San-Diego/Senior-Admin-Partner-to-CEO_43203-JOB",
+   "company": "Illumina",
+   "title": "Senior Admin Partner to CEO",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://illumina.wd1.myworkdayjobs.com/en-US/illumina-careers/job/US---California---San-Diego/Associate-Director--Strategic-Sourcing---GIS_41615-JOB",
+   "company": "Illumina",
+   "title": "Associate Director, Strategic Sourcing - Illumina Digital Services / IT",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://illumina.wd1.myworkdayjobs.com/en-US/illumina-careers/job/US---California---San-Diego/Sr-Director-Software-Quality_42718-JOB",
+   "company": "Illumina",
+   "title": "Sr. Director Software Quality",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://illumina.wd1.myworkdayjobs.com/en-US/illumina-careers/job/Singapore---Woodlands---NorthCoast/Equipment-Engineer-1_43176-JOB-1",
+   "company": "Illumina",
+   "title": "Equipment Engineer 1",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://illumina.wd1.myworkdayjobs.com/en-US/illumina-careers/job/US---California---San-Diego/Sr-Staff-Contracts-Analyst--San-Diego---Hybrid-_43219-JOB-1",
+   "company": "Illumina",
+   "title": "Sr Staff Contracts Analyst (San Diego / Hybrid)",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://illumina.wd1.myworkdayjobs.com/en-US/illumina-careers/job/Singapore---Woodlands---NorthTech/Manufacturing-Equipment-Engineer-2--Automation-_43059-JOB",
+   "company": "Illumina",
+   "title": "Manufacturing Equipment Engineer 2 (Automation)",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://illumina.wd1.myworkdayjobs.com/en-US/illumina-careers/job/Singapore---Woodlands---NorthCoast/Staff-Software-Engineer---Full-Stack_42506-JOB-1",
+   "company": "Illumina",
+   "title": "Senior Software Engineer - Full Stack",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://illumina.wd1.myworkdayjobs.com/en-US/illumina-careers/job/Singapore---Woodlands---NorthTech/Engineer-2--Process-Development_42680-JOB",
+   "company": "Illumina",
+   "title": "Engineer 2, Process Development (Chemical)",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://airproducts.wd5.myworkdayjobs.com/en-US/AP0001/job/Allentown-Pennsylvania/Summer-Intern---Accounting--Internal-Audit--FY27_JR-2026-21958",
+   "company": "Air Products",
+   "title": "Summer Intern - Accounting (Internal Audit) FY27",
+   "label": "internship"
+  },
+  {
+   "url": "https://airproducts.wd5.myworkdayjobs.com/en-US/AP0001/job/Allentown-Pennsylvania/Spring-Intern-Accounting--Internal-Audit----FY-2027_JR-2026-21957",
+   "company": "Air Products",
+   "title": "Spring Intern-Accounting (Internal Audit) - FY 2027",
+   "label": "internship"
+  },
+  {
+   "url": "https://airproducts.wd5.myworkdayjobs.com/en-US/AP0001/job/Meise-Belgium/Internal-Account-Manager_JR-2026-21527",
+   "company": "Air Products",
+   "title": "Internal Account Manager",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://airproducts.wd5.myworkdayjobs.com/en-US/AP0001/job/Allentown-Pennsylvania/Summer-Intern-Finance--Corporate--2027-_JR-2026-21959",
+   "company": "Air Products",
+   "title": "Summer Intern-Finance, Corporate (2027)",
+   "label": "internship"
+  },
+  {
+   "url": "https://airproducts.wd5.myworkdayjobs.com/en-US/AP0001/job/Allentown-Pennsylvania/Summer-Intern--IT-Digital-Technology--2027-_JR-2026-21953",
+   "company": "Air Products",
+   "title": "Summer Intern- IT/Digital Technology (2027)",
+   "label": "internship"
+  },
+  {
+   "url": "https://airproducts.wd5.myworkdayjobs.com/en-US/AP0001/job/Allentown-Pennsylvania/Summer-Intern--IT---Cyber-Audit--2027-_JR-2026-21954",
+   "company": "Air Products",
+   "title": "Summer Intern- IT & Cyber Audit (2027)",
+   "label": "internship"
+  },
+  {
+   "url": "https://airproducts.wd5.myworkdayjobs.com/en-US/AP0001/job/Allentown-Pennsylvania/Summer-Intern-Co-op-Mechanical-Engineering--2027-_JR-2026-21956",
+   "company": "Air Products",
+   "title": "Summer Intern/Co-op-Mechanical Engineering (2027)",
+   "label": "internship"
+  },
+  {
+   "url": "https://airproducts.wd5.myworkdayjobs.com/en-US/AP0001/job/Allentown-Pennsylvania/SUMMER-CO-OP-INTERN---Chemical-Engineering--FY-2027-_JR-2026-21955",
+   "company": "Air Products",
+   "title": "SUMMER CO-OP/INTERN – Chemical Engineering (FY 2027)",
+   "label": "internship"
+  },
+  {
+   "url": "https://airproducts.wd5.myworkdayjobs.com/en-US/AP0001/job/Taipei-Taipei-City/Piping-Design-Engineer_JR-2026-21370-1",
+   "company": "Air Products",
+   "title": "Piping Design Engineer",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://airproducts.wd5.myworkdayjobs.com/en-US/AP0001/job/Taipei-Taipei-City/Piping-Design-Engineer_JR-2026-21848",
+   "company": "Air Products",
+   "title": "Piping Design Engineer",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://airproducts.wd5.myworkdayjobs.com/en-US/AP0001/job/Guaiba-Brazil/Estagirio--Tcnico-em-Qumica-_JR-2026-21535",
+   "company": "Air Products",
+   "title": "Estagiário (Técnico em Química)",
+   "label": "internship",
+   "overridden_from": "not_internship",
+   "note": "Portuguese: chemistry technician trainee placement."
+  },
+  {
+   "url": "https://airproducts.wd5.myworkdayjobs.com/en-US/AP0001/job/Luneburg-Germany/Produktionsmitarbeiter--m-w-d--fr-das-Flaschenfllwerk-Lneburg_JR-2026-20053",
+   "company": "Air Products",
+   "title": "Produktionsmitarbeiter (m/w/d) für das Flaschenfüllwerk Lüneburg",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://airproducts.wd5.myworkdayjobs.com/en-US/AP0001/job/Budapest-Office/Business-Development-Manager--Industrial-Gases---Strategic-Growth_JR-2026-20808",
+   "company": "Air Products",
+   "title": "Business Development Manager, Industrial Gases & Strategic Growth",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://airproducts.wd5.myworkdayjobs.com/en-US/AP0001/job/Wrocaw/Sourcing-Specialist-with-Polish--English-and-Czech_JR-2026-21895",
+   "company": "Air Products",
+   "title": "Sourcing Specialist with Polish, English and Czech",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://airproducts.wd5.myworkdayjobs.com/en-US/AP0001/job/Paris-France/Alternance---Marketing_JR-2026-20922",
+   "company": "Air Products",
+   "title": "Alternance - Marketing",
+   "label": "internship",
+   "overridden_from": "not_internship",
+   "note": "French 'alternance' is a work-study placement."
+  },
+  {
+   "url": "https://airproducts.wd5.myworkdayjobs.com/en-US/AP0001/job/Massiac-France/Technicien-Maintenance-Itinrance-H-F_JR-2026-21726-2",
+   "company": "Air Products",
+   "title": "Technicien Maintenance Itinérance H/F",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://airproducts.wd5.myworkdayjobs.com/en-US/AP0001/job/Rouen/Chauffeur-SPL-ADR--H-F-_JR-2026-21864",
+   "company": "Air Products",
+   "title": "Chauffeur SPL ADR (H/F)",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://airproducts.wd5.myworkdayjobs.com/en-US/AP0001/job/Strasbourg-France/Chauffeur-SPL-CITERNE-H-F_JR-2026-21869",
+   "company": "Air Products",
+   "title": "Chauffeur SPL CITERNE H/F",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://airproducts.wd5.myworkdayjobs.com/en-US/AP0001/job/Jubail-Saudi-Arabia/Senior-Project-Planning---Controls-Engineer_JR-2026-19140-1",
+   "company": "Air Products",
+   "title": "Senior Project Planning & Controls Engineer",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://airproducts.wd5.myworkdayjobs.com/en-US/AP0001/job/Jubail-Saudi-Arabia/Senior-Project-Planning---Controls-Engineer_JR-2026-22003-1",
+   "company": "Air Products",
+   "title": "Senior Project Planning & Controls Engineer",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://albemarle.wd5.myworkdayjobs.com/en-US/External/job/Charlotte-North-Carolina-United-States-of-America/Treasury-Analyst_REQ-31145",
+   "company": "Albemarle",
+   "title": "Treasury Analyst",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://albemarle.wd5.myworkdayjobs.com/en-US/External/job/Tokyo-Japan/Logistics-Specialist_REQ-30867",
+   "company": "Albemarle",
+   "title": "Logistics Specialist",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://albemarle.wd5.myworkdayjobs.com/en-US/External/job/Charlotte-North-Carolina-United-States-of-America/Executive-Assistant_REQ-31159",
+   "company": "Albemarle",
+   "title": "Executive Assistant",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://albemarle.wd5.myworkdayjobs.com/en-US/External/job/Tokyo-Japan/Regulatory-Affairs-Specialist_REQ-30551",
+   "company": "Albemarle",
+   "title": "Regulatory Affairs Lead",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://albemarle.wd5.myworkdayjobs.com/en-US/External/job/Charlotte-North-Carolina-United-States-of-America/Subsidiary-Governance-Manager_REQ-31138-1",
+   "company": "Albemarle",
+   "title": "Subsidiary Governance Manager",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://albemarle.wd5.myworkdayjobs.com/en-US/External/job/Charlotte-North-Carolina-United-States-of-America/Procurement-Manager---US-Ground-Transportation---Warehousing_REQ-30997",
+   "company": "Albemarle",
+   "title": "Procurement Manager – U.S. Ground Transportation & Warehousing",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://albemarle.wd5.myworkdayjobs.com/en-US/External/job/Charlotte-North-Carolina-United-States-of-America/Director--Media-Relations-and-US-Public-Affairs_REQ-31155",
+   "company": "Albemarle",
+   "title": "Director, Media Relations and U.S. Public Affairs",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://albemarle.wd5.myworkdayjobs.com/en-US/External/job/Banglore-India/IT-System-Analyst_REQ-31136",
+   "company": "Albemarle",
+   "title": "IT System Analyst",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://albemarle.wd5.myworkdayjobs.com/en-US/External/job/Banglore-India/Power-Platform-and-DevOps-Administrator_REQ-31095",
+   "company": "Albemarle",
+   "title": "Power Platform and DevOps Administrator",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://albemarle.wd5.myworkdayjobs.com/en-US/External/job/Banglore-India/AI-Operations-Analyst_REQ-31190",
+   "company": "Albemarle",
+   "title": "AI Operations Analyst",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://albemarle.wd5.myworkdayjobs.com/en-US/External/job/Banglore-India/Senior-Manager--AI-Technologies---Development_REQ-30975",
+   "company": "Albemarle",
+   "title": "Senior Manager, AI Technologies & Development",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://albemarle.wd5.myworkdayjobs.com/en-US/External/job/Banglore-India/Technical-Systems-Analyst_REQ-31009",
+   "company": "Albemarle",
+   "title": "Technical Systems Analyst",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://albemarle.wd5.myworkdayjobs.com/en-US/External/job/Banglore-India/Data-Engineer_REQ-31254-1",
+   "company": "Albemarle",
+   "title": "Data Engineer",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://albemarle.wd5.myworkdayjobs.com/en-US/External/job/Banglore-India/Data-Architect_REQ-31256-2",
+   "company": "Albemarle",
+   "title": "Data Architect",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://albemarle.wd5.myworkdayjobs.com/en-US/External/job/Dalian-Liaoning-China/Customer-Service-Representative_REQ-31276",
+   "company": "Albemarle",
+   "title": "Customer Service Representative",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://albemarle.wd5.myworkdayjobs.com/en-US/External/job/Charlotte-North-Carolina-United-States-of-America/Digital-and-AI-Governance-Manager_REQ-30717",
+   "company": "Albemarle",
+   "title": "Digital and AI Governance Manager",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://albemarle.wd5.myworkdayjobs.com/en-US/External/job/Banglore-India/Digital-and-AI-Governance-Manager_REQ-31310-1",
+   "company": "Albemarle",
+   "title": "Digital and AI Governance Manager",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://albemarle.wd5.myworkdayjobs.com/en-US/External/job/Perth-Western-Australia-Australia/Mining-Engineer_REQ-30958-1",
+   "company": "Albemarle",
+   "title": "Mining Engineer",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://albemarle.wd5.myworkdayjobs.com/en-US/External/job/Silver-Peak-Nevada-United-States-of-America/Health--Safety-and-Environmental-Manager_REQ-30380-1",
+   "company": "Albemarle",
+   "title": "Health, Safety and Environmental Manager",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://albemarle.wd5.myworkdayjobs.com/en-US/External/job/Houston-Texas-United-States-of-America/Capital-Estimating--Cost-Control---Benchmarking-Lead--Capital-Portfolio-Planning-and-Controls-Group_REQ-30539",
+   "company": "Albemarle",
+   "title": "Capital Estimating, Cost Control & Benchmarking Lead- Capital Portfolio Planning and Controls Group",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://chevron.wd5.myworkdayjobs.com/en-US/jobs/job/Bengaluru-Karnataka-India/Wells-Engineer_R000072668",
+   "company": "Chevron",
+   "title": "Wells Engineer",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://chevron.wd5.myworkdayjobs.com/en-US/jobs/job/Midland-Texas-United-States-of-America/Lead-Materials-Specialist---Texas---New-Mexico_R000073300",
+   "company": "Chevron",
+   "title": "Lead Materials Specialist - Texas / New Mexico",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://chevron.wd5.myworkdayjobs.com/en-US/jobs/job/Westferry-London-United-Kingdom/Senior-Market-Fundamental-Analyst--Petrochemical-_R000073363-1",
+   "company": "Chevron",
+   "title": "Senior Market Fundamental Analyst",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://chevron.wd5.myworkdayjobs.com/en-US/jobs/job/Houston-Texas-United-States-of-America/Senior-Market-Fundamental-Analyst--Petrochemical-_R000073361",
+   "company": "Chevron",
+   "title": "Senior Market Fundamental Analyst",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://chevron.wd5.myworkdayjobs.com/en-US/jobs/job/Buenos-Aires-Buenos-Aires-Argentina/Benefits-Specialist_R000073154",
+   "company": "Chevron",
+   "title": "Benefits Specialist",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://chevron.wd5.myworkdayjobs.com/en-US/jobs/job/Houston-Texas-United-States-of-America/IT-Architect--SAP---Hydro-Carbon-Value-Chain_R000072333",
+   "company": "Chevron",
+   "title": "IT Architect, SAP - Hydro Carbon Value Chain",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://chevron.wd5.myworkdayjobs.com/en-US/jobs/job/Chatuchuk-Bangkok-Thailand/HR-Operations-Specialist---Thailand_R000073293",
+   "company": "Chevron",
+   "title": "HR Operations Specialist – Thailand",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://chevron.wd5.myworkdayjobs.com/en-US/jobs/job/Singapore-West-Singapore-Singapore/Process-Engineer_R000073180-1",
+   "company": "Chevron",
+   "title": "Process Engineer",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://chevron.wd5.myworkdayjobs.com/en-US/jobs/job/Bengaluru-Karnataka-India/GHG-Reporting-Analyst_R000073355",
+   "company": "Chevron",
+   "title": "GHG Reporting Analyst",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://chevron.wd5.myworkdayjobs.com/en-US/jobs/job/Houston-Texas-United-States-of-America/Insurance-Analyst_R000073149",
+   "company": "Chevron",
+   "title": "Insurance Analyst",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://chevron.wd5.myworkdayjobs.com/en-US/jobs/job/Greeley-Colorado-United-States-of-America/Field-Specialist-B_R000073298",
+   "company": "Chevron",
+   "title": "Field Specialist B",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://chevron.wd5.myworkdayjobs.com/en-US/jobs/job/Houston-Texas-United-States-of-America/Senior-Technical-Geophysicist---Quantitative-Interpretation---4D_R000073020",
+   "company": "Chevron",
+   "title": "Senior Technical Geophysicist – Quantitative Interpretation & 4D",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://chevron.wd5.myworkdayjobs.com/en-US/jobs/job/Ames-Iowa-United-States-of-America/Administrative-Assistant_R000070434",
+   "company": "Chevron",
+   "title": "Administrative Assistant",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://chevron.wd5.myworkdayjobs.com/en-US/jobs/job/Mason-City-Iowa-United-States-of-America/Biodiesel-Operator--Nights_R000073207",
+   "company": "Chevron",
+   "title": "Biodiesel Operator, Nights",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://chevron.wd5.myworkdayjobs.com/en-US/jobs/job/Colombo-Sri-Lanka/Chevron-Sri-Lanka-Summer-Internship_R000073233",
+   "company": "Chevron",
+   "title": "Chevron Sri Lanka Summer Internship",
+   "label": "internship"
+  },
+  {
+   "url": "https://chevron.wd5.myworkdayjobs.com/en-US/jobs/job/Ningbo-Zhejiang-China/BPF-Analyst_R000071371",
+   "company": "Chevron",
+   "title": "BPF Analyst",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://chevron.wd5.myworkdayjobs.com/en-US/jobs/job/Ayala-Makati-City-Philippines/Payroll-Operations-Analyst_R000073306",
+   "company": "Chevron",
+   "title": "Payroll Operations Analyst",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://chevron.wd5.myworkdayjobs.com/en-US/jobs/job/Buenos-Aires-Buenos-Aires-Argentina/Global-Exploration---MCPs-Support-Team-Leader_R000072953",
+   "company": "Chevron",
+   "title": "Global Exploration & MCPs Support Team Leader",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://chevron.wd5.myworkdayjobs.com/en-US/jobs/job/Seneca-Illinois-United-States-of-America/Biodiesel-Operator_R000072117",
+   "company": "Chevron",
+   "title": "Biodiesel Operator",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://chevron.wd5.myworkdayjobs.com/en-US/jobs/job/Houston-Texas-United-States-of-America/Specialist--Loyalty_R000073283",
+   "company": "Chevron",
+   "title": "Specialist, Loyalty",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://dow.wd1.myworkdayjobs.com/en-US/ExternalCareers/job/Midland-MI-USA/Local-College-Co-op---Core-Legal-Practices--Dow-Legal-Department-Administrative-Assistant_R2064539",
+   "company": "Dow",
+   "title": "Local College Co-op - Core Legal Practices/ Dow Legal Department Administrative Assistant",
+   "label": "internship"
+  },
+  {
+   "url": "https://emerson.wd5.myworkdayjobs.com/en-US/Emerson_College_Staff/job/Boston-Campus/Campus-Planning-Intern_JR008645",
+   "company": "Emerson",
+   "title": "Campus Planning Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://emerson.wd5.myworkdayjobs.com/en-US/Emerson_College_Staff/job/Boston-Campus/Associate-Director--Internships---Work-Based-Education_JR008757",
+   "company": "Emerson",
+   "title": "Associate Director, Internships & Work-Based Education",
+   "label": "not_internship",
+   "overridden_from": "internship",
+   "note": "A director-level staff role that administers internships; the word in the title is the programme, not the job."
+  },
+  {
+   "url": "https://emerson.wd5.myworkdayjobs.com/en-US/Emerson_College_Staff/job/Boston-Campus/Communications-Specialist--Student-Affairs_JR009044",
+   "company": "Emerson",
+   "title": "Communications Specialist, Student Affairs",
+   "label": "not_internship"
+  },
+  {
+   "url": "https://iff.wd5.myworkdayjobs.com/en-US/IFF_Careers/job/Tlalnepantla-Mexico/Intern-Application_R17891-1",
+   "company": "IFF",
+   "title": "Intern Application",
+   "label": "internship"
+  },
+  {
+   "url": "https://iff.wd5.myworkdayjobs.com/en-US/IFF_Careers/job/TecnoParque-GBS-Mexico/Credit-Intern_R21172",
+   "company": "IFF",
+   "title": "Credit Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://iff.wd5.myworkdayjobs.com/en-US/IFF_Careers/job/Punto-Polanco-Mexico/GL-Intern_R18845",
+   "company": "IFF",
+   "title": "GL Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://iff.wd5.myworkdayjobs.com/en-US/IFF_Careers/job/Shanghai-Hongqiao-China/Lab-IT-Intern_R13489",
+   "company": "IFF",
+   "title": "Lab IT Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://iff.wd5.myworkdayjobs.com/en-US/IFF_Careers/job/Barcelona-Spain/Intern---Sales-Support_R20765",
+   "company": "IFF",
+   "title": "Intern – Sales Support",
+   "label": "internship"
+  },
+  {
+   "url": "https://iff.wd5.myworkdayjobs.com/en-US/IFF_Careers/job/New-York-NY-USA/Consumer-Insights-Intern_R21289",
+   "company": "IFF",
+   "title": "Consumer Insights Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://iff.wd5.myworkdayjobs.com/en-US/IFF_Careers/job/Citrus-Innovation-Ctr-FL-USA/Intern_R18828",
+   "company": "IFF",
+   "title": "Intern - Marketing & Digital Experience",
+   "label": "internship"
+  },
+  {
+   "url": "https://iff.wd5.myworkdayjobs.com/en-US/IFF_Careers/job/Bogota-Megaport-Colombia/Intern_R16919-1",
+   "company": "IFF",
+   "title": "Sales Fine Fragrance Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://iff.wd5.myworkdayjobs.com/en-US/IFF_Careers/job/Hilversum-Liebergerweg-Netherlands/Intern-Project-Coordination_R19347",
+   "company": "IFF",
+   "title": "Intern Project Coordination  Fragrance development",
+   "label": "internship"
+  },
+  {
+   "url": "https://iff.wd5.myworkdayjobs.com/en-US/IFF_Careers/job/Casablanca-Morocco/Commercial-Sales-Internship--Taste-_R20518",
+   "company": "IFF",
+   "title": "Commercial Sales Internship (Taste)",
+   "label": "internship"
+  },
+  {
+   "url": "https://iff.wd5.myworkdayjobs.com/en-US/IFF_Careers/job/Citrus-Innovation-Ctr-FL-USA/Intern_R18830",
+   "company": "IFF",
+   "title": "Research & Development Intern – Citrus Innovation Center",
+   "label": "internship"
+  },
+  {
+   "url": "https://iff.wd5.myworkdayjobs.com/en-US/IFF_Careers/job/Asturias-Spain/Procurement-Taste-Intern_R20517",
+   "company": "IFF",
+   "title": "Especialista de Compras (Beca FUO - intern)",
+   "label": "internship",
+   "overridden_from": "internship",
+   "note": "Spanish scholarship internship in purchasing."
+  },
+  {
+   "url": "https://iff.wd5.myworkdayjobs.com/en-US/IFF_Careers/job/Brabrand-Denmark/Internship-and-Thesis-opportunities-at-IFF--Spring-2027-_R20937",
+   "company": "IFF",
+   "title": "Internship and Thesis opportunities at IFF (Spring 2027)",
+   "label": "internship"
+  },
+  {
+   "url": "https://iff.wd5.myworkdayjobs.com/en-US/IFF_Careers/job/Memphis-TN-USA/Manufacturing-Tech-Co-Op_R17721",
+   "company": "IFF",
+   "title": "Manufacturing Tech Co-Op",
+   "label": "internship"
+  },
+  {
+   "url": "https://iff.wd5.myworkdayjobs.com/en-US/IFF_Careers/job/Pryor-OK-USA/Manufacturing-Engineer-Co-Op_R15636-1",
+   "company": "IFF",
+   "title": "Manufacturing Engineer Co-Op",
+   "label": "internship"
+  },
+  {
+   "url": "https://regeneron.wd1.myworkdayjobs.com/en-US/IrelandPrivate/job/Limerick/Intern_R49978",
+   "company": "Regeneron",
+   "title": "Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://modernatx.wd1.myworkdayjobs.com/en-US/M_tx/job/Norwood-Massachusetts/Intern--CMC-Development--Summer-2027-_R19683",
+   "company": "Moderna",
+   "title": "Intern, CMC Development (Summer 2027)",
+   "label": "internship"
+  },
+  {
+   "url": "https://modernatx.wd1.myworkdayjobs.com/en-US/M_tx/job/Norwood-Massachusetts/Co-Op--CMC-Development--Spring-2027-_R19684",
+   "company": "Moderna",
+   "title": "Co-Op, CMC Development (Spring 2027)",
+   "label": "internship"
+  },
+  {
+   "url": "https://amgen.wd1.myworkdayjobs.com/en-US/Careers/job/Singapore-Affiliate---Duo-Tower/Finance-Intern_R-253789",
+   "company": "Amgen",
+   "title": "Finance Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://amgen.wd1.myworkdayjobs.com/en-US/Careers/job/Singapore-Affiliate---Duo-Tower/Marketing-Intern_R-253791",
+   "company": "Amgen",
+   "title": "Marketing Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://amgen.wd1.myworkdayjobs.com/en-US/Careers/job/Singapore-Affiliate---Duo-Tower/Marketing-Intern_R-253795",
+   "company": "Amgen",
+   "title": "Marketing Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://amgen.wd1.myworkdayjobs.com/en-US/Careers/job/Singapore-Affiliate---Duo-Tower/VAP-Intern_R-253797",
+   "company": "Amgen",
+   "title": "VAP Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://amgen.wd1.myworkdayjobs.com/en-US/Careers/job/Malaysia---Kuala-Lumpur/Pharmaceutical-Marketing-Intern_R-253696",
+   "company": "Amgen",
+   "title": "Pharmaceutical Marketing Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://amgen.wd1.myworkdayjobs.com/en-US/Careers/job/Singapore-Affiliate---Duo-Tower/SEA-Medical-Affairs-Intern_R-253798",
+   "company": "Amgen",
+   "title": "SEA Medical Affairs Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://amgen.wd1.myworkdayjobs.com/en-US/Careers/job/United-States---Remote/Grad-Intern---Operations--Fall-2026-_R-253415",
+   "company": "Amgen",
+   "title": "Grad Intern - Operations (Fall 2026)",
+   "label": "internship"
+  },
+  {
+   "url": "https://amgen.wd1.myworkdayjobs.com/en-US/Careers/job/United-States---Remote/Undergrad-intern---US-Value---Access--Summer-2027-_R-253424",
+   "company": "Amgen",
+   "title": "Undergrad intern - U.S. Value & Access (Summer 2027)",
+   "label": "internship"
+  },
+  {
+   "url": "https://amgen.wd1.myworkdayjobs.com/en-US/Careers/job/United-States---Remote/MBA-Intern---Commercial-Leadership-Program--Summer-2027-_R-254479",
+   "company": "Amgen",
+   "title": "MBA Intern – Commercial Leadership Program (Summer 2027)",
+   "label": "internship"
+  },
+  {
+   "url": "https://amgen.wd1.myworkdayjobs.com/en-US/Careers/job/US---North-Carolina---Holly-Springs/Engineering-Grad-Co-op_R-254020",
+   "company": "Amgen",
+   "title": "Engineering Grad Co-op",
+   "label": "internship"
+  },
+  {
+   "url": "https://amgen.wd1.myworkdayjobs.com/en-US/Careers/job/United-States---Remote/MBA-Intern---Finance---Strategy-Leadership-Development-Program--Summer-2027-_R-254491",
+   "company": "Amgen",
+   "title": "MBA Intern – Finance & Strategy Leadership Development Program (Summer 2027)",
+   "label": "internship"
+  },
+  {
+   "url": "https://amgen.wd1.myworkdayjobs.com/en-US/Careers/job/US---Massachusetts---Cambridge/Undergrad-Intern---Operations---Cambridge--MA--Summer-2027-_R-254515",
+   "company": "Amgen",
+   "title": "Undergrad Intern - Operations – Cambridge, MA (Summer 2027)",
+   "label": "internship"
+  },
+  {
+   "url": "https://amgen.wd1.myworkdayjobs.com/en-US/Careers/job/US---Rhode-Island---West-Greenwich/Undergrad-Intern---Operations---West-Greenwich--RI--Summer-2027-_R-254514",
+   "company": "Amgen",
+   "title": "Undergrad Intern - Operations – West Greenwich, RI (Summer 2027)",
+   "label": "internship"
+  },
+  {
+   "url": "https://amgen.wd1.myworkdayjobs.com/en-US/Careers/job/US---California---Thousand-Oaks/Undergrad-Intern---Operations---Process-Development--Summer-2027-_R-254516",
+   "company": "Amgen",
+   "title": "Undergrad Intern - Operations – Process Development (Summer 2027)",
+   "label": "internship"
+  },
+  {
+   "url": "https://amgen.wd1.myworkdayjobs.com/en-US/Careers/job/US---California---Thousand-Oaks/Grad-Intern---Operations---Process-Development--Summer-2027-_R-254519",
+   "company": "Amgen",
+   "title": "Grad Intern - Operations – Process Development (Summer 2027)",
+   "label": "internship"
+  },
+  {
+   "url": "https://amgen.wd1.myworkdayjobs.com/en-US/Careers/job/US---North-Carolina---Holly-Springs/Undergrad-Intern---Operations---Holly-Springs--NC--Summer-2027-_R-254509",
+   "company": "Amgen",
+   "title": "Undergrad Intern - Operations – Holly Springs, NC (Summer 2027)",
+   "label": "internship"
+  },
+  {
+   "url": "https://sanofi.wd3.myworkdayjobs.com/en-US/SanofiCareers/job/sterbro/Digital-Innovative-Solutions-Student-Worker_R2869898",
+   "company": "Sanofi",
+   "title": "Digital Innovative Solutions Student Worker",
+   "label": "not_internship",
+   "note": "A rolling part-time student job, not a seasonal internship, so it is labelled not_internship. The product disagrees on purpose: INTERN_RE in lib/career/jobs/normalize.ts includes 'student worker'. Kept as a labelled disagreement rather than relabelled to make precision look better - it is the boundary of the definition, not a defect."
+  },
+  {
+   "url": "https://sanofi.wd3.myworkdayjobs.com/en-US/SanofiCareers/job/Milano/Quality-Internship_R2869562",
+   "company": "Sanofi",
+   "title": "Quality Internship",
+   "label": "internship"
+  },
+  {
+   "url": "https://sanofi.wd3.myworkdayjobs.com/en-US/SanofiCareers/job/Beijing/R-D---CSU----CSU-intern---BJ_R2869552",
+   "company": "Sanofi",
+   "title": "CSU intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://jci.wd5.myworkdayjobs.com/en-US/TUPU/job/Shanghai-Shanghai-China/Procurement-Intern----FM-MRO_WD30278394-2",
+   "company": "Johnson Controls",
+   "title": "Procurement Intern -  FM/MRO",
+   "label": "internship"
+  },
+  {
+   "url": "https://westlake.wd1.myworkdayjobs.com/en-US/westlake/job/US---Houston-TX/XMLNAME-2026-Intern---Mechanical-Engineer_R30240",
+   "company": "Westlake",
+   "title": "2026 Intern - Mechanical Engineer",
+   "label": "internship"
+  },
+  {
+   "url": "https://westlake.wd1.myworkdayjobs.com/en-US/westlake/job/US---Houston-TX/XMLNAME-2026-Intern---Electrical-Engineer_R30242",
+   "company": "Westlake",
+   "title": "2026 Intern - Electrical Engineer",
+   "label": "internship"
+  },
+  {
+   "url": "https://huntsman.wd1.myworkdayjobs.com/en-US/Huntsman/job/China----Huntsman-Campus-Shanghai/Lab-Intern_J-013547",
+   "company": "Huntsman",
+   "title": "Lab Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://huntsman.wd1.myworkdayjobs.com/en-US/Huntsman/job/USA---Texas---Houston---The-Woodlands---Corporate-Office/Chemist-Intern_J-020029",
+   "company": "Huntsman",
+   "title": "Chemist Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://huntsman.wd1.myworkdayjobs.com/en-US/Huntsman/job/Costa-Rica---Heredia/Accounting-Intern_J-020209",
+   "company": "Huntsman",
+   "title": "Accounting Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://huntsman.wd1.myworkdayjobs.com/en-US/Huntsman/job/USA---Texas---Houston---The-Woodlands---Corporate-Office/Supply-Chain-Intern_J-020028",
+   "company": "Huntsman",
+   "title": "Supply Chain Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://huntsman.wd1.myworkdayjobs.com/en-US/Huntsman/job/USA---Texas---Houston---The-Woodlands---Corporate-Office/Electrical-Engineering-Intern_J-020027",
+   "company": "Huntsman",
+   "title": "Electrical Engineering Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://huntsman.wd1.myworkdayjobs.com/en-US/Huntsman/job/USA---Texas---Houston---The-Woodlands---Corporate-Office/Chemical-Engineering-Intern_J-020025",
+   "company": "Huntsman",
+   "title": "Chemical Engineering Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://huntsman.wd1.myworkdayjobs.com/en-US/Huntsman/job/USA---Texas---Houston---The-Woodlands---Corporate-Office/Mechanical-Engineering-Intern_J-020026",
+   "company": "Huntsman",
+   "title": "Mechanical Engineering Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://huntsman.wd1.myworkdayjobs.com/en-US/Huntsman/job/Costa-Rica---Heredia/Customer-Service-Intern_J-020049",
+   "company": "Huntsman",
+   "title": "Customer Service Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://huntsman.wd1.myworkdayjobs.com/en-US/Huntsman/job/Switzerland---Basel/Intern-Digital-Engineer_J-020117",
+   "company": "Huntsman",
+   "title": "Intern Digital Engineer",
+   "label": "internship"
+  },
+  {
+   "url": "https://huntsman.wd1.myworkdayjobs.com/en-US/Huntsman/job/Costa-Rica---Heredia/Product-Portfolio-Intern_J-020242",
+   "company": "Huntsman",
+   "title": "Product Portfolio Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://huntsman.wd1.myworkdayjobs.com/en-US/Huntsman/job/Costa-Rica---Heredia/Supply-Chain-Planning-Intern_J-019887",
+   "company": "Huntsman",
+   "title": "Supply Chain Planning Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://huntsman.wd1.myworkdayjobs.com/en-US/Huntsman/job/Malaysia---Kuala-Lumpur/Artificial-Intelligence---Automation-Intern_J-019938-1",
+   "company": "Huntsman",
+   "title": "Artificial Intelligence / Automation Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://huntsman.wd1.myworkdayjobs.com/en-US/Huntsman/job/Poland---Krakow/Internship-Program-at-Huntsman---Krakow-GBS-Hub-Intern---Tax_J-020234",
+   "company": "Huntsman",
+   "title": "Internship Program at Huntsman – Krakow GBS Hub Intern - Tax",
+   "label": "internship"
+  },
+  {
+   "url": "https://huntsman.wd1.myworkdayjobs.com/en-US/Huntsman/job/Malaysia---Kuala-Lumpur/Global-Reporting---Analytics-Intern---Functions_J-020039",
+   "company": "Huntsman",
+   "title": "Global Reporting & Analytics Intern – Functions",
+   "label": "internship"
+  },
+  {
+   "url": "https://huntsman.wd1.myworkdayjobs.com/en-US/Huntsman/job/Malaysia---Kuala-Lumpur/Business-Intelligence---AI-Analytics-Intern_J-020202",
+   "company": "Huntsman",
+   "title": "Business Intelligence & AI Analytics Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://huntsman.wd1.myworkdayjobs.com/en-US/Huntsman/job/Poland---Krakow/Internship-Program-at-Huntsman---Krakow-GBS---FP-A--Financial-Planning---Analysis-_J-020147",
+   "company": "Huntsman",
+   "title": "Internship Program at Huntsman – Krakow GBS - FP&A (Financial Planning & Analysis)",
+   "label": "internship"
+  },
+  {
+   "url": "https://huntsman.wd1.myworkdayjobs.com/en-US/Huntsman/job/Poland---Krakow/Internship-Program-at-Huntsman---Krakow-GBS---Supply-Planning_J-019934",
+   "company": "Huntsman",
+   "title": "Internship Program at Huntsman – Krakow GBS – Inventory and Supply Chain Reporting",
+   "label": "internship"
+  },
+  {
+   "url": "https://huntsman.wd1.myworkdayjobs.com/en-US/Huntsman/job/Malaysia---Kuala-Lumpur/Supplier-Lifecycle-and-Performance-Administrator-Intern_J-020043",
+   "company": "Huntsman",
+   "title": "Supplier Lifecycle and Performance Administrator Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://huntsman.wd1.myworkdayjobs.com/en-US/Huntsman/job/Costa-Rica---Heredia/XMLNAME-2027-Huntsman-Costa-Rica-Internship-Program_J-020210",
+   "company": "Huntsman",
+   "title": "2027 Huntsman Costa Rica Internship Program",
+   "label": "internship"
+  },
+  {
+   "url": "https://huntsman.wd1.myworkdayjobs.com/en-US/Huntsman/job/Poland---Krakow/Internship-Program-at-Huntsman---Krakow-GBS---Supply-Chain-Excellence_J-020134",
+   "company": "Huntsman",
+   "title": "Internship Program at Huntsman – Krakow GBS - Supply Chain Excellence",
+   "label": "internship"
+  },
+  {
+   "url": "https://sbdinc.wd1.myworkdayjobs.com/en-US/Stanley_Black_Decker_Career_Site/job/Bergueda-Catalonia-Spain/Service-Intern--Postventa-_REQ-1000049491",
+   "company": "Stanley Black & Decker",
+   "title": "Service Intern (Postventa)",
+   "label": "internship"
+  },
+  {
+   "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/SingaporeSGP/Intern_R2626579",
+   "company": "Applied Materials",
+   "title": "Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/SingaporeSGP/Intern_R2626566",
+   "company": "Applied Materials",
+   "title": "Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/SingaporeSGP/College-Intern_R2626455",
+   "company": "Applied Materials",
+   "title": "College Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/SingaporeSGP/College-intern_R2626165",
+   "company": "Applied Materials",
+   "title": "College intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/SingaporeSGP/College-Intern_R2624343",
+   "company": "Applied Materials",
+   "title": "College Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/SingaporeSGP/College-Intern_R2626453",
+   "company": "Applied Materials",
+   "title": "College Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/SingaporeSGP/College-Intern_R2626457",
+   "company": "Applied Materials",
+   "title": "College Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/SingaporeSGP/College-Intern_R2626195",
+   "company": "Applied Materials",
+   "title": "College Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/SingaporeSGP/College-Intern_R2627319",
+   "company": "Applied Materials",
+   "title": "College Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/SingaporeSGP/College-Intern_R2627315",
+   "company": "Applied Materials",
+   "title": "College Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/SingaporeSGP/College-Intern_R2627316",
+   "company": "Applied Materials",
+   "title": "College Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/SingaporeSGP/College-Intern_R2627226",
+   "company": "Applied Materials",
+   "title": "College Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/SingaporeSGP/College-Intern_R2627230",
+   "company": "Applied Materials",
+   "title": "College Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/SingaporeSGP/College-Intern_R2627317",
+   "company": "Applied Materials",
+   "title": "College Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/SingaporeSGP/College-Intern_R2627318",
+   "company": "Applied Materials",
+   "title": "College Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/SingaporeSGP/College-Intern_R2627321",
+   "company": "Applied Materials",
+   "title": "College Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/SingaporeSGP/College-Intern_R2627320",
+   "company": "Applied Materials",
+   "title": "College Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/SingaporeSGP/Industrial-Engineering-Intern_R2614287",
+   "company": "Applied Materials",
+   "title": "Industrial Engineering Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/SingaporeSGP/Process-Engineer-Intern_R2626574",
+   "company": "Applied Materials",
+   "title": "Process Engineer Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/FagareITA/Mechanical-Engineer--Intern-_R2626998",
+   "company": "Applied Materials",
+   "title": "Mechanical Engineer (Intern)",
+   "label": "internship"
+  },
+  {
+   "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/SingaporeSGP/College-Intern--Hardware-_R2627095",
+   "company": "Applied Materials",
+   "title": "College Intern (Hardware)",
+   "label": "internship"
+  },
+  {
+   "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/SingaporeSGP/College-Intern--Hardware-_R2627094",
+   "company": "Applied Materials",
+   "title": "College Intern (Hardware)",
+   "label": "internship"
+  },
+  {
+   "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/TrevisoITA/Supplier-Industrial-Engineer--Internship-_R2613391",
+   "company": "Applied Materials",
+   "title": "Supplier Industrial Engineer (Internship)",
+   "label": "internship"
+  },
+  {
+   "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/Santa-ClaraCA/XMLNAME-2026-Summer-Intern---Physics---AI-modeling-Engineering_R2616095",
+   "company": "Applied Materials",
+   "title": "2026 Summer Intern - Physics & AI modeling Engineering",
+   "label": "internship"
+  },
+  {
+   "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/SingaporeSGP/Intern---Regional-UPSkill-Enablement_R2623692",
+   "company": "Applied Materials",
+   "title": "Intern - Regional UPSkill Enablement",
+   "label": "internship"
+  },
+  {
+   "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/Santa-ClaraCA/Chemist---Co-Op---Santa-Clara-_R2625243",
+   "company": "Applied Materials",
+   "title": "Chemist  (Co-Op - Santa Clara)",
+   "label": "internship"
+  },
+  {
+   "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/ShanghaiCHN/-Customer-Engineer-Intern-_R2625965",
+   "company": "Applied Materials",
+   "title": "客户服务工程师实习岗（Customer Engineer Intern）",
+   "label": "internship"
+  },
+  {
+   "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/SingaporeSGP/Global-Supply-Chain-Internship-Program_R2627122",
+   "company": "Applied Materials",
+   "title": "Global Supply Chain Internship Program",
+   "label": "internship"
+  },
+  {
+   "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/SingaporeSGP/AGS-Field-Support-Internship-Program_R2627129",
+   "company": "Applied Materials",
+   "title": "AGS Field Support Internship Program",
+   "label": "internship"
+  },
+  {
+   "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/SingaporeSGP/Manufacturing-Internship-Program_R2627132",
+   "company": "Applied Materials",
+   "title": "Manufacturing Internship Program",
+   "label": "internship"
+  },
+  {
+   "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/SingaporeSGP/Research---Development-Internship-Program_R2627133",
+   "company": "Applied Materials",
+   "title": "Research & Development Internship Program",
+   "label": "internship"
+  },
+  {
+   "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/GloucesterMA/Summer-2027-Supply-Chain-Buyer-Intern--Bachelor-s--Gloucester--MA-_R2627055",
+   "company": "Applied Materials",
+   "title": "Summer 2027 Supply Chain Buyer Intern- Bachelor's (Gloucester, MA)",
+   "label": "internship"
+  },
+  {
+   "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/AustinTX/Summer-2027-Supply-Chain-Buyer-Intern--Bachelor-s--Austin--TX-_R2627046-1",
+   "company": "Applied Materials",
+   "title": "Summer 2027 Supply Chain Buyer Intern- Bachelor's (Austin, TX)",
+   "label": "internship"
+  },
+  {
+   "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/AustinTX/Summer-2027-Supply-Chain-Materials-Project-Manager-Intern--Master-s--Austin--TX-_R2627069",
+   "company": "Applied Materials",
+   "title": "Summer 2027 Supply Chain Materials Project Manager Intern- Master's (Austin, TX)",
+   "label": "internship"
+  },
+  {
+   "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/Santa-ClaraCA/Summer-2027-Supply-Chain-Materials-Project-Manager-Intern--Master-s--Santa-Clara--CA-_R2627074",
+   "company": "Applied Materials",
+   "title": "Summer 2027 Supply Chain Materials Project Manager Intern- Master's (Santa Clara, CA)",
+   "label": "internship"
+  },
+  {
+   "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/Santa-ClaraCA/Summer-2027-Supply-Chain-Buyer-Intern--Bachelor-s--Santa-Clara--CA-_R2627066",
+   "company": "Applied Materials",
+   "title": "Summer 2027 Supply Chain Buyer Intern- Bachelor's (Santa Clara, CA)",
+   "label": "internship"
+  },
+  {
+   "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/SingaporeSGP/Process-Engineering-Intern--Hybrid-Bonding-_R2626437",
+   "company": "Applied Materials",
+   "title": "Process Engineering Intern (Hybrid Bonding)",
+   "label": "internship"
+  },
+  {
+   "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/SingaporeSGP/Process-Engineer-Internship--Enhancing-CVD-process-efficiency-and-film-quality-through-systematic-recipe-optimization_R2626530",
+   "company": "Applied Materials",
+   "title": "Process Engineer Internship: Enhancing CVD process efficiency and film quality through systematic recipe optimization",
+   "label": "internship"
+  },
+  {
+   "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/SingaporeSGP/Technology-Development-Engineer---Hybrid-Bonding---Advanced-Packaging--Internship-_R2626901",
+   "company": "Applied Materials",
+   "title": "Technology Development Engineer – Hybrid Bonding & Advanced Packaging (Internship)",
+   "label": "internship"
+  },
+  {
+   "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/SingaporeSGP/College-Intern---Process-Integration_R2626676",
+   "company": "Applied Materials",
+   "title": "College Intern - Process Integration",
+   "label": "internship"
+  },
+  {
+   "url": "https://micron.wd1.myworkdayjobs.com/en-US/External/job/Boise-ID---Main-Site/Intern---Mask-Technology_JR110035",
+   "company": "Micron",
+   "title": "Intern - Mask Technology",
+   "label": "internship"
+  },
+  {
+   "url": "https://micron.wd1.myworkdayjobs.com/en-US/External/job/Hyderabad---Phoenix-Aquila-India/Intern---FDV-PCV--NAND-Product-Engineering_JR109268",
+   "company": "Micron",
+   "title": "Intern - FDV/PCV, NAND Product Engineering",
+   "label": "internship"
+  },
+  {
+   "url": "https://micron.wd1.myworkdayjobs.com/en-US/External/job/Fab-10NX-Singapore/Intern---Engineer-HVM-PEE-PHOTO_JR99361",
+   "company": "Micron",
+   "title": "Intern - Engineer HVM PEE PHOTO",
+   "label": "internship"
+  },
+  {
+   "url": "https://micron.wd1.myworkdayjobs.com/en-US/External/job/Fab-10NX-Singapore/Intern---ADTS-ATI-Process-Integration-Engineer_JR103501",
+   "company": "Micron",
+   "title": "Intern - ADTS ATI Process Integration Engineer",
+   "label": "internship"
+  },
+  {
+   "url": "https://pfizer.wd1.myworkdayjobs.com/en-US/PfizerCareers/job/Hong-Kong---Quarry-Bay/Pharmacy-Intern--Medical-Affairs_4961610",
+   "company": "Pfizer",
+   "title": "Pharmacy Intern, Medical Affairs",
+   "label": "internship"
+  },
+  {
+   "url": "https://pfizer.wd1.myworkdayjobs.com/en-US/PfizerCareers/job/Hong-Kong---Quarry-Bay/Pharmacy-Intern--Regulatory-Sciences_4961611",
+   "company": "Pfizer",
+   "title": "Pharmacy Intern, Regulatory Sciences",
+   "label": "internship"
+  },
+  {
+   "url": "https://pfizer.wd1.myworkdayjobs.com/en-US/PfizerCareers/job/Ireland---Dublin---Grange-Castle/XMLNAME-2027-Internship---Pfizer--Grange-Castle_4962930",
+   "company": "Pfizer",
+   "title": "2027 Internship - Pfizer, Grange Castle",
+   "label": "internship"
+  },
+  {
+   "url": "https://medtronic.wd1.myworkdayjobs.com/en-US/MedtronicCareers/job/Shanghai-Shanghai-China/MTC-Intern_R70480-1",
+   "company": "Medtronic",
+   "title": "MTC-Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://medtronic.wd1.myworkdayjobs.com/en-US/MedtronicCareers/job/Shanghai-Shanghai-China/IT-Intern_R72764",
+   "company": "Medtronic",
+   "title": "IT Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://medtronic.wd1.myworkdayjobs.com/en-US/MedtronicCareers/job/Seoul-Seoul-Korea/Marketing-Intern_R73780-1",
+   "company": "Medtronic",
+   "title": "Marketing Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://medtronic.wd1.myworkdayjobs.com/en-US/MedtronicCareers/job/Alicante-Alicante-Spain/Technical-Support-Intern_R73161-1",
+   "company": "Medtronic",
+   "title": "Technical Support Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://medtronic.wd1.myworkdayjobs.com/en-US/MedtronicCareers/job/Taipei-Taipei-Taiwan/Cardiovascular--Marketing-Intern_R75072-1",
+   "company": "Medtronic",
+   "title": "Cardiovascular _Marketing Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://medtronic.wd1.myworkdayjobs.com/en-US/MedtronicCareers/job/Fridley-Minnesota-United-States-of-America/Engineering-Intern---Summer-2027_R73623-1",
+   "company": "Medtronic",
+   "title": "Engineering Intern – Summer 2027",
+   "label": "internship"
+  },
+  {
+   "url": "https://medtronic.wd1.myworkdayjobs.com/en-US/MedtronicCareers/job/Minneapolis-Minnesota-United-States-of-America/IT-Intern---Summer-2027_R73625-1",
+   "company": "Medtronic",
+   "title": "IT Intern - Summer 2027",
+   "label": "internship"
+  },
+  {
+   "url": "https://medtronic.wd1.myworkdayjobs.com/en-US/MedtronicCareers/job/Minneapolis-Minnesota-United-States-of-America/Finance-Intern---Summer-2027_R73629-2",
+   "company": "Medtronic",
+   "title": "Finance Intern - Summer 2027",
+   "label": "internship"
+  },
+  {
+   "url": "https://medtronic.wd1.myworkdayjobs.com/en-US/MedtronicCareers/job/Fridley-Minnesota-United-States-of-America/Software-Engineering-Intern---Summer-2027_R73630-1",
+   "company": "Medtronic",
+   "title": "Software Engineering Intern – Summer 2027",
+   "label": "internship"
+  },
+  {
+   "url": "https://medtronic.wd1.myworkdayjobs.com/en-US/MedtronicCareers/job/Minneapolis-Minnesota-United-States-of-America/Supply-Chain-Supply-Management-Intern--Summer-2027_R73693-2",
+   "company": "Medtronic",
+   "title": "Supply Chain/Supply Management Intern- Summer 2027",
+   "label": "internship"
+  },
+  {
+   "url": "https://medtronic.wd1.myworkdayjobs.com/en-US/MedtronicCareers/job/Minneapolis-Minnesota-United-States-of-America/Engineering-Intern-Summer-2027---Candidates-Attending-2026-O4U-Engineering-Conference_R75847-1",
+   "company": "Medtronic",
+   "title": "Engineering Intern Summer 2027 - Candidates Attending 2026 O4U Engineering Conference",
+   "label": "internship"
+  },
+  {
+   "url": "https://medtronic.wd1.myworkdayjobs.com/en-US/MedtronicCareers/job/Mounds-View-Minnesota-United-States-of-America/Engineering-Intern-Summer-2027--Candidates-Attending-2026-SWE-National-Conference-_R76021-1",
+   "company": "Medtronic",
+   "title": "Engineering Intern Summer 2027- Candidates Attending 2026 SWE National Conference",
+   "label": "internship"
+  },
+  {
+   "url": "https://medtronic.wd1.myworkdayjobs.com/en-US/MedtronicCareers/job/Shanghai-Shanghai-China/EHS-Intern_R71545",
+   "company": "Medtronic",
+   "title": "EHS Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://medtronic.wd1.myworkdayjobs.com/en-US/MedtronicCareers/job/Shanghai-Shanghai-China/MTC--Intern_R75604-1",
+   "company": "Medtronic",
+   "title": "MTC_ Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://medtronic.wd1.myworkdayjobs.com/en-US/MedtronicCareers/job/Taipei-Taipei-Taiwan/Accounting-Intern_R76357-1",
+   "company": "Medtronic",
+   "title": "Accounting Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://medtronic.wd1.myworkdayjobs.com/en-US/MedtronicCareers/job/Shanghai-Shanghai-China/R-D-Intern--Tech_R70374-2",
+   "company": "Medtronic",
+   "title": "R&D Intern: Tech",
+   "label": "internship"
+  },
+  {
+   "url": "https://agilent.wd5.myworkdayjobs.com/en-US/Agilent_Student_Careers/job/China-Shanghai/Intern_4035743",
+   "company": "Agilent",
+   "title": "Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://agilent.wd5.myworkdayjobs.com/en-US/Agilent_Student_Careers/job/China-Shanghai/Intern_4035744",
+   "company": "Agilent",
+   "title": "Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://agilent.wd5.myworkdayjobs.com/en-US/Agilent_Student_Careers/job/China-Shanghai/Intern_4035912",
+   "company": "Agilent",
+   "title": "Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://agilent.wd5.myworkdayjobs.com/en-US/Agilent_Student_Careers/job/US-DE-Wilmington/Electrical-Engineering-Intern_4038526",
+   "company": "Agilent",
+   "title": "Electrical Engineering Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://agilent.wd5.myworkdayjobs.com/en-US/Agilent_Student_Careers/job/US-DE-Wilmington/Video-Production-Intern_4038651",
+   "company": "Agilent",
+   "title": "Video Production Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://agilent.wd5.myworkdayjobs.com/en-US/Agilent_Student_Careers/job/US-DE-Remote-Location-WilmingtonNewport-Area/Community-Operations-Intern_4038571",
+   "company": "Agilent",
+   "title": "Community Operations Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://agilent.wd5.myworkdayjobs.com/en-US/Agilent_Student_Careers/job/China-Shanghai/R-D-Software-Intern_4039114",
+   "company": "Agilent",
+   "title": "AI/ML Software Engineer Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://agilent.wd5.myworkdayjobs.com/en-US/Agilent_Student_Careers/job/Netherlands-Remote-Location-Middelburg/Intern-Benelux-Sales_4038945",
+   "company": "Agilent",
+   "title": "Business Development Intern – Bridging Molecular Research, Protein QC & Cell Analysis (Netherlands)",
+   "label": "internship"
+  },
+  {
+   "url": "https://clorox.wd1.myworkdayjobs.com/en-US/Clorox/job/Burnside-KY---USA/Plant-Intern_21841",
+   "company": "Clorox",
+   "title": "Plant Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://bakerhughes.wd5.myworkdayjobs.com/en-US/BakerHughes/job/ID-JW-JAKARTA-JI-RA-KARTINI-KAV-8-CILANDAK-BARAT/Intern-Business--Indonesia--2026-Opportunities_R168104",
+   "company": "Baker Hughes",
+   "title": "Intern Business (Indonesia) 2026 Opportunities",
+   "label": "internship"
+  },
+  {
+   "url": "https://bakerhughes.wd5.myworkdayjobs.com/en-US/BakerHughes/job/MY-KUL-KUALA-LUMPUR-21ST-FLOOR-MENARA-TAN--TAN/University-Internship---Finance---Accounting-2026-Opportunities--Malaysia-_R154616",
+   "company": "Baker Hughes",
+   "title": "Intern Finance & Accounting (Malaysia) 2026 Opportunities",
+   "label": "internship"
+  },
+  {
+   "url": "https://bakerhughes.wd5.myworkdayjobs.com/en-US/BakerHughes/job/GA-PORT-GENTIL-Route-de-Sogara-Parcelle-No-160-Section-PA/Emerging-Talent-Assembly--Maintenance---Overhaul-Intern-2026-Opportunities--Gabon-_R158345",
+   "company": "Baker Hughes",
+   "title": "Intern – Assembly, Maintenance & Overhaul – Gabon – 2026",
+   "label": "internship"
+  },
+  {
+   "url": "https://bakerhughes.wd5.myworkdayjobs.com/en-US/BakerHughes/job/IT-BA-BARI-STRADA-PROVINCIALE-PER-MODUGNO-10C613/Emerging-Talent---Engineering-Intern-2026-Opportunities--Bari-_R164101",
+   "company": "Baker Hughes",
+   "title": "Intern – Engineering - Bari - 2026 (M/F/D)",
+   "label": "internship"
+  },
+  {
+   "url": "https://bakerhughes.wd5.myworkdayjobs.com/en-US/BakerHughes/job/IT-FI-FLORENCE-VIA-FELICE-MATTEUCCI-2/Emerging-Talent---Sourcing-Intern-2026-Opportunities--Florence-_R158134",
+   "company": "Baker Hughes",
+   "title": "Intern – Sourcing – Florence, Italy – 2026 (M/F/D)",
+   "label": "internship"
+  },
+  {
+   "url": "https://bakerhughes.wd5.myworkdayjobs.com/en-US/BakerHughes/job/PL-PDK-WARSAW-ALEJA-KRAKOWSKA-110114-BLD-3014613/Emerging-Talent--Engineering-Intern-2026-Opportunities--Warsaw-_R158192-1",
+   "company": "Baker Hughes",
+   "title": "Intern – Engineering – Warsaw, Poland – 2026 (M/F/D)",
+   "label": "internship"
+  },
+  {
+   "url": "https://bakerhughes.wd5.myworkdayjobs.com/en-US/BakerHughes/job/IT-FI-FLORENCE-VIA-FELICE-MATTEUCCI-2/Emerging-Talent---Engineering-Intern-2026-Opportunities--Florence-_R158404",
+   "company": "Baker Hughes",
+   "title": "Intern – Engineering – Florence, Italy – 2026 (M/F/D)",
+   "label": "internship"
+  },
+  {
+   "url": "https://bakerhughes.wd5.myworkdayjobs.com/en-US/BakerHughes/job/IT-FI-FLORENCE-VIA-FELICE-MATTEUCCI-2/Emerging-Talent---Services-Intern-2026-Opportunities--Florence-_R158468",
+   "company": "Baker Hughes",
+   "title": "Intern - Services - Florence, Italy - 2026 (M/F/D)",
+   "label": "internship"
+  },
+  {
+   "url": "https://bakerhughes.wd5.myworkdayjobs.com/en-US/BakerHughes/job/IT-FI-FLORENCE-VIA-FELICE-MATTEUCCI-2/Emerging-Talent---Manufacturing-Intern-2026-Opportunities--Florence-_R158416",
+   "company": "Baker Hughes",
+   "title": "Intern – Manufacturing - Florence, Italy - 2026 (M/F/D)",
+   "label": "internship"
+  },
+  {
+   "url": "https://bakerhughes.wd5.myworkdayjobs.com/en-US/BakerHughes/job/IT-VV-VIBO-VALENTIA-VIA-LE-MARINATE/Emerging-Talent---Engineering-Intern-2026-Opportunities--Vibo-_R158420",
+   "company": "Baker Hughes",
+   "title": "Intern – Engineering – Vibo, Italy – 2026 (M/F/D)",
+   "label": "internship"
+  },
+  {
+   "url": "https://bakerhughes.wd5.myworkdayjobs.com/en-US/BakerHughes/job/IT-BA-BARI-STRADA-PROVINCIALE-PER-MODUGNO-10C613/Emerging-Talent---Procurement-Intern-2026-Opportunities--Bari-_R162410",
+   "company": "Baker Hughes",
+   "title": "Intern – Procurement – Bari, Italy – 2026 (M/F/D)",
+   "label": "internship"
+  },
+  {
+   "url": "https://bakerhughes.wd5.myworkdayjobs.com/en-US/BakerHughes/job/IT-BA-BARI-STRADA-PROVINCIALE-PER-MODUGNO-10C613/Emerging-Talent---Engineering-Intern-2026-Opportunities--Bari-_R162788",
+   "company": "Baker Hughes",
+   "title": "Intern – Engineering – Bari, Italy – 2026 (M/F/D)",
+   "label": "internship"
+  },
+  {
+   "url": "https://bakerhughes.wd5.myworkdayjobs.com/en-US/BakerHughes/job/IT-FI-FLORENCE-VIA-FELICE-MATTEUCCI-2/Emerging-Talent---Engineering-Internship-2026-Opportunities--Florence-_R162949",
+   "company": "Baker Hughes",
+   "title": "Intern – Engineering – Florence, Italy – 2026 (M/F/D)",
+   "label": "internship"
+  },
+  {
+   "url": "https://bakerhughes.wd5.myworkdayjobs.com/en-US/BakerHughes/job/IT-FI-FLORENCE-VIA-FELICE-MATTEUCCI-2/Emerging-Talent---Reciprocating-Compressor-Intern-2026-Opportunities--Florence---M-F-D-_R166188",
+   "company": "Baker Hughes",
+   "title": "Intern – Reciprocating Compressor -  Florence - 2026 (M/F/D)",
+   "label": "internship"
+  },
+  {
+   "url": "https://bakerhughes.wd5.myworkdayjobs.com/en-US/BakerHughes/job/HU-PE-FOT-EAST-GATE-BUSINESS-PARK/Emerging-Talent--Enginering-Intern-2026-Opportunities--Ft---M-F-D-_R166163",
+   "company": "Baker Hughes",
+   "title": "Intern - Engineering - Fót, Hungary - 2026 (M/F/D)",
+   "label": "internship"
+  },
+  {
+   "url": "https://bakerhughes.wd5.myworkdayjobs.com/en-US/BakerHughes/job/IT-FI-FLORENCE-VIA-FELICE-MATTEUCCI-2/Emerging-Talent---Project-Management-Intern-2026-Opportunities--Florence-_R158409",
+   "company": "Baker Hughes",
+   "title": "Intern – Project Management - Florence, Italy - 2026 (M/F/D)",
+   "label": "internship"
+  },
+  {
+   "url": "https://bakerhughes.wd5.myworkdayjobs.com/en-US/BakerHughes/job/IT-SO-TALAMONA-VIA-ROMA-32/Emerging-Talent---Manufacturing-Intern-2026-Opportunities--Talamona--Sondrio-_R158415-1",
+   "company": "Baker Hughes",
+   "title": "Intern – Manufacturing - Talamona, Sondrio, Italy - 2026 (M/F/D)",
+   "label": "internship"
+  },
+  {
+   "url": "https://rockwellautomation.wd1.myworkdayjobs.com/en-US/External_Rockwell_Automation/job/Katowice-Poland/Embedded-Software--Intern_R26-5675-1",
+   "company": "Rockwell Automation",
+   "title": "Embedded Software, Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://rockwellautomation.wd1.myworkdayjobs.com/en-US/External_Rockwell_Automation/job/Katowice-Poland/Credit-Management-Intern_R26-5901",
+   "company": "Rockwell Automation",
+   "title": "Credit Management Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://rockwellautomation.wd1.myworkdayjobs.com/en-US/External_Rockwell_Automation/job/Cambridge-Ontario-Canada/EHS-Co-op--Intern_R26-6480",
+   "company": "Rockwell Automation",
+   "title": "EHS Co-op/ Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://gevernova.wd5.myworkdayjobs.com/en-US/Vernova_ExternalSite/job/Schenectady/GE-Vernova-Operations-Intern---Customer-Data-Management-2027_R5050478-2",
+   "company": "GE Vernova",
+   "title": "GE Vernova Operations Intern - Customer Data Management 2027",
+   "label": "internship"
+  },
+  {
+   "url": "https://msd.wd5.myworkdayjobs.com/en-US/SearchJobs/job/SGP---Singapore---Singapore-70-Tuas-West-Dr/Reliability-Engineer-Intern_R415054",
+   "company": "Merck",
+   "title": "Reliability Engineer Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://job-boards.greenhouse.io/kairospower/jobs/6122803004",
+   "company": "Kairos Power",
+   "title": "Chemical and Materials Engineering Internship - Summer 2027",
+   "label": "internship"
+  },
+  {
+   "url": "https://job-boards.greenhouse.io/kairospower/jobs/6123620004",
+   "company": "Kairos Power",
+   "title": "Civil Engineering Internship - Summer 2027",
+   "label": "internship"
+  },
+  {
+   "url": "https://job-boards.greenhouse.io/kairospower/jobs/6123657004",
+   "company": "Kairos Power",
+   "title": "Electrical Engineering Internship - Summer 2027",
+   "label": "internship"
+  },
+  {
+   "url": "https://job-boards.greenhouse.io/kairospower/jobs/6123676004",
+   "company": "Kairos Power",
+   "title": "Mechanical and Manufacturing Engineering Internship - Summer 2027",
+   "label": "internship"
+  },
+  {
+   "url": "https://job-boards.greenhouse.io/kairospower/jobs/6123830004",
+   "company": "Kairos Power",
+   "title": "Nuclear Engineering Internship - Summer 2027",
+   "label": "internship"
+  },
+  {
+   "url": "https://job-boards.greenhouse.io/ginkgobioworks/jobs/5022683007",
+   "company": "Ginkgo Bioworks",
+   "title": "Automation Scientist Intern, RAC Operations",
+   "label": "internship"
+  },
+  {
+   "url": "https://job-boards.greenhouse.io/ginkgobioworks/jobs/5033171007",
+   "company": "Ginkgo Bioworks",
+   "title": "Software Graduate Intern, Autonomous Lab",
+   "label": "internship"
+  },
+  {
+   "url": "https://job-boards.greenhouse.io/ginkgobioworks/jobs/5033167007",
+   "company": "Ginkgo Bioworks",
+   "title": "Software Intern, Autonomous Lab",
+   "label": "internship"
+  },
+  {
+   "url": "https://job-boards.greenhouse.io/lucidmotors/jobs/5197324007",
+   "company": "Lucid Motors",
+   "title": "Business Operations Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://job-boards.greenhouse.io/lucidmotors/jobs/5156608007",
+   "company": "Lucid Motors",
+   "title": "Data Analyst Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://job-boards.greenhouse.io/lucidmotors/jobs/5185317007",
+   "company": "Lucid Motors",
+   "title": "IT Asset Management Intern",
+   "label": "internship"
+  },
+  {
+   "url": "https://job-boards.greenhouse.io/silananotechnologies/jobs/8157153",
+   "company": "Sila Nanotechnologies",
+   "title": "FP&A Internship",
+   "label": "internship"
+  },
+  {
+   "url": "https://msd.wd5.myworkdayjobs.com/en-US/SearchJobs/job/USA---Pennsylvania---West-Point/XMLNAME-2026-Future-Talent-Program---Manufacturing-and-Reliability-Engineering-Co-Op_R395901/apply",
+   "company": "Merck",
+   "title": "2026 Future Talent Program – Manufacturing and Reliability Engineering Co-Op",
+   "label": "internship"
+  },
+  {
+   "url": "https://msd.wd5.myworkdayjobs.com/en-US/SearchJobs/job/USA---Pennsylvania---West-Point/XMLNAME-2026-Future-Talent-Program---Vaccine-Manufacturing-Co-op_R395900/apply",
+   "company": "Merck",
+   "title": "2026 Future Talent Program - Vaccine Manufacturing Co-op",
+   "label": "internship"
+  }
+ ]
+}

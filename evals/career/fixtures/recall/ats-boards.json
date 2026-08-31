@@ -1,0 +1,2697 @@
+{
+ "generated_at": "2026-08-31",
+ "method": "Recorded live from public, unauthenticated endpoints on 2026-08-31: Workday cxs POST /jobs (searchText 'intern'), Greenhouse boards-api, Lever v0/postings, Ashby posting-api, Phenom POST /widgets. No login, no CAPTCHA, robots.txt respected. Exactly as returned; nothing invented.",
+ "boards": [
+  {
+   "platform": "workday",
+   "company": "DuPont",
+   "company_domain": "dupont.com",
+   "board_key": "Jobs",
+   "board_url": "https://dupont.wd5.myworkdayjobs.com/en-US/Jobs",
+   "board_total_reported": 74,
+   "postings": [
+    {
+     "external_id": "/job/Wimington-Delaware/Process-R-D-Senior-Scientist_249728W",
+     "title": "Process R&D Senior Scientist",
+     "location_raw": "Wimington, Delaware",
+     "url": "https://dupont.wd5.myworkdayjobs.com/en-US/Jobs/job/Wimington-Delaware/Process-R-D-Senior-Scientist_249728W",
+     "posted_raw": "Posted Today",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Wimington-Delaware/Process-R-D-Technologist---DuPont-Water-Solutions_249729W",
+     "title": "Process R&D Technologist",
+     "location_raw": "Wimington, Delaware",
+     "url": "https://dupont.wd5.myworkdayjobs.com/en-US/Jobs/job/Wimington-Delaware/Process-R-D-Technologist---DuPont-Water-Solutions_249729W",
+     "posted_raw": "Posted Today",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Avils-Asturias/HR-Shared-Services-Coordinator--m-f-d-_250204W",
+     "title": "HR Shared Services Coordinator (m/f/d)",
+     "location_raw": "Avilés, Asturias",
+     "url": "https://dupont.wd5.myworkdayjobs.com/en-US/Jobs/job/Avils-Asturias/HR-Shared-Services-Coordinator--m-f-d-_250204W",
+     "posted_raw": "Posted Today",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Wimington-Delaware/Global-Tax-Accounting-Lead_248557W",
+     "title": "Global Tax Accounting Lead",
+     "location_raw": "Wimington, Delaware",
+     "url": "https://dupont.wd5.myworkdayjobs.com/en-US/Jobs/job/Wimington-Delaware/Global-Tax-Accounting-Lead_248557W",
+     "posted_raw": "Posted 2 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Wimington-Delaware/Director---Tax-Planning---Tax-M-A_250112W",
+     "title": "Director - Tax Planning / Tax M&A",
+     "location_raw": "Wimington, Delaware",
+     "url": "https://dupont.wd5.myworkdayjobs.com/en-US/Jobs/job/Wimington-Delaware/Director---Tax-Planning---Tax-M-A_250112W",
+     "posted_raw": "Posted 3 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Wimington-Delaware/Contract-Administration-and-Events-Administrative-Assistant_250121W",
+     "title": "Contract Administration and Events Administrative Assistant",
+     "location_raw": "Wimington, Delaware",
+     "url": "https://dupont.wd5.myworkdayjobs.com/en-US/Jobs/job/Wimington-Delaware/Contract-Administration-and-Events-Administrative-Assistant_250121W",
+     "posted_raw": "Posted 3 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Hillsdale-Michigan/Control-Systems-Technician---Process-Automation_249060W",
+     "title": "Control Systems Technician - Process Automation",
+     "location_raw": "Hillsdale, Michigan",
+     "url": "https://dupont.wd5.myworkdayjobs.com/en-US/Jobs/job/Hillsdale-Michigan/Control-Systems-Technician---Process-Automation_249060W",
+     "posted_raw": "Posted 3 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Valley-View-Ohio/Technical-Service-Technician_250031W",
+     "title": "Technical Service Technician",
+     "location_raw": "Valley View, Ohio",
+     "url": "https://dupont.wd5.myworkdayjobs.com/en-US/Jobs/job/Valley-View-Ohio/Technical-Service-Technician_250031W",
+     "posted_raw": "Posted 3 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Hyderabad-Telangana/Dispute-Analyst_250021W",
+     "title": "Dispute Analyst",
+     "location_raw": "Hyderabad, Telangana",
+     "url": "https://dupont.wd5.myworkdayjobs.com/en-US/Jobs/job/Hyderabad-Telangana/Dispute-Analyst_250021W",
+     "posted_raw": "Posted 3 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Midland-Michigan/MOLYKOTE--Specialty-Lubricants-Application-Engineer--AE-_249163W",
+     "title": "Application Engineer - Specialty Lubricants",
+     "location_raw": "Midland, Michigan",
+     "url": "https://dupont.wd5.myworkdayjobs.com/en-US/Jobs/job/Midland-Michigan/MOLYKOTE--Specialty-Lubricants-Application-Engineer--AE-_249163W",
+     "posted_raw": "Posted 4 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Hyderabad-Telangana/Analyst---Controls---Governance--Shared-Services--C-G-Finance-_249143W",
+     "title": "Finance Internal Auditor (C&G, Finance)",
+     "location_raw": "Hyderabad, Telangana",
+     "url": "https://dupont.wd5.myworkdayjobs.com/en-US/Jobs/job/Hyderabad-Telangana/Analyst---Controls---Governance--Shared-Services--C-G-Finance-_249143W",
+     "posted_raw": "Posted 4 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Pudong-Shanghai/Customer-Service-Representative_249826W-1",
+     "title": "Customer Service Representative",
+     "location_raw": "Pudong, Shanghai",
+     "url": "https://dupont.wd5.myworkdayjobs.com/en-US/Jobs/job/Pudong-Shanghai/Customer-Service-Representative_249826W-1",
+     "posted_raw": "Posted 4 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Valley-View-Ohio/Contract-Manufacturing-Manager_250014W",
+     "title": "Contract Manufacturing Manager",
+     "location_raw": "Valley View, Ohio",
+     "url": "https://dupont.wd5.myworkdayjobs.com/en-US/Jobs/job/Valley-View-Ohio/Contract-Manufacturing-Manager_250014W",
+     "posted_raw": "Posted 5 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Wimington-Delaware/Chief-Operations-Officer---The-Innovation-Space_250114W",
+     "title": "Chief Operations Officer - The Innovation Space",
+     "location_raw": "Wimington, Delaware",
+     "url": "https://dupont.wd5.myworkdayjobs.com/en-US/Jobs/job/Wimington-Delaware/Chief-Operations-Officer---The-Innovation-Space_250114W",
+     "posted_raw": "Posted 5 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Barueri-So-Paulo/Estagirio-de-comrcio-exterior_250119W",
+     "title": "Estagiário de comércio exterior",
+     "location_raw": "Barueri, São Paulo",
+     "url": "https://dupont.wd5.myworkdayjobs.com/en-US/Jobs/job/Barueri-So-Paulo/Estagirio-de-comrcio-exterior_250119W",
+     "posted_raw": "Posted 6 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Auburn-Hills-Michigan/Maintenance-Technician_249629W",
+     "title": "Maintenance Technician",
+     "location_raw": "Auburn Hills, Michigan",
+     "url": "https://dupont.wd5.myworkdayjobs.com/en-US/Jobs/job/Auburn-Hills-Michigan/Maintenance-Technician_249629W",
+     "posted_raw": "Posted 7 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Mechelen-Antwerp/EMEA-Specification-Sales-Leader--m-f-d-_250073W",
+     "title": "EMEA Specification Sales Leader (m/f/d)",
+     "location_raw": "6 Locations",
+     "url": "https://dupont.wd5.myworkdayjobs.com/en-US/Jobs/job/Mechelen-Antwerp/EMEA-Specification-Sales-Leader--m-f-d-_250073W",
+     "posted_raw": "Posted 7 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Braine-lAlleud-Brabant-wallon/Customer-Service-Representative---Healthcare-Liveo---EMEA---m-f-d-_249697W",
+     "title": "Customer Service Representative – Healthcare Liveo™ (EMEA) (m/f/d)",
+     "location_raw": "Braine-l'Alleud, Brabant wallon",
+     "url": "https://dupont.wd5.myworkdayjobs.com/en-US/Jobs/job/Braine-lAlleud-Brabant-wallon/Customer-Service-Representative---Healthcare-Liveo---EMEA---m-f-d-_249697W",
+     "posted_raw": "Posted 7 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Braine-lAlleud-Brabant-wallon/Customer-Relationship-Manager---Healthcare-Advanced-Materials--m-f-d-_249834W",
+     "title": "Customer Relationship Manager – Healthcare Advanced Materials (m/f/d)",
+     "location_raw": "Braine-l'Alleud, Brabant wallon",
+     "url": "https://dupont.wd5.myworkdayjobs.com/en-US/Jobs/job/Braine-lAlleud-Brabant-wallon/Customer-Relationship-Manager---Healthcare-Advanced-Materials--m-f-d-_249834W",
+     "posted_raw": "Posted 7 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Braine-lAlleud-Brabant-wallon/Customer-Relationship-Manager---Life-Sciences--m-f-d-_249836W",
+     "title": "Customer Relationship Manager – Life Sciences (m/f/d)",
+     "location_raw": "Braine-l'Alleud, Brabant wallon",
+     "url": "https://dupont.wd5.myworkdayjobs.com/en-US/Jobs/job/Braine-lAlleud-Brabant-wallon/Customer-Relationship-Manager---Life-Sciences--m-f-d-_249836W",
+     "posted_raw": "Posted 7 Days Ago",
+     "posted_at": null
+    }
+   ],
+   "tenant": "dupont/wd5/Jobs"
+  },
+  {
+   "platform": "workday",
+   "company": "3M",
+   "company_domain": "3m.com",
+   "board_key": "Search",
+   "board_url": "https://3m.wd1.myworkdayjobs.com/en-US/Search",
+   "board_total_reported": 646,
+   "postings": [
+    {
+     "external_id": "/job/US-Minnesota-Maplewood/Internship---2027-Undergraduate-IT-Intern_R01170403-1",
+     "title": "Internship - 2027 Undergraduate IT Intern",
+     "location_raw": "US, Minnesota, Maplewood",
+     "url": "https://3m.wd1.myworkdayjobs.com/en-US/Search/job/US-Minnesota-Maplewood/Internship---2027-Undergraduate-IT-Intern_R01170403-1",
+     "posted_raw": "Posted Today",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/CN-Shanghai/IATD-AE-Lab-Testing-Summer-Intern_R01165418",
+     "title": "IATD AE Lab Testing Summer Intern",
+     "location_raw": "CN, Shanghai",
+     "url": "https://3m.wd1.myworkdayjobs.com/en-US/Search/job/CN-Shanghai/IATD-AE-Lab-Testing-Summer-Intern_R01165418",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/US-Illinois-Dekalb/Sr-Engineer--Supply-Chain-Network-Optimization---Distribution-Science_R01156666",
+     "title": "Sr Industrial Engineer, Optimization",
+     "location_raw": "2 Locations",
+     "url": "https://3m.wd1.myworkdayjobs.com/en-US/Search/job/US-Illinois-Dekalb/Sr-Engineer--Supply-Chain-Network-Optimization---Distribution-Science_R01156666",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/US-Texas-Austin/Product-Developer-Embedded-Software_R01168176-1",
+     "title": "Embedded Linux Engineer",
+     "location_raw": "US, Texas, Austin",
+     "url": "https://3m.wd1.myworkdayjobs.com/en-US/Search/job/US-Texas-Austin/Product-Developer-Embedded-Software_R01168176-1",
+     "posted_raw": "Posted 10 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/DE-Neuss/Werkstudent--m-w----Elektrotechnik---Elektronik---Forschung---Entwicklung_R01165172-1",
+     "title": "Werkstudent (m/w/*) Hochfrequenztechnik / Elektronik - Forschung & Entwicklung",
+     "location_raw": "DE, Neuss",
+     "url": "https://3m.wd1.myworkdayjobs.com/en-US/Search/job/DE-Neuss/Werkstudent--m-w----Elektrotechnik---Elektronik---Forschung---Entwicklung_R01165172-1",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/DE-Neuss/Werkstudent-Marketing---Kommunikation---Channel-Partner-Communications--m-w---_R01168511-1",
+     "title": "Werkstudent Marketing & Kommunikation / Channel Partner Communications (m/w/*)",
+     "location_raw": "DE, Neuss",
+     "url": "https://3m.wd1.myworkdayjobs.com/en-US/Search/job/DE-Neuss/Werkstudent-Marketing---Kommunikation---Channel-Partner-Communications--m-w---_R01168511-1",
+     "posted_raw": "Posted 10 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/DE-Kempten/Schlerpraktikum-am-Standort-in-Kempten--m-w---_R01159369",
+     "title": "Schülerpraktikum am Standort in Kempten (m/w/*)",
+     "location_raw": "DE, Kempten",
+     "url": "https://3m.wd1.myworkdayjobs.com/en-US/Search/job/DE-Kempten/Schlerpraktikum-am-Standort-in-Kempten--m-w---_R01159369",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/CN-Shanghai/IP-Counsel_R01163521",
+     "title": "IP Counsel",
+     "location_raw": "CN, Shanghai",
+     "url": "https://3m.wd1.myworkdayjobs.com/en-US/Search/job/CN-Shanghai/IP-Counsel_R01163521",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/CN-Guangdong-Shenzhen/Sales-account-manager_R01163675",
+     "title": "Sales account manager",
+     "location_raw": "CN, Guangdong, Shenzhen",
+     "url": "https://3m.wd1.myworkdayjobs.com/en-US/Search/job/CN-Guangdong-Shenzhen/Sales-account-manager_R01163675",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/CN-NingBo-Remote/-_R01165110",
+     "title": "工业胶带及胶粘剂部门高级客户经理-宁波地区",
+     "location_raw": "CN, NingBo, Remote",
+     "url": "https://3m.wd1.myworkdayjobs.com/en-US/Search/job/CN-NingBo-Remote/-_R01165110",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/CN-WuHan-Remote/Account-Manager_R01165933-1",
+     "title": "Account Manager",
+     "location_raw": "CN, WuHan, Remote",
+     "url": "https://3m.wd1.myworkdayjobs.com/en-US/Search/job/CN-WuHan-Remote/Account-Manager_R01165933-1",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/CN-Shanghai/CHK-CBG-Design-Manager_R01165164",
+     "title": "CHK CBG Design Manager",
+     "location_raw": "CN, Shanghai",
+     "url": "https://3m.wd1.myworkdayjobs.com/en-US/Search/job/CN-Shanghai/CHK-CBG-Design-Manager_R01165164",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/CN-Shanghai/Area-Portfolio-Leader_R01166146-1",
+     "title": "Area Portfolio Leader",
+     "location_raw": "CN, Shanghai",
+     "url": "https://3m.wd1.myworkdayjobs.com/en-US/Search/job/CN-Shanghai/Area-Portfolio-Leader_R01166146-1",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/CN-ShenZhen-Remote/_R01167392",
+     "title": "高级客户经理",
+     "location_raw": "CN, ShenZhen, Remote",
+     "url": "https://3m.wd1.myworkdayjobs.com/en-US/Search/job/CN-ShenZhen-Remote/_R01167392",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/CN-Guangdong-Virtual/Account-Manager_R01168887",
+     "title": "Account Manager",
+     "location_raw": "CN, Guangdong, Virtual",
+     "url": "https://3m.wd1.myworkdayjobs.com/en-US/Search/job/CN-Guangdong-Virtual/Account-Manager_R01168887",
+     "posted_raw": "Posted 30 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/CN-Shanghai/Sr-Account-Manager_R01169010-1",
+     "title": "Sr. Account Manager",
+     "location_raw": "CN, Shanghai",
+     "url": "https://3m.wd1.myworkdayjobs.com/en-US/Search/job/CN-Shanghai/Sr-Account-Manager_R01169010-1",
+     "posted_raw": "Posted 28 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/CN-Shanghai-Remote/--_R01169207",
+     "title": "客户经理（单面胶带与胶水销售专员）",
+     "location_raw": "CN, Shanghai, Remote",
+     "url": "https://3m.wd1.myworkdayjobs.com/en-US/Search/job/CN-Shanghai-Remote/--_R01169207",
+     "posted_raw": "Posted 20 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/CN-Shanghai/Channel-Marketing-Manager_R01169457-1",
+     "title": "Channel Marketing Manager",
+     "location_raw": "CN, Shanghai",
+     "url": "https://3m.wd1.myworkdayjobs.com/en-US/Search/job/CN-Shanghai/Channel-Marketing-Manager_R01169457-1",
+     "posted_raw": "Posted 18 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/CN-Beijing/C-I-Key-Account-Business-Development-Manager_R01169749-1",
+     "title": "C&I Key Account Business Development Manager",
+     "location_raw": "CN, Beijing",
+     "url": "https://3m.wd1.myworkdayjobs.com/en-US/Search/job/CN-Beijing/C-I-Key-Account-Business-Development-Manager_R01169749-1",
+     "posted_raw": "Posted 14 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/PH-Taguig/Intercompany-Outbound-Analyst_R01164288",
+     "title": "Intercompany Outbound Analyst",
+     "location_raw": "PH, Taguig",
+     "url": "https://3m.wd1.myworkdayjobs.com/en-US/Search/job/PH-Taguig/Intercompany-Outbound-Analyst_R01164288",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    }
+   ],
+   "tenant": "3m/wd1/Search"
+  },
+  {
+   "platform": "workday",
+   "company": "Illumina",
+   "company_domain": "illumina.com",
+   "board_key": "illumina-careers",
+   "board_url": "https://illumina.wd1.myworkdayjobs.com/en-US/illumina-careers",
+   "board_total_reported": 117,
+   "postings": [
+    {
+     "external_id": "/job/US---California---San-Diego/Senior-Internal-Auditor-II---IT--San-Diego-Hybrid-_42464-JOB-1",
+     "title": "Senior Internal Auditor II - IT (San Diego/Hybrid)",
+     "location_raw": "US - California - San Diego",
+     "url": "https://illumina.wd1.myworkdayjobs.com/en-US/illumina-careers/job/US---California---San-Diego/Senior-Internal-Auditor-II---IT--San-Diego-Hybrid-_42464-JOB-1",
+     "posted_raw": "Posted 7 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/England---Cambridge/Associate-Director--Regulatory-Legal-Counsel_42744-JOB-1",
+     "title": "Associate Director, Regulatory Legal Counsel",
+     "location_raw": "England - Cambridge",
+     "url": "https://illumina.wd1.myworkdayjobs.com/en-US/illumina-careers/job/England---Cambridge/Associate-Director--Regulatory-Legal-Counsel_42744-JOB-1",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Singapore---Woodlands---NorthTech/Logistics-Coordinator-2_43121-JOB",
+     "title": "Logistics Coordinator 2",
+     "location_raw": "Singapore - Woodlands - NorthTech",
+     "url": "https://illumina.wd1.myworkdayjobs.com/en-US/illumina-careers/job/Singapore---Woodlands---NorthTech/Logistics-Coordinator-2_43121-JOB",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Singapore---Woodlands---NorthTech/Logistics-Specialist--12-months-contract-_43150-JOB-2",
+     "title": "Logistics Specialist (12 months contract)",
+     "location_raw": "Singapore - Woodlands - NorthTech",
+     "url": "https://illumina.wd1.myworkdayjobs.com/en-US/illumina-careers/job/Singapore---Woodlands---NorthTech/Logistics-Specialist--12-months-contract-_43150-JOB-2",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Singapore---Woodlands---NorthTech/Logistics-Specialist_43206-JOB",
+     "title": "Logistics Specialist",
+     "location_raw": "Singapore - Woodlands - NorthTech",
+     "url": "https://illumina.wd1.myworkdayjobs.com/en-US/illumina-careers/job/Singapore---Woodlands---NorthTech/Logistics-Specialist_43206-JOB",
+     "posted_raw": "Posted 25 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/US---Bay-Area---Hayward/Senior-Staff-Supplier-Relationship_43086-JOB-1",
+     "title": "Senior Staff Supplier Relationship",
+     "location_raw": "US - Bay Area - Hayward",
+     "url": "https://illumina.wd1.myworkdayjobs.com/en-US/illumina-careers/job/US---Bay-Area---Hayward/Senior-Staff-Supplier-Relationship_43086-JOB-1",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/India---Bengaluru---Manyata/Software-Quality-Engineer-2_42968-JOB",
+     "title": "Software Quality Engineer 2",
+     "location_raw": "India - Bengaluru - Manyata",
+     "url": "https://illumina.wd1.myworkdayjobs.com/en-US/illumina-careers/job/India---Bengaluru---Manyata/Software-Quality-Engineer-2_42968-JOB",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/US---California---San-Diego/Sr-Scientist----Electrochemist_42266-JOB",
+     "title": "Sr. Scientist  - Electrochemist",
+     "location_raw": "US - California - San Diego",
+     "url": "https://illumina.wd1.myworkdayjobs.com/en-US/illumina-careers/job/US---California---San-Diego/Sr-Scientist----Electrochemist_42266-JOB",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/India---Bengaluru---Manyata/Senior-Software-Quality-Engineer_42964-JOB",
+     "title": "Senior Software Quality Engineer",
+     "location_raw": "India - Bengaluru - Manyata",
+     "url": "https://illumina.wd1.myworkdayjobs.com/en-US/illumina-careers/job/India---Bengaluru---Manyata/Senior-Software-Quality-Engineer_42964-JOB",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/US---California---San-Diego/Vice-President--Clinical-Solutions-Product-Development_42756-JOB",
+     "title": "Vice President, Clinical Solutions Product Development",
+     "location_raw": "US - California - San Diego",
+     "url": "https://illumina.wd1.myworkdayjobs.com/en-US/illumina-careers/job/US---California---San-Diego/Vice-President--Clinical-Solutions-Product-Development_42756-JOB",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/India---Bengaluru---Manyata/Senior-Software-Quality-Engineer_42967-JOB",
+     "title": "Senior Software Quality Engineer",
+     "location_raw": "India - Bengaluru - Manyata",
+     "url": "https://illumina.wd1.myworkdayjobs.com/en-US/illumina-careers/job/India---Bengaluru---Manyata/Senior-Software-Quality-Engineer_42967-JOB",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/US---Wisconsin---Madison/Process-Engineer-II_43173-JOB-1",
+     "title": "Process Engineer II",
+     "location_raw": "US - Wisconsin - Madison",
+     "url": "https://illumina.wd1.myworkdayjobs.com/en-US/illumina-careers/job/US---Wisconsin---Madison/Process-Engineer-II_43173-JOB-1",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/US---California---San-Diego/Senior-Admin-Partner-to-CEO_43203-JOB",
+     "title": "Senior Admin Partner to CEO",
+     "location_raw": "US - California - San Diego",
+     "url": "https://illumina.wd1.myworkdayjobs.com/en-US/illumina-careers/job/US---California---San-Diego/Senior-Admin-Partner-to-CEO_43203-JOB",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/US---California---San-Diego/Associate-Director--Strategic-Sourcing---GIS_41615-JOB",
+     "title": "Associate Director, Strategic Sourcing - Illumina Digital Services / IT",
+     "location_raw": "US - California - San Diego",
+     "url": "https://illumina.wd1.myworkdayjobs.com/en-US/illumina-careers/job/US---California---San-Diego/Associate-Director--Strategic-Sourcing---GIS_41615-JOB",
+     "posted_raw": "Posted 5 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/US---California---San-Diego/Sr-Director-Software-Quality_42718-JOB",
+     "title": "Sr. Director Software Quality",
+     "location_raw": "US - California - San Diego",
+     "url": "https://illumina.wd1.myworkdayjobs.com/en-US/illumina-careers/job/US---California---San-Diego/Sr-Director-Software-Quality_42718-JOB",
+     "posted_raw": "Posted 12 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Singapore---Woodlands---NorthCoast/Equipment-Engineer-1_43176-JOB-1",
+     "title": "Equipment Engineer 1",
+     "location_raw": "Singapore - Woodlands - NorthCoast",
+     "url": "https://illumina.wd1.myworkdayjobs.com/en-US/illumina-careers/job/Singapore---Woodlands---NorthCoast/Equipment-Engineer-1_43176-JOB-1",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/US---California---San-Diego/Sr-Staff-Contracts-Analyst--San-Diego---Hybrid-_43219-JOB-1",
+     "title": "Sr Staff Contracts Analyst (San Diego / Hybrid)",
+     "location_raw": "US - California - San Diego",
+     "url": "https://illumina.wd1.myworkdayjobs.com/en-US/illumina-careers/job/US---California---San-Diego/Sr-Staff-Contracts-Analyst--San-Diego---Hybrid-_43219-JOB-1",
+     "posted_raw": "Posted 20 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Singapore---Woodlands---NorthTech/Manufacturing-Equipment-Engineer-2--Automation-_43059-JOB",
+     "title": "Manufacturing Equipment Engineer 2 (Automation)",
+     "location_raw": "Singapore - Woodlands - NorthTech",
+     "url": "https://illumina.wd1.myworkdayjobs.com/en-US/illumina-careers/job/Singapore---Woodlands---NorthTech/Manufacturing-Equipment-Engineer-2--Automation-_43059-JOB",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Singapore---Woodlands---NorthCoast/Staff-Software-Engineer---Full-Stack_42506-JOB-1",
+     "title": "Senior Software Engineer - Full Stack",
+     "location_raw": "Singapore - Woodlands - NorthCoast",
+     "url": "https://illumina.wd1.myworkdayjobs.com/en-US/illumina-careers/job/Singapore---Woodlands---NorthCoast/Staff-Software-Engineer---Full-Stack_42506-JOB-1",
+     "posted_raw": "Posted 5 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Singapore---Woodlands---NorthTech/Engineer-2--Process-Development_42680-JOB",
+     "title": "Engineer 2, Process Development (Chemical)",
+     "location_raw": "Singapore - Woodlands - NorthTech",
+     "url": "https://illumina.wd1.myworkdayjobs.com/en-US/illumina-careers/job/Singapore---Woodlands---NorthTech/Engineer-2--Process-Development_42680-JOB",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    }
+   ],
+   "tenant": "illumina/wd1/illumina-careers"
+  },
+  {
+   "platform": "workday",
+   "company": "Air Products",
+   "company_domain": "airproducts.com",
+   "board_key": "AP0001",
+   "board_url": "https://airproducts.wd5.myworkdayjobs.com/en-US/AP0001",
+   "board_total_reported": 183,
+   "postings": [
+    {
+     "external_id": "/job/Allentown-Pennsylvania/Summer-Intern---Accounting--Internal-Audit--FY27_JR-2026-21958",
+     "title": "Summer Intern - Accounting (Internal Audit) FY27",
+     "location_raw": "Allentown, Pennsylvania",
+     "url": "https://airproducts.wd5.myworkdayjobs.com/en-US/AP0001/job/Allentown-Pennsylvania/Summer-Intern---Accounting--Internal-Audit--FY27_JR-2026-21958",
+     "posted_raw": "Posted 4 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Allentown-Pennsylvania/Spring-Intern-Accounting--Internal-Audit----FY-2027_JR-2026-21957",
+     "title": "Spring Intern-Accounting (Internal Audit) - FY 2027",
+     "location_raw": "Allentown, Pennsylvania",
+     "url": "https://airproducts.wd5.myworkdayjobs.com/en-US/AP0001/job/Allentown-Pennsylvania/Spring-Intern-Accounting--Internal-Audit----FY-2027_JR-2026-21957",
+     "posted_raw": "Posted 4 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Meise-Belgium/Internal-Account-Manager_JR-2026-21527",
+     "title": "Internal Account Manager",
+     "location_raw": "2 Locations",
+     "url": "https://airproducts.wd5.myworkdayjobs.com/en-US/AP0001/job/Meise-Belgium/Internal-Account-Manager_JR-2026-21527",
+     "posted_raw": "Posted 4 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Allentown-Pennsylvania/Summer-Intern-Finance--Corporate--2027-_JR-2026-21959",
+     "title": "Summer Intern-Finance, Corporate (2027)",
+     "location_raw": "Allentown, Pennsylvania",
+     "url": "https://airproducts.wd5.myworkdayjobs.com/en-US/AP0001/job/Allentown-Pennsylvania/Summer-Intern-Finance--Corporate--2027-_JR-2026-21959",
+     "posted_raw": "Posted 4 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Allentown-Pennsylvania/Summer-Intern--IT-Digital-Technology--2027-_JR-2026-21953",
+     "title": "Summer Intern- IT/Digital Technology (2027)",
+     "location_raw": "Allentown, Pennsylvania",
+     "url": "https://airproducts.wd5.myworkdayjobs.com/en-US/AP0001/job/Allentown-Pennsylvania/Summer-Intern--IT-Digital-Technology--2027-_JR-2026-21953",
+     "posted_raw": "Posted 4 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Allentown-Pennsylvania/Summer-Intern--IT---Cyber-Audit--2027-_JR-2026-21954",
+     "title": "Summer Intern- IT & Cyber Audit (2027)",
+     "location_raw": "Allentown, Pennsylvania",
+     "url": "https://airproducts.wd5.myworkdayjobs.com/en-US/AP0001/job/Allentown-Pennsylvania/Summer-Intern--IT---Cyber-Audit--2027-_JR-2026-21954",
+     "posted_raw": "Posted 4 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Allentown-Pennsylvania/Summer-Intern-Co-op-Mechanical-Engineering--2027-_JR-2026-21956",
+     "title": "Summer Intern/Co-op-Mechanical Engineering (2027)",
+     "location_raw": "Allentown, Pennsylvania",
+     "url": "https://airproducts.wd5.myworkdayjobs.com/en-US/AP0001/job/Allentown-Pennsylvania/Summer-Intern-Co-op-Mechanical-Engineering--2027-_JR-2026-21956",
+     "posted_raw": "Posted 4 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Allentown-Pennsylvania/SUMMER-CO-OP-INTERN---Chemical-Engineering--FY-2027-_JR-2026-21955",
+     "title": "SUMMER CO-OP/INTERN – Chemical Engineering (FY 2027)",
+     "location_raw": "Allentown, Pennsylvania",
+     "url": "https://airproducts.wd5.myworkdayjobs.com/en-US/AP0001/job/Allentown-Pennsylvania/SUMMER-CO-OP-INTERN---Chemical-Engineering--FY-2027-_JR-2026-21955",
+     "posted_raw": "Posted 4 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Taipei-Taipei-City/Piping-Design-Engineer_JR-2026-21370-1",
+     "title": "Piping Design Engineer",
+     "location_raw": "2 Locations",
+     "url": "https://airproducts.wd5.myworkdayjobs.com/en-US/AP0001/job/Taipei-Taipei-City/Piping-Design-Engineer_JR-2026-21370-1",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Taipei-Taipei-City/Piping-Design-Engineer_JR-2026-21848",
+     "title": "Piping Design Engineer",
+     "location_raw": "2 Locations",
+     "url": "https://airproducts.wd5.myworkdayjobs.com/en-US/AP0001/job/Taipei-Taipei-City/Piping-Design-Engineer_JR-2026-21848",
+     "posted_raw": "Posted 17 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Guaiba-Brazil/Estagirio--Tcnico-em-Qumica-_JR-2026-21535",
+     "title": "Estagiário (Técnico em Química)",
+     "location_raw": "Guaiba, Brazil",
+     "url": "https://airproducts.wd5.myworkdayjobs.com/en-US/AP0001/job/Guaiba-Brazil/Estagirio--Tcnico-em-Qumica-_JR-2026-21535",
+     "posted_raw": "Posted 7 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Luneburg-Germany/Produktionsmitarbeiter--m-w-d--fr-das-Flaschenfllwerk-Lneburg_JR-2026-20053",
+     "title": "Produktionsmitarbeiter (m/w/d) für das Flaschenfüllwerk Lüneburg",
+     "location_raw": "Luneburg, Germany",
+     "url": "https://airproducts.wd5.myworkdayjobs.com/en-US/AP0001/job/Luneburg-Germany/Produktionsmitarbeiter--m-w-d--fr-das-Flaschenfllwerk-Lneburg_JR-2026-20053",
+     "posted_raw": "Posted 10 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Budapest-Office/Business-Development-Manager--Industrial-Gases---Strategic-Growth_JR-2026-20808",
+     "title": "Business Development Manager, Industrial Gases & Strategic Growth",
+     "location_raw": "2 Locations",
+     "url": "https://airproducts.wd5.myworkdayjobs.com/en-US/AP0001/job/Budapest-Office/Business-Development-Manager--Industrial-Gases---Strategic-Growth_JR-2026-20808",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Wrocaw/Sourcing-Specialist-with-Polish--English-and-Czech_JR-2026-21895",
+     "title": "Sourcing Specialist with Polish, English and Czech",
+     "location_raw": "4 Locations",
+     "url": "https://airproducts.wd5.myworkdayjobs.com/en-US/AP0001/job/Wrocaw/Sourcing-Specialist-with-Polish--English-and-Czech_JR-2026-21895",
+     "posted_raw": "Posted 5 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Paris-France/Alternance---Marketing_JR-2026-20922",
+     "title": "Alternance - Marketing",
+     "location_raw": "Paris, France",
+     "url": "https://airproducts.wd5.myworkdayjobs.com/en-US/AP0001/job/Paris-France/Alternance---Marketing_JR-2026-20922",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Massiac-France/Technicien-Maintenance-Itinrance-H-F_JR-2026-21726-2",
+     "title": "Technicien Maintenance Itinérance H/F",
+     "location_raw": "2 Locations",
+     "url": "https://airproducts.wd5.myworkdayjobs.com/en-US/AP0001/job/Massiac-France/Technicien-Maintenance-Itinrance-H-F_JR-2026-21726-2",
+     "posted_raw": "Posted 7 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Rouen/Chauffeur-SPL-ADR--H-F-_JR-2026-21864",
+     "title": "Chauffeur SPL ADR (H/F)",
+     "location_raw": "Rouen",
+     "url": "https://airproducts.wd5.myworkdayjobs.com/en-US/AP0001/job/Rouen/Chauffeur-SPL-ADR--H-F-_JR-2026-21864",
+     "posted_raw": "Posted 7 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Strasbourg-France/Chauffeur-SPL-CITERNE-H-F_JR-2026-21869",
+     "title": "Chauffeur SPL CITERNE H/F",
+     "location_raw": "4 Locations",
+     "url": "https://airproducts.wd5.myworkdayjobs.com/en-US/AP0001/job/Strasbourg-France/Chauffeur-SPL-CITERNE-H-F_JR-2026-21869",
+     "posted_raw": "Posted 7 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Jubail-Saudi-Arabia/Senior-Project-Planning---Controls-Engineer_JR-2026-19140-1",
+     "title": "Senior Project Planning & Controls Engineer",
+     "location_raw": "Jubail, Saudi Arabia",
+     "url": "https://airproducts.wd5.myworkdayjobs.com/en-US/AP0001/job/Jubail-Saudi-Arabia/Senior-Project-Planning---Controls-Engineer_JR-2026-19140-1",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Jubail-Saudi-Arabia/Senior-Project-Planning---Controls-Engineer_JR-2026-22003-1",
+     "title": "Senior Project Planning & Controls Engineer",
+     "location_raw": "Jubail, Saudi Arabia",
+     "url": "https://airproducts.wd5.myworkdayjobs.com/en-US/AP0001/job/Jubail-Saudi-Arabia/Senior-Project-Planning---Controls-Engineer_JR-2026-22003-1",
+     "posted_raw": "Posted 5 Days Ago",
+     "posted_at": null
+    }
+   ],
+   "tenant": "airproducts/wd5/AP0001"
+  },
+  {
+   "platform": "workday",
+   "company": "Albemarle",
+   "company_domain": "albemarle.com",
+   "board_key": "External",
+   "board_url": "https://albemarle.wd5.myworkdayjobs.com/en-US/External",
+   "board_total_reported": 36,
+   "postings": [
+    {
+     "external_id": "/job/Charlotte-North-Carolina-United-States-of-America/Treasury-Analyst_REQ-31145",
+     "title": "Treasury Analyst",
+     "location_raw": "Charlotte, North Carolina, United States of America",
+     "url": "https://albemarle.wd5.myworkdayjobs.com/en-US/External/job/Charlotte-North-Carolina-United-States-of-America/Treasury-Analyst_REQ-31145",
+     "posted_raw": "Posted 27 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Tokyo-Japan/Logistics-Specialist_REQ-30867",
+     "title": "Logistics Specialist",
+     "location_raw": "Tokyo, Japan",
+     "url": "https://albemarle.wd5.myworkdayjobs.com/en-US/External/job/Tokyo-Japan/Logistics-Specialist_REQ-30867",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Charlotte-North-Carolina-United-States-of-America/Executive-Assistant_REQ-31159",
+     "title": "Executive Assistant",
+     "location_raw": "Charlotte, North Carolina, United States of America",
+     "url": "https://albemarle.wd5.myworkdayjobs.com/en-US/External/job/Charlotte-North-Carolina-United-States-of-America/Executive-Assistant_REQ-31159",
+     "posted_raw": "Posted 18 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Tokyo-Japan/Regulatory-Affairs-Specialist_REQ-30551",
+     "title": "Regulatory Affairs Lead",
+     "location_raw": "Tokyo, Japan",
+     "url": "https://albemarle.wd5.myworkdayjobs.com/en-US/External/job/Tokyo-Japan/Regulatory-Affairs-Specialist_REQ-30551",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Charlotte-North-Carolina-United-States-of-America/Subsidiary-Governance-Manager_REQ-31138-1",
+     "title": "Subsidiary Governance Manager",
+     "location_raw": "Charlotte, North Carolina, United States of America",
+     "url": "https://albemarle.wd5.myworkdayjobs.com/en-US/External/job/Charlotte-North-Carolina-United-States-of-America/Subsidiary-Governance-Manager_REQ-31138-1",
+     "posted_raw": "Posted 25 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Charlotte-North-Carolina-United-States-of-America/Procurement-Manager---US-Ground-Transportation---Warehousing_REQ-30997",
+     "title": "Procurement Manager – U.S. Ground Transportation & Warehousing",
+     "location_raw": "Charlotte, North Carolina, United States of America",
+     "url": "https://albemarle.wd5.myworkdayjobs.com/en-US/External/job/Charlotte-North-Carolina-United-States-of-America/Procurement-Manager---US-Ground-Transportation---Warehousing_REQ-30997",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Charlotte-North-Carolina-United-States-of-America/Director--Media-Relations-and-US-Public-Affairs_REQ-31155",
+     "title": "Director, Media Relations and U.S. Public Affairs",
+     "location_raw": "2 Locations",
+     "url": "https://albemarle.wd5.myworkdayjobs.com/en-US/External/job/Charlotte-North-Carolina-United-States-of-America/Director--Media-Relations-and-US-Public-Affairs_REQ-31155",
+     "posted_raw": "Posted 28 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Banglore-India/IT-System-Analyst_REQ-31136",
+     "title": "IT System Analyst",
+     "location_raw": "Banglore, India",
+     "url": "https://albemarle.wd5.myworkdayjobs.com/en-US/External/job/Banglore-India/IT-System-Analyst_REQ-31136",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Banglore-India/Power-Platform-and-DevOps-Administrator_REQ-31095",
+     "title": "Power Platform and DevOps Administrator",
+     "location_raw": "Banglore, India",
+     "url": "https://albemarle.wd5.myworkdayjobs.com/en-US/External/job/Banglore-India/Power-Platform-and-DevOps-Administrator_REQ-31095",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Banglore-India/AI-Operations-Analyst_REQ-31190",
+     "title": "AI Operations Analyst",
+     "location_raw": "Banglore, India",
+     "url": "https://albemarle.wd5.myworkdayjobs.com/en-US/External/job/Banglore-India/AI-Operations-Analyst_REQ-31190",
+     "posted_raw": "Posted 20 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Banglore-India/Senior-Manager--AI-Technologies---Development_REQ-30975",
+     "title": "Senior Manager, AI Technologies & Development",
+     "location_raw": "Banglore, India",
+     "url": "https://albemarle.wd5.myworkdayjobs.com/en-US/External/job/Banglore-India/Senior-Manager--AI-Technologies---Development_REQ-30975",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Banglore-India/Technical-Systems-Analyst_REQ-31009",
+     "title": "Technical Systems Analyst",
+     "location_raw": "Banglore, India",
+     "url": "https://albemarle.wd5.myworkdayjobs.com/en-US/External/job/Banglore-India/Technical-Systems-Analyst_REQ-31009",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Banglore-India/Data-Engineer_REQ-31254-1",
+     "title": "Data Engineer",
+     "location_raw": "Banglore, India",
+     "url": "https://albemarle.wd5.myworkdayjobs.com/en-US/External/job/Banglore-India/Data-Engineer_REQ-31254-1",
+     "posted_raw": "Posted 19 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Banglore-India/Data-Architect_REQ-31256-2",
+     "title": "Data Architect",
+     "location_raw": "Banglore, India",
+     "url": "https://albemarle.wd5.myworkdayjobs.com/en-US/External/job/Banglore-India/Data-Architect_REQ-31256-2",
+     "posted_raw": "Posted 19 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Dalian-Liaoning-China/Customer-Service-Representative_REQ-31276",
+     "title": "Customer Service Representative",
+     "location_raw": "Dalian, Liaoning, China",
+     "url": "https://albemarle.wd5.myworkdayjobs.com/en-US/External/job/Dalian-Liaoning-China/Customer-Service-Representative_REQ-31276",
+     "posted_raw": "Posted 7 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Charlotte-North-Carolina-United-States-of-America/Digital-and-AI-Governance-Manager_REQ-30717",
+     "title": "Digital and AI Governance Manager",
+     "location_raw": "Charlotte, North Carolina, United States of America",
+     "url": "https://albemarle.wd5.myworkdayjobs.com/en-US/External/job/Charlotte-North-Carolina-United-States-of-America/Digital-and-AI-Governance-Manager_REQ-30717",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Banglore-India/Digital-and-AI-Governance-Manager_REQ-31310-1",
+     "title": "Digital and AI Governance Manager",
+     "location_raw": "Banglore, India",
+     "url": "https://albemarle.wd5.myworkdayjobs.com/en-US/External/job/Banglore-India/Digital-and-AI-Governance-Manager_REQ-31310-1",
+     "posted_raw": "Posted 3 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Perth-Western-Australia-Australia/Mining-Engineer_REQ-30958-1",
+     "title": "Mining Engineer",
+     "location_raw": "Perth, Western Australia, Australia",
+     "url": "https://albemarle.wd5.myworkdayjobs.com/en-US/External/job/Perth-Western-Australia-Australia/Mining-Engineer_REQ-30958-1",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Silver-Peak-Nevada-United-States-of-America/Health--Safety-and-Environmental-Manager_REQ-30380-1",
+     "title": "Health, Safety and Environmental Manager",
+     "location_raw": "Silver Peak, Nevada, United States of America",
+     "url": "https://albemarle.wd5.myworkdayjobs.com/en-US/External/job/Silver-Peak-Nevada-United-States-of-America/Health--Safety-and-Environmental-Manager_REQ-30380-1",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Houston-Texas-United-States-of-America/Capital-Estimating--Cost-Control---Benchmarking-Lead--Capital-Portfolio-Planning-and-Controls-Group_REQ-30539",
+     "title": "Capital Estimating, Cost Control & Benchmarking Lead- Capital Portfolio Planning and Controls Group",
+     "location_raw": "Houston, Texas, United States of America",
+     "url": "https://albemarle.wd5.myworkdayjobs.com/en-US/External/job/Houston-Texas-United-States-of-America/Capital-Estimating--Cost-Control---Benchmarking-Lead--Capital-Portfolio-Planning-and-Controls-Group_REQ-30539",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    }
+   ],
+   "tenant": "albemarle/wd5/External"
+  },
+  {
+   "platform": "workday",
+   "company": "Chevron",
+   "company_domain": "chevron.com",
+   "board_key": "jobs",
+   "board_url": "https://chevron.wd5.myworkdayjobs.com/en-US/jobs",
+   "board_total_reported": 61,
+   "postings": [
+    {
+     "external_id": "/job/Bengaluru-Karnataka-India/Wells-Engineer_R000072668",
+     "title": "Wells Engineer",
+     "location_raw": "Bengaluru, Karnataka, India",
+     "url": "https://chevron.wd5.myworkdayjobs.com/en-US/jobs/job/Bengaluru-Karnataka-India/Wells-Engineer_R000072668",
+     "posted_raw": "Posted 4 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Midland-Texas-United-States-of-America/Lead-Materials-Specialist---Texas---New-Mexico_R000073300",
+     "title": "Lead Materials Specialist - Texas / New Mexico",
+     "location_raw": "Midland, Texas, United States of America",
+     "url": "https://chevron.wd5.myworkdayjobs.com/en-US/jobs/job/Midland-Texas-United-States-of-America/Lead-Materials-Specialist---Texas---New-Mexico_R000073300",
+     "posted_raw": "Posted Today",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Westferry-London-United-Kingdom/Senior-Market-Fundamental-Analyst--Petrochemical-_R000073363-1",
+     "title": "Senior Market Fundamental Analyst",
+     "location_raw": "Westferry, London, United Kingdom",
+     "url": "https://chevron.wd5.myworkdayjobs.com/en-US/jobs/job/Westferry-London-United-Kingdom/Senior-Market-Fundamental-Analyst--Petrochemical-_R000073363-1",
+     "posted_raw": "Posted Today",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Houston-Texas-United-States-of-America/Senior-Market-Fundamental-Analyst--Petrochemical-_R000073361",
+     "title": "Senior Market Fundamental Analyst",
+     "location_raw": "Houston, Texas, United States of America",
+     "url": "https://chevron.wd5.myworkdayjobs.com/en-US/jobs/job/Houston-Texas-United-States-of-America/Senior-Market-Fundamental-Analyst--Petrochemical-_R000073361",
+     "posted_raw": "Posted Today",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Buenos-Aires-Buenos-Aires-Argentina/Benefits-Specialist_R000073154",
+     "title": "Benefits Specialist",
+     "location_raw": "Buenos Aires, Buenos Aires, Argentina",
+     "url": "https://chevron.wd5.myworkdayjobs.com/en-US/jobs/job/Buenos-Aires-Buenos-Aires-Argentina/Benefits-Specialist_R000073154",
+     "posted_raw": "Posted Today",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Houston-Texas-United-States-of-America/IT-Architect--SAP---Hydro-Carbon-Value-Chain_R000072333",
+     "title": "IT Architect, SAP - Hydro Carbon Value Chain",
+     "location_raw": "Houston, Texas, United States of America",
+     "url": "https://chevron.wd5.myworkdayjobs.com/en-US/jobs/job/Houston-Texas-United-States-of-America/IT-Architect--SAP---Hydro-Carbon-Value-Chain_R000072333",
+     "posted_raw": "Posted Today",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Chatuchuk-Bangkok-Thailand/HR-Operations-Specialist---Thailand_R000073293",
+     "title": "HR Operations Specialist – Thailand",
+     "location_raw": "Chatuchuk, Bangkok, Thailand",
+     "url": "https://chevron.wd5.myworkdayjobs.com/en-US/jobs/job/Chatuchuk-Bangkok-Thailand/HR-Operations-Specialist---Thailand_R000073293",
+     "posted_raw": "Posted Today",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Singapore-West-Singapore-Singapore/Process-Engineer_R000073180-1",
+     "title": "Process Engineer",
+     "location_raw": "Singapore, West Singapore, Singapore",
+     "url": "https://chevron.wd5.myworkdayjobs.com/en-US/jobs/job/Singapore-West-Singapore-Singapore/Process-Engineer_R000073180-1",
+     "posted_raw": "Posted Today",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Bengaluru-Karnataka-India/GHG-Reporting-Analyst_R000073355",
+     "title": "GHG Reporting Analyst",
+     "location_raw": "Bengaluru, Karnataka, India",
+     "url": "https://chevron.wd5.myworkdayjobs.com/en-US/jobs/job/Bengaluru-Karnataka-India/GHG-Reporting-Analyst_R000073355",
+     "posted_raw": "Posted Today",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Houston-Texas-United-States-of-America/Insurance-Analyst_R000073149",
+     "title": "Insurance Analyst",
+     "location_raw": "Houston, Texas, United States of America",
+     "url": "https://chevron.wd5.myworkdayjobs.com/en-US/jobs/job/Houston-Texas-United-States-of-America/Insurance-Analyst_R000073149",
+     "posted_raw": "Posted 3 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Greeley-Colorado-United-States-of-America/Field-Specialist-B_R000073298",
+     "title": "Field Specialist B",
+     "location_raw": "Greeley, Colorado, United States of America",
+     "url": "https://chevron.wd5.myworkdayjobs.com/en-US/jobs/job/Greeley-Colorado-United-States-of-America/Field-Specialist-B_R000073298",
+     "posted_raw": "Posted 3 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Houston-Texas-United-States-of-America/Senior-Technical-Geophysicist---Quantitative-Interpretation---4D_R000073020",
+     "title": "Senior Technical Geophysicist – Quantitative Interpretation & 4D",
+     "location_raw": "Houston, Texas, United States of America",
+     "url": "https://chevron.wd5.myworkdayjobs.com/en-US/jobs/job/Houston-Texas-United-States-of-America/Senior-Technical-Geophysicist---Quantitative-Interpretation---4D_R000073020",
+     "posted_raw": "Posted 3 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Ames-Iowa-United-States-of-America/Administrative-Assistant_R000070434",
+     "title": "Administrative Assistant",
+     "location_raw": "Ames, Iowa, United States of America",
+     "url": "https://chevron.wd5.myworkdayjobs.com/en-US/jobs/job/Ames-Iowa-United-States-of-America/Administrative-Assistant_R000070434",
+     "posted_raw": "Posted 3 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Mason-City-Iowa-United-States-of-America/Biodiesel-Operator--Nights_R000073207",
+     "title": "Biodiesel Operator, Nights",
+     "location_raw": "Mason City, Iowa, United States of America",
+     "url": "https://chevron.wd5.myworkdayjobs.com/en-US/jobs/job/Mason-City-Iowa-United-States-of-America/Biodiesel-Operator--Nights_R000073207",
+     "posted_raw": "Posted 3 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Colombo-Sri-Lanka/Chevron-Sri-Lanka-Summer-Internship_R000073233",
+     "title": "Chevron Sri Lanka Summer Internship",
+     "location_raw": "Colombo, Sri Lanka",
+     "url": "https://chevron.wd5.myworkdayjobs.com/en-US/jobs/job/Colombo-Sri-Lanka/Chevron-Sri-Lanka-Summer-Internship_R000073233",
+     "posted_raw": "Posted 3 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Ningbo-Zhejiang-China/BPF-Analyst_R000071371",
+     "title": "BPF Analyst",
+     "location_raw": "Ningbo, Zhejiang, China",
+     "url": "https://chevron.wd5.myworkdayjobs.com/en-US/jobs/job/Ningbo-Zhejiang-China/BPF-Analyst_R000071371",
+     "posted_raw": "Posted 3 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Ayala-Makati-City-Philippines/Payroll-Operations-Analyst_R000073306",
+     "title": "Payroll Operations Analyst",
+     "location_raw": "Ayala, Makati City, Philippines",
+     "url": "https://chevron.wd5.myworkdayjobs.com/en-US/jobs/job/Ayala-Makati-City-Philippines/Payroll-Operations-Analyst_R000073306",
+     "posted_raw": "Posted 3 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Buenos-Aires-Buenos-Aires-Argentina/Global-Exploration---MCPs-Support-Team-Leader_R000072953",
+     "title": "Global Exploration & MCPs Support Team Leader",
+     "location_raw": "Buenos Aires, Buenos Aires, Argentina",
+     "url": "https://chevron.wd5.myworkdayjobs.com/en-US/jobs/job/Buenos-Aires-Buenos-Aires-Argentina/Global-Exploration---MCPs-Support-Team-Leader_R000072953",
+     "posted_raw": "Posted 4 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Seneca-Illinois-United-States-of-America/Biodiesel-Operator_R000072117",
+     "title": "Biodiesel Operator",
+     "location_raw": "Seneca, Illinois, United States of America",
+     "url": "https://chevron.wd5.myworkdayjobs.com/en-US/jobs/job/Seneca-Illinois-United-States-of-America/Biodiesel-Operator_R000072117",
+     "posted_raw": "Posted 4 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Houston-Texas-United-States-of-America/Specialist--Loyalty_R000073283",
+     "title": "Specialist, Loyalty",
+     "location_raw": "Houston, Texas, United States of America",
+     "url": "https://chevron.wd5.myworkdayjobs.com/en-US/jobs/job/Houston-Texas-United-States-of-America/Specialist--Loyalty_R000073283",
+     "posted_raw": "Posted 4 Days Ago",
+     "posted_at": null
+    }
+   ],
+   "tenant": "chevron/wd5/jobs"
+  },
+  {
+   "platform": "workday",
+   "company": "Dow",
+   "company_domain": "dow.com",
+   "board_key": "ExternalCareers",
+   "board_url": "https://dow.wd1.myworkdayjobs.com/en-US/ExternalCareers",
+   "board_total_reported": null,
+   "postings": [
+    {
+     "external_id": "/job/Midland-MI-USA/Local-College-Co-op---Core-Legal-Practices--Dow-Legal-Department-Administrative-Assistant_R2064539",
+     "title": "Local College Co-op - Core Legal Practices/ Dow Legal Department Administrative Assistant",
+     "location_raw": "Midland (MI, USA)",
+     "url": "https://dow.wd1.myworkdayjobs.com/en-US/ExternalCareers/job/Midland-MI-USA/Local-College-Co-op---Core-Legal-Practices--Dow-Legal-Department-Administrative-Assistant_R2064539",
+     "posted_raw": "Posted Today",
+     "posted_at": null
+    }
+   ],
+   "tenant": "dow/wd1/ExternalCareers"
+  },
+  {
+   "platform": "workday",
+   "company": "Emerson",
+   "company_domain": "emerson.edu",
+   "board_key": "Emerson_College_Staff",
+   "board_url": "https://emerson.wd5.myworkdayjobs.com/en-US/Emerson_College_Staff",
+   "board_total_reported": null,
+   "postings": [
+    {
+     "external_id": "/job/Boston-Campus/Campus-Planning-Intern_JR008645",
+     "title": "Campus Planning Intern",
+     "location_raw": "Boston Campus",
+     "url": "https://emerson.wd5.myworkdayjobs.com/en-US/Emerson_College_Staff/job/Boston-Campus/Campus-Planning-Intern_JR008645",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Boston-Campus/Associate-Director--Internships---Work-Based-Education_JR008757",
+     "title": "Associate Director, Internships & Work-Based Education",
+     "location_raw": "Boston Campus",
+     "url": "https://emerson.wd5.myworkdayjobs.com/en-US/Emerson_College_Staff/job/Boston-Campus/Associate-Director--Internships---Work-Based-Education_JR008757",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Boston-Campus/Communications-Specialist--Student-Affairs_JR009044",
+     "title": "Communications Specialist, Student Affairs",
+     "location_raw": "Boston Campus",
+     "url": "https://emerson.wd5.myworkdayjobs.com/en-US/Emerson_College_Staff/job/Boston-Campus/Communications-Specialist--Student-Affairs_JR009044",
+     "posted_raw": "Posted 7 Days Ago",
+     "posted_at": null
+    }
+   ],
+   "tenant": "emerson/wd5/Emerson_College_Staff"
+  },
+  {
+   "platform": "workday",
+   "company": "IFF",
+   "company_domain": "iff.com",
+   "board_key": "IFF_Careers",
+   "board_url": "https://iff.wd5.myworkdayjobs.com/en-US/IFF_Careers",
+   "board_total_reported": null,
+   "postings": [
+    {
+     "external_id": "/job/Tlalnepantla-Mexico/Intern-Application_R17891-1",
+     "title": "Intern Application",
+     "location_raw": "Tlalnepantla, Mexico",
+     "url": "https://iff.wd5.myworkdayjobs.com/en-US/IFF_Careers/job/Tlalnepantla-Mexico/Intern-Application_R17891-1",
+     "posted_raw": "Posted 13 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/TecnoParque-GBS-Mexico/Credit-Intern_R21172",
+     "title": "Credit Intern",
+     "location_raw": "TecnoParque GBS, Mexico",
+     "url": "https://iff.wd5.myworkdayjobs.com/en-US/IFF_Careers/job/TecnoParque-GBS-Mexico/Credit-Intern_R21172",
+     "posted_raw": "Posted 6 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Punto-Polanco-Mexico/GL-Intern_R18845",
+     "title": "GL Intern",
+     "location_raw": "Punto Polanco, Mexico",
+     "url": "https://iff.wd5.myworkdayjobs.com/en-US/IFF_Careers/job/Punto-Polanco-Mexico/GL-Intern_R18845",
+     "posted_raw": "Posted 6 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Shanghai-Hongqiao-China/Lab-IT-Intern_R13489",
+     "title": "Lab IT Intern",
+     "location_raw": "Shanghai Hongqiao, China",
+     "url": "https://iff.wd5.myworkdayjobs.com/en-US/IFF_Careers/job/Shanghai-Hongqiao-China/Lab-IT-Intern_R13489",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Barcelona-Spain/Intern---Sales-Support_R20765",
+     "title": "Intern – Sales Support",
+     "location_raw": "Barcelona, Spain",
+     "url": "https://iff.wd5.myworkdayjobs.com/en-US/IFF_Careers/job/Barcelona-Spain/Intern---Sales-Support_R20765",
+     "posted_raw": "Posted 6 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/New-York-NY-USA/Consumer-Insights-Intern_R21289",
+     "title": "Consumer Insights Intern",
+     "location_raw": "New York, NY, USA",
+     "url": "https://iff.wd5.myworkdayjobs.com/en-US/IFF_Careers/job/New-York-NY-USA/Consumer-Insights-Intern_R21289",
+     "posted_raw": "Posted 4 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Citrus-Innovation-Ctr-FL-USA/Intern_R18828",
+     "title": "Intern - Marketing & Digital Experience",
+     "location_raw": "Citrus Innovation Ctr FL USA",
+     "url": "https://iff.wd5.myworkdayjobs.com/en-US/IFF_Careers/job/Citrus-Innovation-Ctr-FL-USA/Intern_R18828",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Bogota-Megaport-Colombia/Intern_R16919-1",
+     "title": "Sales Fine Fragrance Intern",
+     "location_raw": "Bogota (Megaport), Colombia",
+     "url": "https://iff.wd5.myworkdayjobs.com/en-US/IFF_Careers/job/Bogota-Megaport-Colombia/Intern_R16919-1",
+     "posted_raw": "Posted 6 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Hilversum-Liebergerweg-Netherlands/Intern-Project-Coordination_R19347",
+     "title": "Intern Project Coordination  Fragrance development",
+     "location_raw": "Hilversum (Liebergerweg), Netherlands",
+     "url": "https://iff.wd5.myworkdayjobs.com/en-US/IFF_Careers/job/Hilversum-Liebergerweg-Netherlands/Intern-Project-Coordination_R19347",
+     "posted_raw": "Posted 4 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Casablanca-Morocco/Commercial-Sales-Internship--Taste-_R20518",
+     "title": "Commercial Sales Internship (Taste)",
+     "location_raw": "Casablanca, Morocco",
+     "url": "https://iff.wd5.myworkdayjobs.com/en-US/IFF_Careers/job/Casablanca-Morocco/Commercial-Sales-Internship--Taste-_R20518",
+     "posted_raw": "Posted 4 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Citrus-Innovation-Ctr-FL-USA/Intern_R18830",
+     "title": "Research & Development Intern – Citrus Innovation Center",
+     "location_raw": "Citrus Innovation Ctr FL USA",
+     "url": "https://iff.wd5.myworkdayjobs.com/en-US/IFF_Careers/job/Citrus-Innovation-Ctr-FL-USA/Intern_R18830",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Asturias-Spain/Procurement-Taste-Intern_R20517",
+     "title": "Especialista de Compras (Beca FUO - intern)",
+     "location_raw": "Asturias, Spain",
+     "url": "https://iff.wd5.myworkdayjobs.com/en-US/IFF_Careers/job/Asturias-Spain/Procurement-Taste-Intern_R20517",
+     "posted_raw": "Posted 26 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Brabrand-Denmark/Internship-and-Thesis-opportunities-at-IFF--Spring-2027-_R20937",
+     "title": "Internship and Thesis opportunities at IFF (Spring 2027)",
+     "location_raw": "Brabrand, Denmark",
+     "url": "https://iff.wd5.myworkdayjobs.com/en-US/IFF_Careers/job/Brabrand-Denmark/Internship-and-Thesis-opportunities-at-IFF--Spring-2027-_R20937",
+     "posted_raw": "Posted 17 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Memphis-TN-USA/Manufacturing-Tech-Co-Op_R17721",
+     "title": "Manufacturing Tech Co-Op",
+     "location_raw": "Memphis, TN, USA",
+     "url": "https://iff.wd5.myworkdayjobs.com/en-US/IFF_Careers/job/Memphis-TN-USA/Manufacturing-Tech-Co-Op_R17721",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Pryor-OK-USA/Manufacturing-Engineer-Co-Op_R15636-1",
+     "title": "Manufacturing Engineer Co-Op",
+     "location_raw": "Pryor, OK, USA",
+     "url": "https://iff.wd5.myworkdayjobs.com/en-US/IFF_Careers/job/Pryor-OK-USA/Manufacturing-Engineer-Co-Op_R15636-1",
+     "posted_raw": "Posted 12 Days Ago",
+     "posted_at": null
+    }
+   ],
+   "tenant": "iff/wd5/IFF_Careers"
+  },
+  {
+   "platform": "workday",
+   "company": "Regeneron",
+   "company_domain": "regeneron.com",
+   "board_key": "IrelandPrivate",
+   "board_url": "https://regeneron.wd1.myworkdayjobs.com/en-US/IrelandPrivate",
+   "board_total_reported": null,
+   "postings": [
+    {
+     "external_id": "/job/Limerick/Intern_R49978",
+     "title": "Intern",
+     "location_raw": "Limerick",
+     "url": "https://regeneron.wd1.myworkdayjobs.com/en-US/IrelandPrivate/job/Limerick/Intern_R49978",
+     "posted_raw": "Posted 20 Days Ago",
+     "posted_at": null
+    }
+   ],
+   "tenant": "regeneron/wd1/IrelandPrivate"
+  },
+  {
+   "platform": "workday",
+   "company": "Moderna",
+   "company_domain": "modernatx.com",
+   "board_key": "M_tx",
+   "board_url": "https://modernatx.wd1.myworkdayjobs.com/en-US/M_tx",
+   "board_total_reported": null,
+   "postings": [
+    {
+     "external_id": "/job/Norwood-Massachusetts/Intern--CMC-Development--Summer-2027-_R19683",
+     "title": "Intern, CMC Development (Summer 2027)",
+     "location_raw": null,
+     "url": "https://modernatx.wd1.myworkdayjobs.com/en-US/M_tx/job/Norwood-Massachusetts/Intern--CMC-Development--Summer-2027-_R19683",
+     "posted_raw": "Posted Today",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Norwood-Massachusetts/Co-Op--CMC-Development--Spring-2027-_R19684",
+     "title": "Co-Op, CMC Development (Spring 2027)",
+     "location_raw": null,
+     "url": "https://modernatx.wd1.myworkdayjobs.com/en-US/M_tx/job/Norwood-Massachusetts/Co-Op--CMC-Development--Spring-2027-_R19684",
+     "posted_raw": "Posted Today",
+     "posted_at": null
+    }
+   ],
+   "tenant": "modernatx/wd1/M_tx"
+  },
+  {
+   "platform": "workday",
+   "company": "Amgen",
+   "company_domain": "amgen.com",
+   "board_key": "Careers",
+   "board_url": "https://amgen.wd1.myworkdayjobs.com/en-US/Careers",
+   "board_total_reported": null,
+   "postings": [
+    {
+     "external_id": "/job/Singapore-Affiliate---Duo-Tower/Finance-Intern_R-253789",
+     "title": "Finance Intern",
+     "location_raw": "Singapore Affiliate - Duo Tower",
+     "url": "https://amgen.wd1.myworkdayjobs.com/en-US/Careers/job/Singapore-Affiliate---Duo-Tower/Finance-Intern_R-253789",
+     "posted_raw": "Posted 6 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Singapore-Affiliate---Duo-Tower/Marketing-Intern_R-253791",
+     "title": "Marketing Intern",
+     "location_raw": "Singapore Affiliate - Duo Tower",
+     "url": "https://amgen.wd1.myworkdayjobs.com/en-US/Careers/job/Singapore-Affiliate---Duo-Tower/Marketing-Intern_R-253791",
+     "posted_raw": "Posted 6 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Singapore-Affiliate---Duo-Tower/Marketing-Intern_R-253795",
+     "title": "Marketing Intern",
+     "location_raw": "Singapore Affiliate - Duo Tower",
+     "url": "https://amgen.wd1.myworkdayjobs.com/en-US/Careers/job/Singapore-Affiliate---Duo-Tower/Marketing-Intern_R-253795",
+     "posted_raw": "Posted 6 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Singapore-Affiliate---Duo-Tower/VAP-Intern_R-253797",
+     "title": "VAP Intern",
+     "location_raw": "Singapore Affiliate - Duo Tower",
+     "url": "https://amgen.wd1.myworkdayjobs.com/en-US/Careers/job/Singapore-Affiliate---Duo-Tower/VAP-Intern_R-253797",
+     "posted_raw": "Posted 6 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Malaysia---Kuala-Lumpur/Pharmaceutical-Marketing-Intern_R-253696",
+     "title": "Pharmaceutical Marketing Intern",
+     "location_raw": "Malaysia - Kuala Lumpur",
+     "url": "https://amgen.wd1.myworkdayjobs.com/en-US/Careers/job/Malaysia---Kuala-Lumpur/Pharmaceutical-Marketing-Intern_R-253696",
+     "posted_raw": "Posted 10 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Singapore-Affiliate---Duo-Tower/SEA-Medical-Affairs-Intern_R-253798",
+     "title": "SEA Medical Affairs Intern",
+     "location_raw": "Singapore Affiliate - Duo Tower",
+     "url": "https://amgen.wd1.myworkdayjobs.com/en-US/Careers/job/Singapore-Affiliate---Duo-Tower/SEA-Medical-Affairs-Intern_R-253798",
+     "posted_raw": "Posted 6 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/United-States---Remote/Grad-Intern---Operations--Fall-2026-_R-253415",
+     "title": "Grad Intern - Operations (Fall 2026)",
+     "location_raw": "United States - Remote",
+     "url": "https://amgen.wd1.myworkdayjobs.com/en-US/Careers/job/United-States---Remote/Grad-Intern---Operations--Fall-2026-_R-253415",
+     "posted_raw": "Posted 6 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/United-States---Remote/Undergrad-intern---US-Value---Access--Summer-2027-_R-253424",
+     "title": "Undergrad intern - U.S. Value & Access (Summer 2027)",
+     "location_raw": "United States - Remote",
+     "url": "https://amgen.wd1.myworkdayjobs.com/en-US/Careers/job/United-States---Remote/Undergrad-intern---US-Value---Access--Summer-2027-_R-253424",
+     "posted_raw": "Posted 3 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/United-States---Remote/MBA-Intern---Commercial-Leadership-Program--Summer-2027-_R-254479",
+     "title": "MBA Intern – Commercial Leadership Program (Summer 2027)",
+     "location_raw": "United States - Remote",
+     "url": "https://amgen.wd1.myworkdayjobs.com/en-US/Careers/job/United-States---Remote/MBA-Intern---Commercial-Leadership-Program--Summer-2027-_R-254479",
+     "posted_raw": "Posted 3 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/US---North-Carolina---Holly-Springs/Engineering-Grad-Co-op_R-254020",
+     "title": "Engineering Grad Co-op",
+     "location_raw": "US - North Carolina - Holly Springs",
+     "url": "https://amgen.wd1.myworkdayjobs.com/en-US/Careers/job/US---North-Carolina---Holly-Springs/Engineering-Grad-Co-op_R-254020",
+     "posted_raw": "Posted 3 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/United-States---Remote/MBA-Intern---Finance---Strategy-Leadership-Development-Program--Summer-2027-_R-254491",
+     "title": "MBA Intern – Finance & Strategy Leadership Development Program (Summer 2027)",
+     "location_raw": "United States - Remote",
+     "url": "https://amgen.wd1.myworkdayjobs.com/en-US/Careers/job/United-States---Remote/MBA-Intern---Finance---Strategy-Leadership-Development-Program--Summer-2027-_R-254491",
+     "posted_raw": "Posted 3 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/US---Massachusetts---Cambridge/Undergrad-Intern---Operations---Cambridge--MA--Summer-2027-_R-254515",
+     "title": "Undergrad Intern - Operations – Cambridge, MA (Summer 2027)",
+     "location_raw": "US - Massachusetts - Cambridge",
+     "url": "https://amgen.wd1.myworkdayjobs.com/en-US/Careers/job/US---Massachusetts---Cambridge/Undergrad-Intern---Operations---Cambridge--MA--Summer-2027-_R-254515",
+     "posted_raw": "Posted 3 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/US---Rhode-Island---West-Greenwich/Undergrad-Intern---Operations---West-Greenwich--RI--Summer-2027-_R-254514",
+     "title": "Undergrad Intern - Operations – West Greenwich, RI (Summer 2027)",
+     "location_raw": "US - Rhode Island - West Greenwich",
+     "url": "https://amgen.wd1.myworkdayjobs.com/en-US/Careers/job/US---Rhode-Island---West-Greenwich/Undergrad-Intern---Operations---West-Greenwich--RI--Summer-2027-_R-254514",
+     "posted_raw": "Posted 3 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/US---California---Thousand-Oaks/Undergrad-Intern---Operations---Process-Development--Summer-2027-_R-254516",
+     "title": "Undergrad Intern - Operations – Process Development (Summer 2027)",
+     "location_raw": "US - California - Thousand Oaks",
+     "url": "https://amgen.wd1.myworkdayjobs.com/en-US/Careers/job/US---California---Thousand-Oaks/Undergrad-Intern---Operations---Process-Development--Summer-2027-_R-254516",
+     "posted_raw": "Posted 3 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/US---California---Thousand-Oaks/Grad-Intern---Operations---Process-Development--Summer-2027-_R-254519",
+     "title": "Grad Intern - Operations – Process Development (Summer 2027)",
+     "location_raw": "US - California - Thousand Oaks",
+     "url": "https://amgen.wd1.myworkdayjobs.com/en-US/Careers/job/US---California---Thousand-Oaks/Grad-Intern---Operations---Process-Development--Summer-2027-_R-254519",
+     "posted_raw": "Posted 3 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/US---North-Carolina---Holly-Springs/Undergrad-Intern---Operations---Holly-Springs--NC--Summer-2027-_R-254509",
+     "title": "Undergrad Intern - Operations – Holly Springs, NC (Summer 2027)",
+     "location_raw": "US - North Carolina - Holly Springs",
+     "url": "https://amgen.wd1.myworkdayjobs.com/en-US/Careers/job/US---North-Carolina---Holly-Springs/Undergrad-Intern---Operations---Holly-Springs--NC--Summer-2027-_R-254509",
+     "posted_raw": "Posted 3 Days Ago",
+     "posted_at": null
+    }
+   ],
+   "tenant": "amgen/wd1/Careers"
+  },
+  {
+   "platform": "workday",
+   "company": "Sanofi",
+   "company_domain": "sanofi.com",
+   "board_key": "SanofiCareers",
+   "board_url": "https://sanofi.wd3.myworkdayjobs.com/en-US/SanofiCareers",
+   "board_total_reported": null,
+   "postings": [
+    {
+     "external_id": "/job/sterbro/Digital-Innovative-Solutions-Student-Worker_R2869898",
+     "title": "Digital Innovative Solutions Student Worker",
+     "location_raw": "Østerbro",
+     "url": "https://sanofi.wd3.myworkdayjobs.com/en-US/SanofiCareers/job/sterbro/Digital-Innovative-Solutions-Student-Worker_R2869898",
+     "posted_raw": "Posted Today",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Milano/Quality-Internship_R2869562",
+     "title": "Quality Internship",
+     "location_raw": "Milano",
+     "url": "https://sanofi.wd3.myworkdayjobs.com/en-US/SanofiCareers/job/Milano/Quality-Internship_R2869562",
+     "posted_raw": "Posted Today",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Beijing/R-D---CSU----CSU-intern---BJ_R2869552",
+     "title": "CSU intern",
+     "location_raw": "Beijing",
+     "url": "https://sanofi.wd3.myworkdayjobs.com/en-US/SanofiCareers/job/Beijing/R-D---CSU----CSU-intern---BJ_R2869552",
+     "posted_raw": "Posted Today",
+     "posted_at": null
+    }
+   ],
+   "tenant": "sanofi/wd3/SanofiCareers"
+  },
+  {
+   "platform": "workday",
+   "company": "Johnson Controls",
+   "company_domain": "johnsoncontrols.com",
+   "board_key": "TUPU",
+   "board_url": "https://jci.wd5.myworkdayjobs.com/en-US/TUPU",
+   "board_total_reported": null,
+   "postings": [
+    {
+     "external_id": "/job/Shanghai-Shanghai-China/Procurement-Intern----FM-MRO_WD30278394-2",
+     "title": "Procurement Intern -  FM/MRO",
+     "location_raw": "Shanghai-Shanghai-China",
+     "url": "https://jci.wd5.myworkdayjobs.com/en-US/TUPU/job/Shanghai-Shanghai-China/Procurement-Intern----FM-MRO_WD30278394-2",
+     "posted_raw": "Posted 3 Days Ago",
+     "posted_at": null
+    }
+   ],
+   "tenant": "jci/wd5/TUPU"
+  },
+  {
+   "platform": "workday",
+   "company": "Westlake",
+   "company_domain": "westlake.com",
+   "board_key": "westlake",
+   "board_url": "https://westlake.wd1.myworkdayjobs.com/en-US/westlake",
+   "board_total_reported": null,
+   "postings": [
+    {
+     "external_id": "/job/US---Houston-TX/XMLNAME-2026-Intern---Mechanical-Engineer_R30240",
+     "title": "2026 Intern - Mechanical Engineer",
+     "location_raw": "US - Houston, TX",
+     "url": "https://westlake.wd1.myworkdayjobs.com/en-US/westlake/job/US---Houston-TX/XMLNAME-2026-Intern---Mechanical-Engineer_R30240",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/US---Houston-TX/XMLNAME-2026-Intern---Electrical-Engineer_R30242",
+     "title": "2026 Intern - Electrical Engineer",
+     "location_raw": "US - Houston, TX",
+     "url": "https://westlake.wd1.myworkdayjobs.com/en-US/westlake/job/US---Houston-TX/XMLNAME-2026-Intern---Electrical-Engineer_R30242",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    }
+   ],
+   "tenant": "westlake/wd1/westlake"
+  },
+  {
+   "platform": "workday",
+   "company": "Huntsman",
+   "company_domain": "huntsman.com",
+   "board_key": "Huntsman",
+   "board_url": "https://huntsman.wd1.myworkdayjobs.com/en-US/Huntsman",
+   "board_total_reported": null,
+   "postings": [
+    {
+     "external_id": "/job/China----Huntsman-Campus-Shanghai/Lab-Intern_J-013547",
+     "title": "Lab Intern",
+     "location_raw": "China -  Huntsman Campus, Shanghai",
+     "url": "https://huntsman.wd1.myworkdayjobs.com/en-US/Huntsman/job/China----Huntsman-Campus-Shanghai/Lab-Intern_J-013547",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/USA---Texas---Houston---The-Woodlands---Corporate-Office/Chemist-Intern_J-020029",
+     "title": "Chemist Intern",
+     "location_raw": "USA - Texas - Houston - The Woodlands - Corporate Office",
+     "url": "https://huntsman.wd1.myworkdayjobs.com/en-US/Huntsman/job/USA---Texas---Houston---The-Woodlands---Corporate-Office/Chemist-Intern_J-020029",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Costa-Rica---Heredia/Accounting-Intern_J-020209",
+     "title": "Accounting Intern",
+     "location_raw": "Costa Rica - Heredia",
+     "url": "https://huntsman.wd1.myworkdayjobs.com/en-US/Huntsman/job/Costa-Rica---Heredia/Accounting-Intern_J-020209",
+     "posted_raw": "Posted 5 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/USA---Texas---Houston---The-Woodlands---Corporate-Office/Supply-Chain-Intern_J-020028",
+     "title": "Supply Chain Intern",
+     "location_raw": "USA - Texas - Houston - The Woodlands - Corporate Office",
+     "url": "https://huntsman.wd1.myworkdayjobs.com/en-US/Huntsman/job/USA---Texas---Houston---The-Woodlands---Corporate-Office/Supply-Chain-Intern_J-020028",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/USA---Texas---Houston---The-Woodlands---Corporate-Office/Electrical-Engineering-Intern_J-020027",
+     "title": "Electrical Engineering Intern",
+     "location_raw": "USA - Texas - Houston - The Woodlands - Corporate Office",
+     "url": "https://huntsman.wd1.myworkdayjobs.com/en-US/Huntsman/job/USA---Texas---Houston---The-Woodlands---Corporate-Office/Electrical-Engineering-Intern_J-020027",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/USA---Texas---Houston---The-Woodlands---Corporate-Office/Chemical-Engineering-Intern_J-020025",
+     "title": "Chemical Engineering Intern",
+     "location_raw": "USA - Texas - Houston - The Woodlands - Corporate Office",
+     "url": "https://huntsman.wd1.myworkdayjobs.com/en-US/Huntsman/job/USA---Texas---Houston---The-Woodlands---Corporate-Office/Chemical-Engineering-Intern_J-020025",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/USA---Texas---Houston---The-Woodlands---Corporate-Office/Mechanical-Engineering-Intern_J-020026",
+     "title": "Mechanical Engineering Intern",
+     "location_raw": "USA - Texas - Houston - The Woodlands - Corporate Office",
+     "url": "https://huntsman.wd1.myworkdayjobs.com/en-US/Huntsman/job/USA---Texas---Houston---The-Woodlands---Corporate-Office/Mechanical-Engineering-Intern_J-020026",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Costa-Rica---Heredia/Customer-Service-Intern_J-020049",
+     "title": "Customer Service Intern",
+     "location_raw": "Costa Rica - Heredia",
+     "url": "https://huntsman.wd1.myworkdayjobs.com/en-US/Huntsman/job/Costa-Rica---Heredia/Customer-Service-Intern_J-020049",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Switzerland---Basel/Intern-Digital-Engineer_J-020117",
+     "title": "Intern Digital Engineer",
+     "location_raw": "2 Locations",
+     "url": "https://huntsman.wd1.myworkdayjobs.com/en-US/Huntsman/job/Switzerland---Basel/Intern-Digital-Engineer_J-020117",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Costa-Rica---Heredia/Product-Portfolio-Intern_J-020242",
+     "title": "Product Portfolio Intern",
+     "location_raw": "Costa Rica - Heredia",
+     "url": "https://huntsman.wd1.myworkdayjobs.com/en-US/Huntsman/job/Costa-Rica---Heredia/Product-Portfolio-Intern_J-020242",
+     "posted_raw": "Posted 4 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Costa-Rica---Heredia/Supply-Chain-Planning-Intern_J-019887",
+     "title": "Supply Chain Planning Intern",
+     "location_raw": "Costa Rica - Heredia",
+     "url": "https://huntsman.wd1.myworkdayjobs.com/en-US/Huntsman/job/Costa-Rica---Heredia/Supply-Chain-Planning-Intern_J-019887",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Malaysia---Kuala-Lumpur/Artificial-Intelligence---Automation-Intern_J-019938-1",
+     "title": "Artificial Intelligence / Automation Intern",
+     "location_raw": "Malaysia - Kuala Lumpur",
+     "url": "https://huntsman.wd1.myworkdayjobs.com/en-US/Huntsman/job/Malaysia---Kuala-Lumpur/Artificial-Intelligence---Automation-Intern_J-019938-1",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Poland---Krakow/Internship-Program-at-Huntsman---Krakow-GBS-Hub-Intern---Tax_J-020234",
+     "title": "Internship Program at Huntsman – Krakow GBS Hub Intern - Tax",
+     "location_raw": "Poland - Krakow",
+     "url": "https://huntsman.wd1.myworkdayjobs.com/en-US/Huntsman/job/Poland---Krakow/Internship-Program-at-Huntsman---Krakow-GBS-Hub-Intern---Tax_J-020234",
+     "posted_raw": "Posted 3 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Malaysia---Kuala-Lumpur/Global-Reporting---Analytics-Intern---Functions_J-020039",
+     "title": "Global Reporting & Analytics Intern – Functions",
+     "location_raw": "Malaysia - Kuala Lumpur",
+     "url": "https://huntsman.wd1.myworkdayjobs.com/en-US/Huntsman/job/Malaysia---Kuala-Lumpur/Global-Reporting---Analytics-Intern---Functions_J-020039",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Malaysia---Kuala-Lumpur/Business-Intelligence---AI-Analytics-Intern_J-020202",
+     "title": "Business Intelligence & AI Analytics Intern",
+     "location_raw": "Malaysia - Kuala Lumpur",
+     "url": "https://huntsman.wd1.myworkdayjobs.com/en-US/Huntsman/job/Malaysia---Kuala-Lumpur/Business-Intelligence---AI-Analytics-Intern_J-020202",
+     "posted_raw": "Posted 13 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Poland---Krakow/Internship-Program-at-Huntsman---Krakow-GBS---FP-A--Financial-Planning---Analysis-_J-020147",
+     "title": "Internship Program at Huntsman – Krakow GBS - FP&A (Financial Planning & Analysis)",
+     "location_raw": "Poland - Krakow",
+     "url": "https://huntsman.wd1.myworkdayjobs.com/en-US/Huntsman/job/Poland---Krakow/Internship-Program-at-Huntsman---Krakow-GBS---FP-A--Financial-Planning---Analysis-_J-020147",
+     "posted_raw": "Posted 25 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Poland---Krakow/Internship-Program-at-Huntsman---Krakow-GBS---Supply-Planning_J-019934",
+     "title": "Internship Program at Huntsman – Krakow GBS – Inventory and Supply Chain Reporting",
+     "location_raw": "Poland - Krakow",
+     "url": "https://huntsman.wd1.myworkdayjobs.com/en-US/Huntsman/job/Poland---Krakow/Internship-Program-at-Huntsman---Krakow-GBS---Supply-Planning_J-019934",
+     "posted_raw": "Posted Today",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Malaysia---Kuala-Lumpur/Supplier-Lifecycle-and-Performance-Administrator-Intern_J-020043",
+     "title": "Supplier Lifecycle and Performance Administrator Intern",
+     "location_raw": "Malaysia - Kuala Lumpur",
+     "url": "https://huntsman.wd1.myworkdayjobs.com/en-US/Huntsman/job/Malaysia---Kuala-Lumpur/Supplier-Lifecycle-and-Performance-Administrator-Intern_J-020043",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Costa-Rica---Heredia/XMLNAME-2027-Huntsman-Costa-Rica-Internship-Program_J-020210",
+     "title": "2027 Huntsman Costa Rica Internship Program",
+     "location_raw": "Costa Rica - Heredia",
+     "url": "https://huntsman.wd1.myworkdayjobs.com/en-US/Huntsman/job/Costa-Rica---Heredia/XMLNAME-2027-Huntsman-Costa-Rica-Internship-Program_J-020210",
+     "posted_raw": "Posted 11 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Poland---Krakow/Internship-Program-at-Huntsman---Krakow-GBS---Supply-Chain-Excellence_J-020134",
+     "title": "Internship Program at Huntsman – Krakow GBS - Supply Chain Excellence",
+     "location_raw": "Poland - Krakow",
+     "url": "https://huntsman.wd1.myworkdayjobs.com/en-US/Huntsman/job/Poland---Krakow/Internship-Program-at-Huntsman---Krakow-GBS---Supply-Chain-Excellence_J-020134",
+     "posted_raw": "Posted 12 Days Ago",
+     "posted_at": null
+    }
+   ],
+   "tenant": "huntsman/wd1/Huntsman"
+  },
+  {
+   "platform": "workday",
+   "company": "Stanley Black & Decker",
+   "company_domain": "stanleyblackanddecker.com",
+   "board_key": "Stanley_Black_Decker_Career_Site",
+   "board_url": "https://sbdinc.wd1.myworkdayjobs.com/en-US/Stanley_Black_Decker_Career_Site",
+   "board_total_reported": null,
+   "postings": [
+    {
+     "external_id": "/job/Bergueda-Catalonia-Spain/Service-Intern--Postventa-_REQ-1000049491",
+     "title": "Service Intern (Postventa)",
+     "location_raw": "Bergueda, Catalonia, Spain",
+     "url": "https://sbdinc.wd1.myworkdayjobs.com/en-US/Stanley_Black_Decker_Career_Site/job/Bergueda-Catalonia-Spain/Service-Intern--Postventa-_REQ-1000049491",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    }
+   ],
+   "tenant": "sbdinc/wd1/Stanley_Black_Decker_Career_Site"
+  },
+  {
+   "platform": "workday",
+   "company": "Applied Materials",
+   "company_domain": "appliedmaterials.com",
+   "board_key": "External",
+   "board_url": "https://amat.wd1.myworkdayjobs.com/en-US/External",
+   "board_total_reported": null,
+   "postings": [
+    {
+     "external_id": "/job/SingaporeSGP/Intern_R2626579",
+     "title": "Intern",
+     "location_raw": "Singapore,SGP",
+     "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/SingaporeSGP/Intern_R2626579",
+     "posted_raw": "Posted Today",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/SingaporeSGP/Intern_R2626566",
+     "title": "Intern",
+     "location_raw": "Singapore,SGP",
+     "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/SingaporeSGP/Intern_R2626566",
+     "posted_raw": "Posted Today",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/SingaporeSGP/College-Intern_R2626455",
+     "title": "College Intern",
+     "location_raw": "Singapore,SGP",
+     "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/SingaporeSGP/College-Intern_R2626455",
+     "posted_raw": "Posted Today",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/SingaporeSGP/College-intern_R2626165",
+     "title": "College intern",
+     "location_raw": "Singapore,SGP",
+     "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/SingaporeSGP/College-intern_R2626165",
+     "posted_raw": "Posted Today",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/SingaporeSGP/College-Intern_R2624343",
+     "title": "College Intern",
+     "location_raw": "Singapore,SGP",
+     "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/SingaporeSGP/College-Intern_R2624343",
+     "posted_raw": "Posted Today",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/SingaporeSGP/College-Intern_R2626453",
+     "title": "College Intern",
+     "location_raw": "Singapore,SGP",
+     "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/SingaporeSGP/College-Intern_R2626453",
+     "posted_raw": "Posted Today",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/SingaporeSGP/College-Intern_R2626457",
+     "title": "College Intern",
+     "location_raw": "Singapore,SGP",
+     "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/SingaporeSGP/College-Intern_R2626457",
+     "posted_raw": "Posted Today",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/SingaporeSGP/College-Intern_R2626195",
+     "title": "College Intern",
+     "location_raw": "Singapore,SGP",
+     "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/SingaporeSGP/College-Intern_R2626195",
+     "posted_raw": "Posted Today",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/SingaporeSGP/College-Intern_R2627319",
+     "title": "College Intern",
+     "location_raw": "Singapore,SGP",
+     "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/SingaporeSGP/College-Intern_R2627319",
+     "posted_raw": "Posted Today",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/SingaporeSGP/College-Intern_R2627315",
+     "title": "College Intern",
+     "location_raw": "Singapore,SGP",
+     "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/SingaporeSGP/College-Intern_R2627315",
+     "posted_raw": "Posted Today",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/SingaporeSGP/College-Intern_R2627316",
+     "title": "College Intern",
+     "location_raw": "Singapore,SGP",
+     "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/SingaporeSGP/College-Intern_R2627316",
+     "posted_raw": "Posted Today",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/SingaporeSGP/College-Intern_R2627226",
+     "title": "College Intern",
+     "location_raw": "Singapore,SGP",
+     "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/SingaporeSGP/College-Intern_R2627226",
+     "posted_raw": "Posted Today",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/SingaporeSGP/College-Intern_R2627230",
+     "title": "College Intern",
+     "location_raw": "Singapore,SGP",
+     "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/SingaporeSGP/College-Intern_R2627230",
+     "posted_raw": "Posted Today",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/SingaporeSGP/College-Intern_R2627317",
+     "title": "College Intern",
+     "location_raw": "Singapore,SGP",
+     "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/SingaporeSGP/College-Intern_R2627317",
+     "posted_raw": "Posted Today",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/SingaporeSGP/College-Intern_R2627318",
+     "title": "College Intern",
+     "location_raw": "Singapore,SGP",
+     "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/SingaporeSGP/College-Intern_R2627318",
+     "posted_raw": "Posted Today",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/SingaporeSGP/College-Intern_R2627321",
+     "title": "College Intern",
+     "location_raw": "Singapore,SGP",
+     "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/SingaporeSGP/College-Intern_R2627321",
+     "posted_raw": "Posted Today",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/SingaporeSGP/College-Intern_R2627320",
+     "title": "College Intern",
+     "location_raw": "Singapore,SGP",
+     "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/SingaporeSGP/College-Intern_R2627320",
+     "posted_raw": "Posted Today",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/SingaporeSGP/Industrial-Engineering-Intern_R2614287",
+     "title": "Industrial Engineering Intern",
+     "location_raw": "Singapore,SGP",
+     "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/SingaporeSGP/Industrial-Engineering-Intern_R2614287",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/SingaporeSGP/Process-Engineer-Intern_R2626574",
+     "title": "Process Engineer Intern",
+     "location_raw": "Singapore,SGP",
+     "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/SingaporeSGP/Process-Engineer-Intern_R2626574",
+     "posted_raw": "Posted 6 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/FagareITA/Mechanical-Engineer--Intern-_R2626998",
+     "title": "Mechanical Engineer (Intern)",
+     "location_raw": "2 Locations",
+     "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/FagareITA/Mechanical-Engineer--Intern-_R2626998",
+     "posted_raw": "Posted 3 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/SingaporeSGP/College-Intern--Hardware-_R2627095",
+     "title": "College Intern (Hardware)",
+     "location_raw": "Singapore,SGP",
+     "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/SingaporeSGP/College-Intern--Hardware-_R2627095",
+     "posted_raw": "Posted Today",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/SingaporeSGP/College-Intern--Hardware-_R2627094",
+     "title": "College Intern (Hardware)",
+     "location_raw": "Singapore,SGP",
+     "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/SingaporeSGP/College-Intern--Hardware-_R2627094",
+     "posted_raw": "Posted Today",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/TrevisoITA/Supplier-Industrial-Engineer--Internship-_R2613391",
+     "title": "Supplier Industrial Engineer (Internship)",
+     "location_raw": "Treviso,ITA",
+     "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/TrevisoITA/Supplier-Industrial-Engineer--Internship-_R2613391",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Santa-ClaraCA/XMLNAME-2026-Summer-Intern---Physics---AI-modeling-Engineering_R2616095",
+     "title": "2026 Summer Intern - Physics & AI modeling Engineering",
+     "location_raw": "Santa Clara,CA",
+     "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/Santa-ClaraCA/XMLNAME-2026-Summer-Intern---Physics---AI-modeling-Engineering_R2616095",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/SingaporeSGP/Intern---Regional-UPSkill-Enablement_R2623692",
+     "title": "Intern - Regional UPSkill Enablement",
+     "location_raw": "Singapore,SGP",
+     "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/SingaporeSGP/Intern---Regional-UPSkill-Enablement_R2623692",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Santa-ClaraCA/Chemist---Co-Op---Santa-Clara-_R2625243",
+     "title": "Chemist  (Co-Op - Santa Clara)",
+     "location_raw": "Santa Clara,CA",
+     "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/Santa-ClaraCA/Chemist---Co-Op---Santa-Clara-_R2625243",
+     "posted_raw": "Posted 25 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/ShanghaiCHN/-Customer-Engineer-Intern-_R2625965",
+     "title": "客户服务工程师实习岗（Customer Engineer Intern）",
+     "location_raw": "3 Locations",
+     "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/ShanghaiCHN/-Customer-Engineer-Intern-_R2625965",
+     "posted_raw": "Posted 19 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/SingaporeSGP/Global-Supply-Chain-Internship-Program_R2627122",
+     "title": "Global Supply Chain Internship Program",
+     "location_raw": "Singapore,SGP",
+     "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/SingaporeSGP/Global-Supply-Chain-Internship-Program_R2627122",
+     "posted_raw": "Posted 6 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/SingaporeSGP/AGS-Field-Support-Internship-Program_R2627129",
+     "title": "AGS Field Support Internship Program",
+     "location_raw": "Singapore,SGP",
+     "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/SingaporeSGP/AGS-Field-Support-Internship-Program_R2627129",
+     "posted_raw": "Posted 6 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/SingaporeSGP/Manufacturing-Internship-Program_R2627132",
+     "title": "Manufacturing Internship Program",
+     "location_raw": "Singapore,SGP",
+     "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/SingaporeSGP/Manufacturing-Internship-Program_R2627132",
+     "posted_raw": "Posted 6 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/SingaporeSGP/Research---Development-Internship-Program_R2627133",
+     "title": "Research & Development Internship Program",
+     "location_raw": "Singapore,SGP",
+     "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/SingaporeSGP/Research---Development-Internship-Program_R2627133",
+     "posted_raw": "Posted 6 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/GloucesterMA/Summer-2027-Supply-Chain-Buyer-Intern--Bachelor-s--Gloucester--MA-_R2627055",
+     "title": "Summer 2027 Supply Chain Buyer Intern- Bachelor's (Gloucester, MA)",
+     "location_raw": "Gloucester,MA",
+     "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/GloucesterMA/Summer-2027-Supply-Chain-Buyer-Intern--Bachelor-s--Gloucester--MA-_R2627055",
+     "posted_raw": "Posted 5 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/AustinTX/Summer-2027-Supply-Chain-Buyer-Intern--Bachelor-s--Austin--TX-_R2627046-1",
+     "title": "Summer 2027 Supply Chain Buyer Intern- Bachelor's (Austin, TX)",
+     "location_raw": "Austin,TX",
+     "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/AustinTX/Summer-2027-Supply-Chain-Buyer-Intern--Bachelor-s--Austin--TX-_R2627046-1",
+     "posted_raw": "Posted 5 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/AustinTX/Summer-2027-Supply-Chain-Materials-Project-Manager-Intern--Master-s--Austin--TX-_R2627069",
+     "title": "Summer 2027 Supply Chain Materials Project Manager Intern- Master's (Austin, TX)",
+     "location_raw": "Austin,TX",
+     "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/AustinTX/Summer-2027-Supply-Chain-Materials-Project-Manager-Intern--Master-s--Austin--TX-_R2627069",
+     "posted_raw": "Posted 5 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Santa-ClaraCA/Summer-2027-Supply-Chain-Materials-Project-Manager-Intern--Master-s--Santa-Clara--CA-_R2627074",
+     "title": "Summer 2027 Supply Chain Materials Project Manager Intern- Master's (Santa Clara, CA)",
+     "location_raw": "Santa Clara,CA",
+     "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/Santa-ClaraCA/Summer-2027-Supply-Chain-Materials-Project-Manager-Intern--Master-s--Santa-Clara--CA-_R2627074",
+     "posted_raw": "Posted 5 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Santa-ClaraCA/Summer-2027-Supply-Chain-Buyer-Intern--Bachelor-s--Santa-Clara--CA-_R2627066",
+     "title": "Summer 2027 Supply Chain Buyer Intern- Bachelor's (Santa Clara, CA)",
+     "location_raw": "Santa Clara,CA",
+     "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/Santa-ClaraCA/Summer-2027-Supply-Chain-Buyer-Intern--Bachelor-s--Santa-Clara--CA-_R2627066",
+     "posted_raw": "Posted 5 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/SingaporeSGP/Process-Engineering-Intern--Hybrid-Bonding-_R2626437",
+     "title": "Process Engineering Intern (Hybrid Bonding)",
+     "location_raw": "Singapore,SGP",
+     "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/SingaporeSGP/Process-Engineering-Intern--Hybrid-Bonding-_R2626437",
+     "posted_raw": "Posted Today",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/SingaporeSGP/Process-Engineer-Internship--Enhancing-CVD-process-efficiency-and-film-quality-through-systematic-recipe-optimization_R2626530",
+     "title": "Process Engineer Internship: Enhancing CVD process efficiency and film quality through systematic recipe optimization",
+     "location_raw": "Singapore,SGP",
+     "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/SingaporeSGP/Process-Engineer-Internship--Enhancing-CVD-process-efficiency-and-film-quality-through-systematic-recipe-optimization_R2626530",
+     "posted_raw": "Posted Today",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/SingaporeSGP/Technology-Development-Engineer---Hybrid-Bonding---Advanced-Packaging--Internship-_R2626901",
+     "title": "Technology Development Engineer – Hybrid Bonding & Advanced Packaging (Internship)",
+     "location_raw": "Singapore,SGP",
+     "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/SingaporeSGP/Technology-Development-Engineer---Hybrid-Bonding---Advanced-Packaging--Internship-_R2626901",
+     "posted_raw": "Posted Today",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/SingaporeSGP/College-Intern---Process-Integration_R2626676",
+     "title": "College Intern - Process Integration",
+     "location_raw": "Singapore,SGP",
+     "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/SingaporeSGP/College-Intern---Process-Integration_R2626676",
+     "posted_raw": "Posted Today",
+     "posted_at": null
+    }
+   ],
+   "tenant": "amat/wd1/External"
+  },
+  {
+   "platform": "workday",
+   "company": "Micron",
+   "company_domain": "micron.com",
+   "board_key": "External",
+   "board_url": "https://micron.wd1.myworkdayjobs.com/en-US/External",
+   "board_total_reported": null,
+   "postings": [
+    {
+     "external_id": "/job/Boise-ID---Main-Site/Intern---Mask-Technology_JR110035",
+     "title": "Intern - Mask Technology",
+     "location_raw": "Boise, ID - Main Site",
+     "url": "https://micron.wd1.myworkdayjobs.com/en-US/External/job/Boise-ID---Main-Site/Intern---Mask-Technology_JR110035",
+     "posted_raw": "Posted Today",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Hyderabad---Phoenix-Aquila-India/Intern---FDV-PCV--NAND-Product-Engineering_JR109268",
+     "title": "Intern - FDV/PCV, NAND Product Engineering",
+     "location_raw": "Hyderabad - Phoenix Aquila, India",
+     "url": "https://micron.wd1.myworkdayjobs.com/en-US/External/job/Hyderabad---Phoenix-Aquila-India/Intern---FDV-PCV--NAND-Product-Engineering_JR109268",
+     "posted_raw": "Posted Today",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Fab-10NX-Singapore/Intern---Engineer-HVM-PEE-PHOTO_JR99361",
+     "title": "Intern - Engineer HVM PEE PHOTO",
+     "location_raw": "Fab 10N/X, Singapore",
+     "url": "https://micron.wd1.myworkdayjobs.com/en-US/External/job/Fab-10NX-Singapore/Intern---Engineer-HVM-PEE-PHOTO_JR99361",
+     "posted_raw": "Posted Today",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Fab-10NX-Singapore/Intern---ADTS-ATI-Process-Integration-Engineer_JR103501",
+     "title": "Intern - ADTS ATI Process Integration Engineer",
+     "location_raw": "Fab 10N/X, Singapore",
+     "url": "https://micron.wd1.myworkdayjobs.com/en-US/External/job/Fab-10NX-Singapore/Intern---ADTS-ATI-Process-Integration-Engineer_JR103501",
+     "posted_raw": "Posted Today",
+     "posted_at": null
+    }
+   ],
+   "tenant": "micron/wd1/External"
+  },
+  {
+   "platform": "workday",
+   "company": "Pfizer",
+   "company_domain": "pfizer.com",
+   "board_key": "PfizerCareers",
+   "board_url": "https://pfizer.wd1.myworkdayjobs.com/en-US/PfizerCareers",
+   "board_total_reported": null,
+   "postings": [
+    {
+     "external_id": "/job/Hong-Kong---Quarry-Bay/Pharmacy-Intern--Medical-Affairs_4961610",
+     "title": "Pharmacy Intern, Medical Affairs",
+     "location_raw": "Hong Kong - Quarry Bay",
+     "url": "https://pfizer.wd1.myworkdayjobs.com/en-US/PfizerCareers/job/Hong-Kong---Quarry-Bay/Pharmacy-Intern--Medical-Affairs_4961610",
+     "posted_raw": "Posted 19 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Hong-Kong---Quarry-Bay/Pharmacy-Intern--Regulatory-Sciences_4961611",
+     "title": "Pharmacy Intern, Regulatory Sciences",
+     "location_raw": "Hong Kong - Quarry Bay",
+     "url": "https://pfizer.wd1.myworkdayjobs.com/en-US/PfizerCareers/job/Hong-Kong---Quarry-Bay/Pharmacy-Intern--Regulatory-Sciences_4961611",
+     "posted_raw": "Posted 17 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Ireland---Dublin---Grange-Castle/XMLNAME-2027-Internship---Pfizer--Grange-Castle_4962930",
+     "title": "2027 Internship - Pfizer, Grange Castle",
+     "location_raw": "Ireland - Dublin - Grange Castle",
+     "url": "https://pfizer.wd1.myworkdayjobs.com/en-US/PfizerCareers/job/Ireland---Dublin---Grange-Castle/XMLNAME-2027-Internship---Pfizer--Grange-Castle_4962930",
+     "posted_raw": "Posted Today",
+     "posted_at": null
+    }
+   ],
+   "tenant": "pfizer/wd1/PfizerCareers"
+  },
+  {
+   "platform": "workday",
+   "company": "Medtronic",
+   "company_domain": "medtronic.com",
+   "board_key": "MedtronicCareers",
+   "board_url": "https://medtronic.wd1.myworkdayjobs.com/en-US/MedtronicCareers",
+   "board_total_reported": null,
+   "postings": [
+    {
+     "external_id": "/job/Shanghai-Shanghai-China/MTC-Intern_R70480-1",
+     "title": "MTC-Intern",
+     "location_raw": "Shanghai, Shanghai, China",
+     "url": "https://medtronic.wd1.myworkdayjobs.com/en-US/MedtronicCareers/job/Shanghai-Shanghai-China/MTC-Intern_R70480-1",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Shanghai-Shanghai-China/IT-Intern_R72764",
+     "title": "IT Intern",
+     "location_raw": "Shanghai, Shanghai, China",
+     "url": "https://medtronic.wd1.myworkdayjobs.com/en-US/MedtronicCareers/job/Shanghai-Shanghai-China/IT-Intern_R72764",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Seoul-Seoul-Korea/Marketing-Intern_R73780-1",
+     "title": "Marketing Intern",
+     "location_raw": "Seoul, Seoul, Korea",
+     "url": "https://medtronic.wd1.myworkdayjobs.com/en-US/MedtronicCareers/job/Seoul-Seoul-Korea/Marketing-Intern_R73780-1",
+     "posted_raw": "Posted 26 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Alicante-Alicante-Spain/Technical-Support-Intern_R73161-1",
+     "title": "Technical Support Intern",
+     "location_raw": "3 Locations",
+     "url": "https://medtronic.wd1.myworkdayjobs.com/en-US/MedtronicCareers/job/Alicante-Alicante-Spain/Technical-Support-Intern_R73161-1",
+     "posted_raw": "Posted 18 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Taipei-Taipei-Taiwan/Cardiovascular--Marketing-Intern_R75072-1",
+     "title": "Cardiovascular _Marketing Intern",
+     "location_raw": "Taipei, Taipei, Taiwan",
+     "url": "https://medtronic.wd1.myworkdayjobs.com/en-US/MedtronicCareers/job/Taipei-Taipei-Taiwan/Cardiovascular--Marketing-Intern_R75072-1",
+     "posted_raw": "Posted 13 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Fridley-Minnesota-United-States-of-America/Engineering-Intern---Summer-2027_R73623-1",
+     "title": "Engineering Intern – Summer 2027",
+     "location_raw": "21 Locations",
+     "url": "https://medtronic.wd1.myworkdayjobs.com/en-US/MedtronicCareers/job/Fridley-Minnesota-United-States-of-America/Engineering-Intern---Summer-2027_R73623-1",
+     "posted_raw": "Posted 30 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Minneapolis-Minnesota-United-States-of-America/IT-Intern---Summer-2027_R73625-1",
+     "title": "IT Intern - Summer 2027",
+     "location_raw": "Minneapolis, Minnesota, United States of America",
+     "url": "https://medtronic.wd1.myworkdayjobs.com/en-US/MedtronicCareers/job/Minneapolis-Minnesota-United-States-of-America/IT-Intern---Summer-2027_R73625-1",
+     "posted_raw": "Posted 28 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Minneapolis-Minnesota-United-States-of-America/Finance-Intern---Summer-2027_R73629-2",
+     "title": "Finance Intern - Summer 2027",
+     "location_raw": "Minneapolis, Minnesota, United States of America",
+     "url": "https://medtronic.wd1.myworkdayjobs.com/en-US/MedtronicCareers/job/Minneapolis-Minnesota-United-States-of-America/Finance-Intern---Summer-2027_R73629-2",
+     "posted_raw": "Posted 28 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Fridley-Minnesota-United-States-of-America/Software-Engineering-Intern---Summer-2027_R73630-1",
+     "title": "Software Engineering Intern – Summer 2027",
+     "location_raw": "21 Locations",
+     "url": "https://medtronic.wd1.myworkdayjobs.com/en-US/MedtronicCareers/job/Fridley-Minnesota-United-States-of-America/Software-Engineering-Intern---Summer-2027_R73630-1",
+     "posted_raw": "Posted 30 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Minneapolis-Minnesota-United-States-of-America/Supply-Chain-Supply-Management-Intern--Summer-2027_R73693-2",
+     "title": "Supply Chain/Supply Management Intern- Summer 2027",
+     "location_raw": "7 Locations",
+     "url": "https://medtronic.wd1.myworkdayjobs.com/en-US/MedtronicCareers/job/Minneapolis-Minnesota-United-States-of-America/Supply-Chain-Supply-Management-Intern--Summer-2027_R73693-2",
+     "posted_raw": "Posted 30 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Minneapolis-Minnesota-United-States-of-America/Engineering-Intern-Summer-2027---Candidates-Attending-2026-O4U-Engineering-Conference_R75847-1",
+     "title": "Engineering Intern Summer 2027 - Candidates Attending 2026 O4U Engineering Conference",
+     "location_raw": "15 Locations",
+     "url": "https://medtronic.wd1.myworkdayjobs.com/en-US/MedtronicCareers/job/Minneapolis-Minnesota-United-States-of-America/Engineering-Intern-Summer-2027---Candidates-Attending-2026-O4U-Engineering-Conference_R75847-1",
+     "posted_raw": "Posted 6 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Mounds-View-Minnesota-United-States-of-America/Engineering-Intern-Summer-2027--Candidates-Attending-2026-SWE-National-Conference-_R76021-1",
+     "title": "Engineering Intern Summer 2027- Candidates Attending 2026 SWE National Conference ",
+     "location_raw": "20 Locations",
+     "url": "https://medtronic.wd1.myworkdayjobs.com/en-US/MedtronicCareers/job/Mounds-View-Minnesota-United-States-of-America/Engineering-Intern-Summer-2027--Candidates-Attending-2026-SWE-National-Conference-_R76021-1",
+     "posted_raw": "Posted 4 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Shanghai-Shanghai-China/EHS-Intern_R71545",
+     "title": "EHS Intern",
+     "location_raw": "Shanghai, Shanghai, China",
+     "url": "https://medtronic.wd1.myworkdayjobs.com/en-US/MedtronicCareers/job/Shanghai-Shanghai-China/EHS-Intern_R71545",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Shanghai-Shanghai-China/MTC--Intern_R75604-1",
+     "title": "MTC_ Intern",
+     "location_raw": "Shanghai, Shanghai, China",
+     "url": "https://medtronic.wd1.myworkdayjobs.com/en-US/MedtronicCareers/job/Shanghai-Shanghai-China/MTC--Intern_R75604-1",
+     "posted_raw": "Posted 7 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Taipei-Taipei-Taiwan/Accounting-Intern_R76357-1",
+     "title": "Accounting Intern",
+     "location_raw": "Taipei, Taipei, Taiwan",
+     "url": "https://medtronic.wd1.myworkdayjobs.com/en-US/MedtronicCareers/job/Taipei-Taipei-Taiwan/Accounting-Intern_R76357-1",
+     "posted_raw": "Posted Today",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Shanghai-Shanghai-China/R-D-Intern--Tech_R70374-2",
+     "title": "R&D Intern: Tech",
+     "location_raw": "Shanghai, Shanghai, China",
+     "url": "https://medtronic.wd1.myworkdayjobs.com/en-US/MedtronicCareers/job/Shanghai-Shanghai-China/R-D-Intern--Tech_R70374-2",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    }
+   ],
+   "tenant": "medtronic/wd1/MedtronicCareers"
+  },
+  {
+   "platform": "workday",
+   "company": "Agilent",
+   "company_domain": "agilent.com",
+   "board_key": "Agilent_Student_Careers",
+   "board_url": "https://agilent.wd5.myworkdayjobs.com/en-US/Agilent_Student_Careers",
+   "board_total_reported": null,
+   "postings": [
+    {
+     "external_id": "/job/China-Shanghai/Intern_4035743",
+     "title": "Intern",
+     "location_raw": "China-Shanghai",
+     "url": "https://agilent.wd5.myworkdayjobs.com/en-US/Agilent_Student_Careers/job/China-Shanghai/Intern_4035743",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/China-Shanghai/Intern_4035744",
+     "title": "Intern",
+     "location_raw": "China-Shanghai",
+     "url": "https://agilent.wd5.myworkdayjobs.com/en-US/Agilent_Student_Careers/job/China-Shanghai/Intern_4035744",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/China-Shanghai/Intern_4035912",
+     "title": "Intern",
+     "location_raw": "China-Shanghai",
+     "url": "https://agilent.wd5.myworkdayjobs.com/en-US/Agilent_Student_Careers/job/China-Shanghai/Intern_4035912",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/US-DE-Wilmington/Electrical-Engineering-Intern_4038526",
+     "title": "Electrical Engineering Intern",
+     "location_raw": "US-DE-Wilmington",
+     "url": "https://agilent.wd5.myworkdayjobs.com/en-US/Agilent_Student_Careers/job/US-DE-Wilmington/Electrical-Engineering-Intern_4038526",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/US-DE-Wilmington/Video-Production-Intern_4038651",
+     "title": "Video Production Intern",
+     "location_raw": "US-DE-Wilmington",
+     "url": "https://agilent.wd5.myworkdayjobs.com/en-US/Agilent_Student_Careers/job/US-DE-Wilmington/Video-Production-Intern_4038651",
+     "posted_raw": "Posted 21 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/US-DE-Remote-Location-WilmingtonNewport-Area/Community-Operations-Intern_4038571",
+     "title": "Community Operations Intern",
+     "location_raw": "8 Locations",
+     "url": "https://agilent.wd5.myworkdayjobs.com/en-US/Agilent_Student_Careers/job/US-DE-Remote-Location-WilmingtonNewport-Area/Community-Operations-Intern_4038571",
+     "posted_raw": "Posted 11 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/China-Shanghai/R-D-Software-Intern_4039114",
+     "title": "AI/ML Software Engineer Intern",
+     "location_raw": "China-Shanghai",
+     "url": "https://agilent.wd5.myworkdayjobs.com/en-US/Agilent_Student_Careers/job/China-Shanghai/R-D-Software-Intern_4039114",
+     "posted_raw": "Posted 24 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Netherlands-Remote-Location-Middelburg/Intern-Benelux-Sales_4038945",
+     "title": "Business Development Intern – Bridging Molecular Research, Protein QC & Cell Analysis (Netherlands)",
+     "location_raw": "Netherlands-Remote Location-Middelburg​",
+     "url": "https://agilent.wd5.myworkdayjobs.com/en-US/Agilent_Student_Careers/job/Netherlands-Remote-Location-Middelburg/Intern-Benelux-Sales_4038945",
+     "posted_raw": "Posted 26 Days Ago",
+     "posted_at": null
+    }
+   ],
+   "tenant": "agilent/wd5/Agilent_Student_Careers"
+  },
+  {
+   "platform": "workday",
+   "company": "Clorox",
+   "company_domain": "clorox.com",
+   "board_key": "Clorox",
+   "board_url": "https://clorox.wd1.myworkdayjobs.com/en-US/Clorox",
+   "board_total_reported": null,
+   "postings": [
+    {
+     "external_id": "/job/Burnside-KY---USA/Plant-Intern_21841",
+     "title": "Plant Intern",
+     "location_raw": "Burnside, KY - USA",
+     "url": "https://clorox.wd1.myworkdayjobs.com/en-US/Clorox/job/Burnside-KY---USA/Plant-Intern_21841",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    }
+   ],
+   "tenant": "clorox/wd1/Clorox"
+  },
+  {
+   "platform": "workday",
+   "company": "Baker Hughes",
+   "company_domain": "bakerhughes.com",
+   "board_key": "BakerHughes",
+   "board_url": "https://bakerhughes.wd5.myworkdayjobs.com/en-US/BakerHughes",
+   "board_total_reported": null,
+   "postings": [
+    {
+     "external_id": "/job/ID-JW-JAKARTA-JI-RA-KARTINI-KAV-8-CILANDAK-BARAT/Intern-Business--Indonesia--2026-Opportunities_R168104",
+     "title": "Intern Business (Indonesia) 2026 Opportunities",
+     "location_raw": "ID-JW-JAKARTA-JI. R.A. KARTINI KAV. 8, CILANDAK BARAT",
+     "url": "https://bakerhughes.wd5.myworkdayjobs.com/en-US/BakerHughes/job/ID-JW-JAKARTA-JI-RA-KARTINI-KAV-8-CILANDAK-BARAT/Intern-Business--Indonesia--2026-Opportunities_R168104",
+     "posted_raw": "Posted 14 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/MY-KUL-KUALA-LUMPUR-21ST-FLOOR-MENARA-TAN--TAN/University-Internship---Finance---Accounting-2026-Opportunities--Malaysia-_R154616",
+     "title": "Intern Finance & Accounting (Malaysia) 2026 Opportunities",
+     "location_raw": "MY-KUL-KUALA LUMPUR-21ST FLOOR MENARA TAN & TAN",
+     "url": "https://bakerhughes.wd5.myworkdayjobs.com/en-US/BakerHughes/job/MY-KUL-KUALA-LUMPUR-21ST-FLOOR-MENARA-TAN--TAN/University-Internship---Finance---Accounting-2026-Opportunities--Malaysia-_R154616",
+     "posted_raw": "Posted 3 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/GA-PORT-GENTIL-Route-de-Sogara-Parcelle-No-160-Section-PA/Emerging-Talent-Assembly--Maintenance---Overhaul-Intern-2026-Opportunities--Gabon-_R158345",
+     "title": "Intern – Assembly, Maintenance & Overhaul – Gabon – 2026",
+     "location_raw": "GA-PORT GENTIL-Route de Sogara Parcelle No. 160, Section PA",
+     "url": "https://bakerhughes.wd5.myworkdayjobs.com/en-US/BakerHughes/job/GA-PORT-GENTIL-Route-de-Sogara-Parcelle-No-160-Section-PA/Emerging-Talent-Assembly--Maintenance---Overhaul-Intern-2026-Opportunities--Gabon-_R158345",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/IT-BA-BARI-STRADA-PROVINCIALE-PER-MODUGNO-10C613/Emerging-Talent---Engineering-Intern-2026-Opportunities--Bari-_R164101",
+     "title": "Intern – Engineering - Bari - 2026 (M/F/D)",
+     "location_raw": "IT-BA-BARI-STRADA PROVINCIALE PER MODUGNO 10+C613",
+     "url": "https://bakerhughes.wd5.myworkdayjobs.com/en-US/BakerHughes/job/IT-BA-BARI-STRADA-PROVINCIALE-PER-MODUGNO-10C613/Emerging-Talent---Engineering-Intern-2026-Opportunities--Bari-_R164101",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/IT-FI-FLORENCE-VIA-FELICE-MATTEUCCI-2/Emerging-Talent---Sourcing-Intern-2026-Opportunities--Florence-_R158134",
+     "title": "Intern – Sourcing – Florence, Italy – 2026 (M/F/D)",
+     "location_raw": "IT-FI-FLORENCE-VIA FELICE MATTEUCCI 2",
+     "url": "https://bakerhughes.wd5.myworkdayjobs.com/en-US/BakerHughes/job/IT-FI-FLORENCE-VIA-FELICE-MATTEUCCI-2/Emerging-Talent---Sourcing-Intern-2026-Opportunities--Florence-_R158134",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/PL-PDK-WARSAW-ALEJA-KRAKOWSKA-110114-BLD-3014613/Emerging-Talent--Engineering-Intern-2026-Opportunities--Warsaw-_R158192-1",
+     "title": "Intern – Engineering – Warsaw, Poland – 2026 (M/F/D)",
+     "location_raw": "PL-PDK-WARSAW-ALEJA KRAKOWSKA 110/114 BLD 3014613",
+     "url": "https://bakerhughes.wd5.myworkdayjobs.com/en-US/BakerHughes/job/PL-PDK-WARSAW-ALEJA-KRAKOWSKA-110114-BLD-3014613/Emerging-Talent--Engineering-Intern-2026-Opportunities--Warsaw-_R158192-1",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/IT-FI-FLORENCE-VIA-FELICE-MATTEUCCI-2/Emerging-Talent---Engineering-Intern-2026-Opportunities--Florence-_R158404",
+     "title": "Intern – Engineering – Florence, Italy – 2026 (M/F/D)",
+     "location_raw": "IT-FI-FLORENCE-VIA FELICE MATTEUCCI 2",
+     "url": "https://bakerhughes.wd5.myworkdayjobs.com/en-US/BakerHughes/job/IT-FI-FLORENCE-VIA-FELICE-MATTEUCCI-2/Emerging-Talent---Engineering-Intern-2026-Opportunities--Florence-_R158404",
+     "posted_raw": "Posted 28 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/IT-FI-FLORENCE-VIA-FELICE-MATTEUCCI-2/Emerging-Talent---Services-Intern-2026-Opportunities--Florence-_R158468",
+     "title": "Intern - Services - Florence, Italy - 2026 (M/F/D)",
+     "location_raw": "IT-FI-FLORENCE-VIA FELICE MATTEUCCI 2",
+     "url": "https://bakerhughes.wd5.myworkdayjobs.com/en-US/BakerHughes/job/IT-FI-FLORENCE-VIA-FELICE-MATTEUCCI-2/Emerging-Talent---Services-Intern-2026-Opportunities--Florence-_R158468",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/IT-FI-FLORENCE-VIA-FELICE-MATTEUCCI-2/Emerging-Talent---Manufacturing-Intern-2026-Opportunities--Florence-_R158416",
+     "title": "Intern – Manufacturing - Florence, Italy - 2026 (M/F/D)",
+     "location_raw": "IT-FI-FLORENCE-VIA FELICE MATTEUCCI 2",
+     "url": "https://bakerhughes.wd5.myworkdayjobs.com/en-US/BakerHughes/job/IT-FI-FLORENCE-VIA-FELICE-MATTEUCCI-2/Emerging-Talent---Manufacturing-Intern-2026-Opportunities--Florence-_R158416",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/IT-VV-VIBO-VALENTIA-VIA-LE-MARINATE/Emerging-Talent---Engineering-Intern-2026-Opportunities--Vibo-_R158420",
+     "title": "Intern – Engineering – Vibo, Italy – 2026 (M/F/D)",
+     "location_raw": "IT-VV-VIBO VALENTIA-VIA LE MARINATE",
+     "url": "https://bakerhughes.wd5.myworkdayjobs.com/en-US/BakerHughes/job/IT-VV-VIBO-VALENTIA-VIA-LE-MARINATE/Emerging-Talent---Engineering-Intern-2026-Opportunities--Vibo-_R158420",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/IT-BA-BARI-STRADA-PROVINCIALE-PER-MODUGNO-10C613/Emerging-Talent---Procurement-Intern-2026-Opportunities--Bari-_R162410",
+     "title": "Intern – Procurement – Bari, Italy – 2026 (M/F/D)",
+     "location_raw": "IT-BA-BARI-STRADA PROVINCIALE PER MODUGNO 10+C613",
+     "url": "https://bakerhughes.wd5.myworkdayjobs.com/en-US/BakerHughes/job/IT-BA-BARI-STRADA-PROVINCIALE-PER-MODUGNO-10C613/Emerging-Talent---Procurement-Intern-2026-Opportunities--Bari-_R162410",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/IT-BA-BARI-STRADA-PROVINCIALE-PER-MODUGNO-10C613/Emerging-Talent---Engineering-Intern-2026-Opportunities--Bari-_R162788",
+     "title": "Intern – Engineering – Bari, Italy – 2026 (M/F/D)",
+     "location_raw": "IT-BA-BARI-STRADA PROVINCIALE PER MODUGNO 10+C613",
+     "url": "https://bakerhughes.wd5.myworkdayjobs.com/en-US/BakerHughes/job/IT-BA-BARI-STRADA-PROVINCIALE-PER-MODUGNO-10C613/Emerging-Talent---Engineering-Intern-2026-Opportunities--Bari-_R162788",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/IT-FI-FLORENCE-VIA-FELICE-MATTEUCCI-2/Emerging-Talent---Engineering-Internship-2026-Opportunities--Florence-_R162949",
+     "title": "Intern – Engineering – Florence, Italy – 2026 (M/F/D)",
+     "location_raw": "IT-FI-FLORENCE-VIA FELICE MATTEUCCI 2",
+     "url": "https://bakerhughes.wd5.myworkdayjobs.com/en-US/BakerHughes/job/IT-FI-FLORENCE-VIA-FELICE-MATTEUCCI-2/Emerging-Talent---Engineering-Internship-2026-Opportunities--Florence-_R162949",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/IT-FI-FLORENCE-VIA-FELICE-MATTEUCCI-2/Emerging-Talent---Reciprocating-Compressor-Intern-2026-Opportunities--Florence---M-F-D-_R166188",
+     "title": "Intern – Reciprocating Compressor -  Florence - 2026 (M/F/D)",
+     "location_raw": "IT-FI-FLORENCE-VIA FELICE MATTEUCCI 2",
+     "url": "https://bakerhughes.wd5.myworkdayjobs.com/en-US/BakerHughes/job/IT-FI-FLORENCE-VIA-FELICE-MATTEUCCI-2/Emerging-Talent---Reciprocating-Compressor-Intern-2026-Opportunities--Florence---M-F-D-_R166188",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/HU-PE-FOT-EAST-GATE-BUSINESS-PARK/Emerging-Talent--Enginering-Intern-2026-Opportunities--Ft---M-F-D-_R166163",
+     "title": "Intern - Engineering - Fót, Hungary - 2026 (M/F/D)",
+     "location_raw": "HU-PE-FOT-EAST GATE BUSINESS PARK",
+     "url": "https://bakerhughes.wd5.myworkdayjobs.com/en-US/BakerHughes/job/HU-PE-FOT-EAST-GATE-BUSINESS-PARK/Emerging-Talent--Enginering-Intern-2026-Opportunities--Ft---M-F-D-_R166163",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/IT-FI-FLORENCE-VIA-FELICE-MATTEUCCI-2/Emerging-Talent---Project-Management-Intern-2026-Opportunities--Florence-_R158409",
+     "title": "Intern – Project Management - Florence, Italy - 2026 (M/F/D)",
+     "location_raw": "IT-FI-FLORENCE-VIA FELICE MATTEUCCI 2",
+     "url": "https://bakerhughes.wd5.myworkdayjobs.com/en-US/BakerHughes/job/IT-FI-FLORENCE-VIA-FELICE-MATTEUCCI-2/Emerging-Talent---Project-Management-Intern-2026-Opportunities--Florence-_R158409",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/IT-SO-TALAMONA-VIA-ROMA-32/Emerging-Talent---Manufacturing-Intern-2026-Opportunities--Talamona--Sondrio-_R158415-1",
+     "title": "Intern – Manufacturing - Talamona, Sondrio, Italy - 2026 (M/F/D)",
+     "location_raw": "IT-SO-TALAMONA-VIA ROMA, 32",
+     "url": "https://bakerhughes.wd5.myworkdayjobs.com/en-US/BakerHughes/job/IT-SO-TALAMONA-VIA-ROMA-32/Emerging-Talent---Manufacturing-Intern-2026-Opportunities--Talamona--Sondrio-_R158415-1",
+     "posted_raw": "Posted 30+ Days Ago",
+     "posted_at": null
+    }
+   ],
+   "tenant": "bakerhughes/wd5/BakerHughes"
+  },
+  {
+   "platform": "workday",
+   "company": "Rockwell Automation",
+   "company_domain": "rockwellautomation.com",
+   "board_key": "External_Rockwell_Automation",
+   "board_url": "https://rockwellautomation.wd1.myworkdayjobs.com/en-US/External_Rockwell_Automation",
+   "board_total_reported": null,
+   "postings": [
+    {
+     "external_id": "/job/Katowice-Poland/Embedded-Software--Intern_R26-5675-1",
+     "title": "Embedded Software, Intern",
+     "location_raw": "Katowice, Poland",
+     "url": "https://rockwellautomation.wd1.myworkdayjobs.com/en-US/External_Rockwell_Automation/job/Katowice-Poland/Embedded-Software--Intern_R26-5675-1",
+     "posted_raw": "Posted 12 Days Ago",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Katowice-Poland/Credit-Management-Intern_R26-5901",
+     "title": "Credit Management Intern",
+     "location_raw": "Katowice, Poland",
+     "url": "https://rockwellautomation.wd1.myworkdayjobs.com/en-US/External_Rockwell_Automation/job/Katowice-Poland/Credit-Management-Intern_R26-5901",
+     "posted_raw": "Posted Today",
+     "posted_at": null
+    },
+    {
+     "external_id": "/job/Cambridge-Ontario-Canada/EHS-Co-op--Intern_R26-6480",
+     "title": "EHS Co-op/ Intern",
+     "location_raw": "Cambridge, Ontario, Canada",
+     "url": "https://rockwellautomation.wd1.myworkdayjobs.com/en-US/External_Rockwell_Automation/job/Cambridge-Ontario-Canada/EHS-Co-op--Intern_R26-6480",
+     "posted_raw": "Posted 4 Days Ago",
+     "posted_at": null
+    }
+   ],
+   "tenant": "rockwellautomation/wd1/External_Rockwell_Automation"
+  },
+  {
+   "platform": "workday",
+   "company": "GE Vernova",
+   "company_domain": "gevernova.com",
+   "board_key": "Vernova_ExternalSite",
+   "board_url": "https://gevernova.wd5.myworkdayjobs.com/en-US/Vernova_ExternalSite",
+   "board_total_reported": null,
+   "postings": [
+    {
+     "external_id": "/job/Schenectady/GE-Vernova-Operations-Intern---Customer-Data-Management-2027_R5050478-2",
+     "title": "GE Vernova Operations Intern - Customer Data Management 2027",
+     "location_raw": "Schenectady",
+     "url": "https://gevernova.wd5.myworkdayjobs.com/en-US/Vernova_ExternalSite/job/Schenectady/GE-Vernova-Operations-Intern---Customer-Data-Management-2027_R5050478-2",
+     "posted_raw": "Posted Today",
+     "posted_at": null
+    }
+   ],
+   "tenant": "gevernova/wd5/Vernova_ExternalSite"
+  },
+  {
+   "platform": "workday",
+   "company": "Merck",
+   "company_domain": "merck.com",
+   "board_key": "SearchJobs",
+   "board_url": "https://msd.wd5.myworkdayjobs.com/en-US/SearchJobs",
+   "board_total_reported": 439,
+   "postings": [
+    {
+     "external_id": "/job/SGP---Singapore---Singapore-70-Tuas-West-Dr/Reliability-Engineer-Intern_R415054",
+     "title": "Reliability Engineer Intern",
+     "location_raw": "SGP - Singapore - Singapore (70 Tuas West Dr)",
+     "url": "https://msd.wd5.myworkdayjobs.com/en-US/SearchJobs/job/SGP---Singapore---Singapore-70-Tuas-West-Dr/Reliability-Engineer-Intern_R415054",
+     "posted_raw": "Posted Today",
+     "posted_at": null
+    }
+   ],
+   "tenant": "msd/wd5/SearchJobs"
+  },
+  {
+   "platform": "greenhouse",
+   "company": "Kairos Power",
+   "company_domain": "kairospower.com",
+   "board_key": "kairospower",
+   "board_url": "https://job-boards.greenhouse.io/kairospower",
+   "board_total_reported": null,
+   "postings": [
+    {
+     "external_id": "6122803004",
+     "title": "Chemical and Materials Engineering Internship - Summer 2027",
+     "location_raw": "Alameda, CA, Albuquerque, NM or Oak Ridge, TN ",
+     "url": "https://job-boards.greenhouse.io/kairospower/jobs/6122803004",
+     "posted_raw": "2026-08-19T16:52:54-04:00",
+     "posted_at": "2026-08-19T16:52:54-04:00"
+    },
+    {
+     "external_id": "6123620004",
+     "title": "Civil Engineering Internship - Summer 2027",
+     "location_raw": "Alameda, CA, Albuquerque, NM or Oak Ridge TN ",
+     "url": "https://job-boards.greenhouse.io/kairospower/jobs/6123620004",
+     "posted_raw": "2026-08-19T16:53:10-04:00",
+     "posted_at": "2026-08-19T16:53:10-04:00"
+    },
+    {
+     "external_id": "6123657004",
+     "title": "Electrical Engineering Internship - Summer 2027",
+     "location_raw": "Alameda, CA, Albuquerque, NM or Oak Ridge, TN ",
+     "url": "https://job-boards.greenhouse.io/kairospower/jobs/6123657004",
+     "posted_raw": "2026-08-19T16:53:40-04:00",
+     "posted_at": "2026-08-19T16:53:40-04:00"
+    },
+    {
+     "external_id": "6123676004",
+     "title": "Mechanical and Manufacturing Engineering Internship - Summer 2027 ",
+     "location_raw": "Alameda, CA, Albuquerque, NM, or Oak Ridge, TN",
+     "url": "https://job-boards.greenhouse.io/kairospower/jobs/6123676004",
+     "posted_raw": "2026-08-19T16:54:06-04:00",
+     "posted_at": "2026-08-19T16:54:06-04:00"
+    },
+    {
+     "external_id": "6123830004",
+     "title": "Nuclear Engineering Internship - Summer 2027 ",
+     "location_raw": "Alameda, CA, Albuquerque, NM, Oak Ridge, TN",
+     "url": "https://job-boards.greenhouse.io/kairospower/jobs/6123830004",
+     "posted_raw": "2026-08-19T16:54:21-04:00",
+     "posted_at": "2026-08-19T16:54:21-04:00"
+    }
+   ]
+  },
+  {
+   "platform": "greenhouse",
+   "company": "Ginkgo Bioworks",
+   "company_domain": "ginkgobioworks.com",
+   "board_key": "ginkgobioworks",
+   "board_url": "https://job-boards.greenhouse.io/ginkgobioworks",
+   "board_total_reported": null,
+   "postings": [
+    {
+     "external_id": "5022683007",
+     "title": "Automation Scientist Intern, RAC Operations",
+     "location_raw": "Boston, Massachusetts",
+     "url": "https://job-boards.greenhouse.io/ginkgobioworks/jobs/5022683007",
+     "posted_raw": "2026-04-01T08:35:30-04:00",
+     "posted_at": "2026-04-01T08:35:30-04:00"
+    },
+    {
+     "external_id": "5033171007",
+     "title": "Software Graduate Intern, Autonomous Lab",
+     "location_raw": "Emeryville, California",
+     "url": "https://job-boards.greenhouse.io/ginkgobioworks/jobs/5033171007",
+     "posted_raw": "2026-04-01T08:37:48-04:00",
+     "posted_at": "2026-04-01T08:37:48-04:00"
+    },
+    {
+     "external_id": "5033167007",
+     "title": "Software Intern, Autonomous Lab",
+     "location_raw": "Emeryville, California",
+     "url": "https://job-boards.greenhouse.io/ginkgobioworks/jobs/5033167007",
+     "posted_raw": "2026-04-01T08:39:10-04:00",
+     "posted_at": "2026-04-01T08:39:10-04:00"
+    }
+   ]
+  },
+  {
+   "platform": "greenhouse",
+   "company": "Lucid Motors",
+   "company_domain": "lucidmotors.com",
+   "board_key": "lucidmotors",
+   "board_url": "https://job-boards.greenhouse.io/lucidmotors",
+   "board_total_reported": null,
+   "postings": [
+    {
+     "external_id": "5197324007",
+     "title": "Business Operations Intern",
+     "location_raw": "Amsterdam, NH",
+     "url": "https://job-boards.greenhouse.io/lucidmotors/jobs/5197324007",
+     "posted_raw": "2026-08-25T07:06:19-04:00",
+     "posted_at": "2026-08-25T07:06:19-04:00"
+    },
+    {
+     "external_id": "5156608007",
+     "title": "Data Analyst Intern",
+     "location_raw": "Amsterdam, NH",
+     "url": "https://job-boards.greenhouse.io/lucidmotors/jobs/5156608007",
+     "posted_raw": "2026-08-25T07:06:39-04:00",
+     "posted_at": "2026-08-25T07:06:39-04:00"
+    },
+    {
+     "external_id": "5185317007",
+     "title": "IT Asset Management Intern",
+     "location_raw": "Amsterdam, NH",
+     "url": "https://job-boards.greenhouse.io/lucidmotors/jobs/5185317007",
+     "posted_raw": "2026-08-25T07:05:36-04:00",
+     "posted_at": "2026-08-25T07:05:36-04:00"
+    }
+   ]
+  },
+  {
+   "platform": "greenhouse",
+   "company": "Sila Nanotechnologies",
+   "company_domain": "silanano.com",
+   "board_key": "silananotechnologies",
+   "board_url": "https://job-boards.greenhouse.io/silananotechnologies",
+   "board_total_reported": null,
+   "postings": [
+    {
+     "external_id": "8157153",
+     "title": "FP&A Internship ",
+     "location_raw": "Alameda, CA",
+     "url": "https://job-boards.greenhouse.io/silananotechnologies/jobs/8157153",
+     "posted_raw": "2026-08-25T14:46:29-04:00",
+     "posted_at": "2026-08-25T14:46:29-04:00"
+    }
+   ]
+  },
+  {
+   "platform": "phenom",
+   "company": "Merck",
+   "company_domain": "merck.com",
+   "board_key": "jobs.merck.com",
+   "board_url": "https://jobs.merck.com/search-jobs",
+   "board_total_reported": null,
+   "postings": [
+    {
+     "external_id": "R395901",
+     "title": "2026 Future Talent Program – Manufacturing and Reliability Engineering Co-Op",
+     "location_raw": "West Point, Pennsylvania, United States of America",
+     "url": "https://msd.wd5.myworkdayjobs.com/en-US/SearchJobs/job/USA---Pennsylvania---West-Point/XMLNAME-2026-Future-Talent-Program---Manufacturing-and-Reliability-Engineering-Co-Op_R395901/apply",
+     "posted_raw": "2026-08-04T00:00:00.000+0000",
+     "posted_at": null
+    },
+    {
+     "external_id": "R395900",
+     "title": "2026 Future Talent Program - Vaccine Manufacturing Co-op",
+     "location_raw": "West Point, Pennsylvania, United States of America",
+     "url": "https://msd.wd5.myworkdayjobs.com/en-US/SearchJobs/job/USA---Pennsylvania---West-Point/XMLNAME-2026-Future-Talent-Program---Vaccine-Manufacturing-Co-op_R395900/apply",
+     "posted_raw": "2026-08-04T00:00:00.000+0000",
+     "posted_at": null
+    }
+   ]
+  }
+ ]
+}

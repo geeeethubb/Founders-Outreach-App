@@ -1,0 +1,747 @@
+{
+ "version": "recall-benchmark-1",
+ "generated_at": "2026-08-31",
+ "method": "Assembled by hand from postings observed live on 2026-08-31 through public, unauthenticated endpoints only: Workday cxs, Greenhouse boards-api, Lever v0, Ashby posting-api, Phenom /widgets, and the SimplifyJobs/Pitt CSC Summer 2027 listings file. Every entry cites the URL it was seen at. Nothing was invented, and nothing behind a login or a CAPTCHA was touched.",
+ "role_areas": [
+  "process_chemical",
+  "manufacturing",
+  "materials",
+  "energy",
+  "cpg",
+  "pharma",
+  "industrial_tech",
+  "ai_industry"
+ ],
+ "probe_notes": [
+  "Greenhouse/Lever/Ashby: 19 climate, materials and chemicals startups answered; only Kairos Power, Ginkgo Bioworks, Lucid Motors and Sila Nanotechnologies had any internship posted on 2026-08-31. Early-stage boards are not where this founder's recall is.",
+  "Workday: DuPont, Illumina, Albemarle and Chevron all answered, and none of them returned a single internship-titled posting in the first page of an 'intern' search — their boards are real but their internships were not open on this date.",
+  "Merck's careers site is Phenom; its apply links point at the Workday tenant msd.wd5/SearchJobs. The two Future Talent co-ops were visible through Phenom search but not in the first 40 Workday results for 'intern' — the same employer, two surfaces, two different answers.",
+  "Oracle Recruiting (Honeywell 697 postings, Vertiv 1041, CSX 13) answered the public recruitingCEJobRequisitions finder with search metadata but no requisition list in this shape; no Oracle postings are in the corpus, and the totals are recorded as a coverage gap instead."
+ ],
+ "coverage_gaps": [
+  {
+   "platform": "oracle",
+   "company": "Honeywell",
+   "board_total_reported": 697,
+   "endpoint": "https://ibqbjb.fa.ocs.oraclecloud.com/hcmRestApi/resources/latest/recruitingCEJobRequisitions"
+  },
+  {
+   "platform": "oracle",
+   "company": "Vertiv",
+   "board_total_reported": 1041,
+   "endpoint": "https://egup.fa.us2.oraclecloud.com/hcmRestApi/resources/latest/recruitingCEJobRequisitions"
+  },
+  {
+   "platform": "oracle",
+   "company": "CSX",
+   "board_total_reported": 13,
+   "endpoint": "https://fa-eowa-saasfaprod1.fa.ocs.oraclecloud.com/hcmRestApi/resources/latest/recruitingCEJobRequisitions"
+  }
+ ],
+ "entries": [
+  {
+   "id": "ats-001",
+   "company": "Air Products",
+   "title": "SUMMER CO-OP/INTERN – Chemical Engineering (FY 2027)",
+   "url": "https://airproducts.wd5.myworkdayjobs.com/en-US/AP0001/job/Allentown-Pennsylvania/SUMMER-CO-OP-INTERN---Chemical-Engineering--FY-2027-_JR-2026-21955",
+   "canonical_url": "https://airproducts.wd5.myworkdayjobs.com/en-US/AP0001/job/Allentown-Pennsylvania/SUMMER-CO-OP-INTERN---Chemical-Engineering--FY-2027-_JR-2026-21955",
+   "source": "workday:AP0001",
+   "platform": "workday",
+   "active": true,
+   "role_area": "process_chemical",
+   "why_relevant": "Named chemical engineering co-op at an industrial-gas producer — the exact role the founder trained for.",
+   "reachable_by": [
+    "workday"
+   ],
+   "observed_at": "2026-08-31"
+  },
+  {
+   "id": "ats-002",
+   "company": "Air Products",
+   "title": "Summer Intern/Co-op-Mechanical Engineering (2027)",
+   "url": "https://airproducts.wd5.myworkdayjobs.com/en-US/AP0001/job/Allentown-Pennsylvania/Summer-Intern-Co-op-Mechanical-Engineering--2027-_JR-2026-21956",
+   "canonical_url": "https://airproducts.wd5.myworkdayjobs.com/en-US/AP0001/job/Allentown-Pennsylvania/Summer-Intern-Co-op-Mechanical-Engineering--2027-_JR-2026-21956",
+   "source": "workday:AP0001",
+   "platform": "workday",
+   "active": true,
+   "role_area": "manufacturing",
+   "why_relevant": "Adjacent engineering discipline inside a chemicals plant environment; a ChemE is a credible applicant.",
+   "reachable_by": [
+    "workday"
+   ],
+   "observed_at": "2026-08-31"
+  },
+  {
+   "id": "ats-003",
+   "company": "Huntsman",
+   "title": "Chemical Engineering Intern",
+   "url": "https://huntsman.wd1.myworkdayjobs.com/en-US/Huntsman/job/USA---Texas---Houston---The-Woodlands---Corporate-Office/Chemical-Engineering-Intern_J-020025",
+   "canonical_url": "https://huntsman.wd1.myworkdayjobs.com/en-US/Huntsman/job/USA---Texas---Houston---The-Woodlands---Corporate-Office/Chemical-Engineering-Intern_J-020025",
+   "source": "workday:Huntsman",
+   "platform": "workday",
+   "active": true,
+   "role_area": "process_chemical",
+   "why_relevant": "Chemical engineering internship at a specialty-chemicals manufacturer, The Woodlands TX.",
+   "reachable_by": [
+    "workday"
+   ],
+   "observed_at": "2026-08-31"
+  },
+  {
+   "id": "ats-004",
+   "company": "Huntsman",
+   "title": "Chemist Intern",
+   "url": "https://huntsman.wd1.myworkdayjobs.com/en-US/Huntsman/job/USA---Texas---Houston---The-Woodlands---Corporate-Office/Chemist-Intern_J-020029",
+   "canonical_url": "https://huntsman.wd1.myworkdayjobs.com/en-US/Huntsman/job/USA---Texas---Houston---The-Woodlands---Corporate-Office/Chemist-Intern_J-020029",
+   "source": "workday:Huntsman",
+   "platform": "workday",
+   "active": true,
+   "role_area": "process_chemical",
+   "why_relevant": "Bench chemistry at a chemicals producer — core-discipline internship.",
+   "reachable_by": [
+    "workday"
+   ],
+   "observed_at": "2026-08-31"
+  },
+  {
+   "id": "ats-005",
+   "company": "Huntsman",
+   "title": "Mechanical Engineering Intern",
+   "url": "https://huntsman.wd1.myworkdayjobs.com/en-US/Huntsman/job/USA---Texas---Houston---The-Woodlands---Corporate-Office/Mechanical-Engineering-Intern_J-020026",
+   "canonical_url": "https://huntsman.wd1.myworkdayjobs.com/en-US/Huntsman/job/USA---Texas---Houston---The-Woodlands---Corporate-Office/Mechanical-Engineering-Intern_J-020026",
+   "source": "workday:Huntsman",
+   "platform": "workday",
+   "active": true,
+   "role_area": "manufacturing",
+   "why_relevant": "Plant-side engineering at a chemicals manufacturer.",
+   "reachable_by": [
+    "workday"
+   ],
+   "observed_at": "2026-08-31"
+  },
+  {
+   "id": "ats-006",
+   "company": "Huntsman",
+   "title": "Supply Chain Intern",
+   "url": "https://huntsman.wd1.myworkdayjobs.com/en-US/Huntsman/job/USA---Texas---Houston---The-Woodlands---Corporate-Office/Supply-Chain-Intern_J-020028",
+   "canonical_url": "https://huntsman.wd1.myworkdayjobs.com/en-US/Huntsman/job/USA---Texas---Houston---The-Woodlands---Corporate-Office/Supply-Chain-Intern_J-020028",
+   "source": "workday:Huntsman",
+   "platform": "workday",
+   "active": true,
+   "role_area": "industrial_tech",
+   "why_relevant": "Industrial operations at a chemicals producer; the operations half of the founder's direction.",
+   "reachable_by": [
+    "workday"
+   ],
+   "observed_at": "2026-08-31"
+  },
+  {
+   "id": "ats-007",
+   "company": "Amgen",
+   "title": "Undergrad Intern - Operations – Process Development (Summer 2027)",
+   "url": "https://amgen.wd1.myworkdayjobs.com/en-US/Careers/job/US---California---Thousand-Oaks/Undergrad-Intern---Operations---Process-Development--Summer-2027-_R-254516",
+   "canonical_url": "https://amgen.wd1.myworkdayjobs.com/en-US/Careers/job/US---California---Thousand-Oaks/Undergrad-Intern---Operations---Process-Development--Summer-2027-_R-254516",
+   "source": "workday:Careers",
+   "platform": "workday",
+   "active": true,
+   "role_area": "pharma",
+   "why_relevant": "Process development in biologics manufacturing — chemical engineering applied to pharma.",
+   "reachable_by": [
+    "workday"
+   ],
+   "observed_at": "2026-08-31"
+  },
+  {
+   "id": "ats-008",
+   "company": "Amgen",
+   "title": "Grad Intern - Operations – Process Development (Summer 2027)",
+   "url": "https://amgen.wd1.myworkdayjobs.com/en-US/Careers/job/US---California---Thousand-Oaks/Grad-Intern---Operations---Process-Development--Summer-2027-_R-254519",
+   "canonical_url": "https://amgen.wd1.myworkdayjobs.com/en-US/Careers/job/US---California---Thousand-Oaks/Grad-Intern---Operations---Process-Development--Summer-2027-_R-254519",
+   "source": "workday:Careers",
+   "platform": "workday",
+   "active": true,
+   "role_area": "pharma",
+   "why_relevant": "The graduate-level twin of the same process-development internship.",
+   "reachable_by": [
+    "workday"
+   ],
+   "observed_at": "2026-08-31"
+  },
+  {
+   "id": "ats-009",
+   "company": "Amgen",
+   "title": "Undergrad Intern - Operations – Holly Springs, NC (Summer 2027)",
+   "url": "https://amgen.wd1.myworkdayjobs.com/en-US/Careers/job/US---North-Carolina---Holly-Springs/Undergrad-Intern---Operations---Holly-Springs--NC--Summer-2027-_R-254509",
+   "canonical_url": "https://amgen.wd1.myworkdayjobs.com/en-US/Careers/job/US---North-Carolina---Holly-Springs/Undergrad-Intern---Operations---Holly-Springs--NC--Summer-2027-_R-254509",
+   "source": "workday:Careers",
+   "platform": "workday",
+   "active": true,
+   "role_area": "pharma",
+   "why_relevant": "Drug-substance plant operations internship at a new biologics site.",
+   "reachable_by": [
+    "workday"
+   ],
+   "observed_at": "2026-08-31"
+  },
+  {
+   "id": "ats-010",
+   "company": "Amgen",
+   "title": "Undergrad Intern - Operations – Cambridge, MA (Summer 2027)",
+   "url": "https://amgen.wd1.myworkdayjobs.com/en-US/Careers/job/US---Massachusetts---Cambridge/Undergrad-Intern---Operations---Cambridge--MA--Summer-2027-_R-254515",
+   "canonical_url": "https://amgen.wd1.myworkdayjobs.com/en-US/Careers/job/US---Massachusetts---Cambridge/Undergrad-Intern---Operations---Cambridge--MA--Summer-2027-_R-254515",
+   "source": "workday:Careers",
+   "platform": "workday",
+   "active": true,
+   "role_area": "pharma",
+   "why_relevant": "Manufacturing operations internship at a biotech site.",
+   "reachable_by": [
+    "workday"
+   ],
+   "observed_at": "2026-08-31"
+  },
+  {
+   "id": "ats-011",
+   "company": "Amgen",
+   "title": "Undergrad Intern - Operations – West Greenwich, RI (Summer 2027)",
+   "url": "https://amgen.wd1.myworkdayjobs.com/en-US/Careers/job/US---Rhode-Island---West-Greenwich/Undergrad-Intern---Operations---West-Greenwich--RI--Summer-2027-_R-254514",
+   "canonical_url": "https://amgen.wd1.myworkdayjobs.com/en-US/Careers/job/US---Rhode-Island---West-Greenwich/Undergrad-Intern---Operations---West-Greenwich--RI--Summer-2027-_R-254514",
+   "source": "workday:Careers",
+   "platform": "workday",
+   "active": true,
+   "role_area": "pharma",
+   "why_relevant": "Manufacturing operations internship at a commercial biologics plant.",
+   "reachable_by": [
+    "workday"
+   ],
+   "observed_at": "2026-08-31"
+  },
+  {
+   "id": "ats-012",
+   "company": "Amgen",
+   "title": "Engineering Grad Co-op",
+   "url": "https://amgen.wd1.myworkdayjobs.com/en-US/Careers/job/US---North-Carolina---Holly-Springs/Engineering-Grad-Co-op_R-254020",
+   "canonical_url": "https://amgen.wd1.myworkdayjobs.com/en-US/Careers/job/US---North-Carolina---Holly-Springs/Engineering-Grad-Co-op_R-254020",
+   "source": "workday:Careers",
+   "platform": "workday",
+   "active": true,
+   "role_area": "pharma",
+   "why_relevant": "Engineering co-op inside pharmaceutical manufacturing.",
+   "reachable_by": [
+    "workday"
+   ],
+   "observed_at": "2026-08-31"
+  },
+  {
+   "id": "ats-013",
+   "company": "Moderna",
+   "title": "Intern, CMC Development (Summer 2027)",
+   "url": "https://modernatx.wd1.myworkdayjobs.com/en-US/M_tx/job/Norwood-Massachusetts/Intern--CMC-Development--Summer-2027-_R19683",
+   "canonical_url": "https://modernatx.wd1.myworkdayjobs.com/en-US/M_tx/job/Norwood-Massachusetts/Intern--CMC-Development--Summer-2027-_R19683",
+   "source": "workday:M_tx",
+   "platform": "workday",
+   "active": true,
+   "role_area": "pharma",
+   "why_relevant": "Chemistry, Manufacturing and Controls — the discipline is in the job title.",
+   "reachable_by": [
+    "workday"
+   ],
+   "observed_at": "2026-08-31"
+  },
+  {
+   "id": "ats-014",
+   "company": "Moderna",
+   "title": "Co-Op, CMC Development (Spring 2027)",
+   "url": "https://modernatx.wd1.myworkdayjobs.com/en-US/M_tx/job/Norwood-Massachusetts/Co-Op--CMC-Development--Spring-2027-_R19684",
+   "canonical_url": "https://modernatx.wd1.myworkdayjobs.com/en-US/M_tx/job/Norwood-Massachusetts/Co-Op--CMC-Development--Spring-2027-_R19684",
+   "source": "workday:M_tx",
+   "platform": "workday",
+   "active": true,
+   "role_area": "pharma",
+   "why_relevant": "The Spring co-op of the same CMC team; a real posting in a different term.",
+   "reachable_by": [
+    "workday"
+   ],
+   "observed_at": "2026-08-31"
+  },
+  {
+   "id": "ats-015",
+   "company": "IFF",
+   "title": "Manufacturing Engineer Co-Op",
+   "url": "https://iff.wd5.myworkdayjobs.com/en-US/IFF_Careers/job/Pryor-OK-USA/Manufacturing-Engineer-Co-Op_R15636-1",
+   "canonical_url": "https://iff.wd5.myworkdayjobs.com/en-US/IFF_Careers/job/Pryor-OK-USA/Manufacturing-Engineer-Co-Op_R15636-1",
+   "source": "workday:IFF_Careers",
+   "platform": "workday",
+   "active": true,
+   "role_area": "manufacturing",
+   "why_relevant": "Manufacturing engineering co-op at a flavours-and-ingredients plant, Pryor OK.",
+   "reachable_by": [
+    "workday"
+   ],
+   "observed_at": "2026-08-31"
+  },
+  {
+   "id": "ats-016",
+   "company": "IFF",
+   "title": "Manufacturing Tech Co-Op",
+   "url": "https://iff.wd5.myworkdayjobs.com/en-US/IFF_Careers/job/Memphis-TN-USA/Manufacturing-Tech-Co-Op_R17721",
+   "canonical_url": "https://iff.wd5.myworkdayjobs.com/en-US/IFF_Careers/job/Memphis-TN-USA/Manufacturing-Tech-Co-Op_R17721",
+   "source": "workday:IFF_Careers",
+   "platform": "workday",
+   "active": true,
+   "role_area": "manufacturing",
+   "why_relevant": "Plant technical co-op at an ingredients manufacturer, Memphis TN.",
+   "reachable_by": [
+    "workday"
+   ],
+   "observed_at": "2026-08-31"
+  },
+  {
+   "id": "ats-017",
+   "company": "IFF",
+   "title": "Research & Development Intern – Citrus Innovation Center",
+   "url": "https://iff.wd5.myworkdayjobs.com/en-US/IFF_Careers/job/Citrus-Innovation-Ctr-FL-USA/Intern_R18830",
+   "canonical_url": "https://iff.wd5.myworkdayjobs.com/en-US/IFF_Careers/job/Citrus-Innovation-Ctr-FL-USA/Intern_R18830",
+   "source": "workday:IFF_Careers",
+   "platform": "workday",
+   "active": true,
+   "role_area": "materials",
+   "why_relevant": "Applied R&D at an ingredients company — formulation-adjacent lab work.",
+   "reachable_by": [
+    "workday"
+   ],
+   "observed_at": "2026-08-31"
+  },
+  {
+   "id": "ats-018",
+   "company": "Applied Materials",
+   "title": "Chemist  (Co-Op - Santa Clara)",
+   "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/Santa-ClaraCA/Chemist---Co-Op---Santa-Clara-_R2625243",
+   "canonical_url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/Santa-ClaraCA/Chemist---Co-Op---Santa-Clara-_R2625243",
+   "source": "workday:External",
+   "platform": "workday",
+   "active": true,
+   "role_area": "materials",
+   "why_relevant": "Chemistry co-op at a semiconductor-materials equipment maker.",
+   "reachable_by": [
+    "workday"
+   ],
+   "observed_at": "2026-08-31"
+  },
+  {
+   "id": "ats-019",
+   "company": "Applied Materials",
+   "title": "Summer 2027 Supply Chain Materials Project Manager Intern- Master's (Austin, TX)",
+   "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/AustinTX/Summer-2027-Supply-Chain-Materials-Project-Manager-Intern--Master-s--Austin--TX-_R2627069",
+   "canonical_url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/AustinTX/Summer-2027-Supply-Chain-Materials-Project-Manager-Intern--Master-s--Austin--TX-_R2627069",
+   "source": "workday:External",
+   "platform": "workday",
+   "active": true,
+   "role_area": "industrial_tech",
+   "why_relevant": "Materials supply-chain internship at an advanced-manufacturing company.",
+   "reachable_by": [
+    "workday"
+   ],
+   "observed_at": "2026-08-31"
+  },
+  {
+   "id": "ats-020",
+   "company": "Applied Materials",
+   "title": "Summer 2027 Supply Chain Materials Project Manager Intern- Master's (Santa Clara, CA)",
+   "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/Santa-ClaraCA/Summer-2027-Supply-Chain-Materials-Project-Manager-Intern--Master-s--Santa-Clara--CA-_R2627074",
+   "canonical_url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/Santa-ClaraCA/Summer-2027-Supply-Chain-Materials-Project-Manager-Intern--Master-s--Santa-Clara--CA-_R2627074",
+   "source": "workday:External",
+   "platform": "workday",
+   "active": true,
+   "role_area": "industrial_tech",
+   "why_relevant": "The Santa Clara posting of the same materials supply-chain internship.",
+   "reachable_by": [
+    "workday"
+   ],
+   "observed_at": "2026-08-31"
+  },
+  {
+   "id": "ats-021",
+   "company": "Applied Materials",
+   "title": "Process Engineer Intern",
+   "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/SingaporeSGP/Process-Engineer-Intern_R2626574",
+   "canonical_url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/SingaporeSGP/Process-Engineer-Intern_R2626574",
+   "source": "workday:External",
+   "platform": "workday",
+   "active": true,
+   "role_area": "process_chemical",
+   "why_relevant": "Process engineering internship (Singapore) — on-discipline but outside the mission's country filter, which is why it is in the corpus.",
+   "reachable_by": [
+    "workday"
+   ],
+   "observed_at": "2026-08-31"
+  },
+  {
+   "id": "ats-022",
+   "company": "Applied Materials",
+   "title": "2026 Summer Intern - Physics & AI modeling Engineering",
+   "url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/Santa-ClaraCA/XMLNAME-2026-Summer-Intern---Physics---AI-modeling-Engineering_R2616095",
+   "canonical_url": "https://amat.wd1.myworkdayjobs.com/en-US/External/job/Santa-ClaraCA/XMLNAME-2026-Summer-Intern---Physics---AI-modeling-Engineering_R2616095",
+   "source": "workday:External",
+   "platform": "workday",
+   "active": true,
+   "role_area": "ai_industry",
+   "why_relevant": "Physics-plus-AI modelling at a manufacturing-equipment company — the AI-applied-to-industry edge.",
+   "reachable_by": [
+    "workday"
+   ],
+   "observed_at": "2026-08-31"
+  },
+  {
+   "id": "ats-023",
+   "company": "Micron",
+   "title": "Intern - Mask Technology",
+   "url": "https://micron.wd1.myworkdayjobs.com/en-US/External/job/Boise-ID---Main-Site/Intern---Mask-Technology_JR110035",
+   "canonical_url": "https://micron.wd1.myworkdayjobs.com/en-US/External/job/Boise-ID---Main-Site/Intern---Mask-Technology_JR110035",
+   "source": "workday:External",
+   "platform": "workday",
+   "active": true,
+   "role_area": "materials",
+   "why_relevant": "Photomask process technology at a memory fab, Boise ID.",
+   "reachable_by": [
+    "workday"
+   ],
+   "observed_at": "2026-08-31"
+  },
+  {
+   "id": "ats-024",
+   "company": "Westlake",
+   "title": "2026 Intern - Mechanical Engineer",
+   "url": "https://westlake.wd1.myworkdayjobs.com/en-US/westlake/job/US---Houston-TX/XMLNAME-2026-Intern---Mechanical-Engineer_R30240",
+   "canonical_url": "https://westlake.wd1.myworkdayjobs.com/en-US/westlake/job/US---Houston-TX/XMLNAME-2026-Intern---Mechanical-Engineer_R30240",
+   "source": "workday:westlake",
+   "platform": "workday",
+   "active": true,
+   "role_area": "process_chemical",
+   "why_relevant": "Plant engineering internship at a petrochemicals producer, Houston TX.",
+   "reachable_by": [
+    "workday"
+   ],
+   "observed_at": "2026-08-31"
+  },
+  {
+   "id": "ats-025",
+   "company": "Medtronic",
+   "title": "Engineering Intern – Summer 2027",
+   "url": "https://medtronic.wd1.myworkdayjobs.com/en-US/MedtronicCareers/job/Fridley-Minnesota-United-States-of-America/Engineering-Intern---Summer-2027_R73623-1",
+   "canonical_url": "https://medtronic.wd1.myworkdayjobs.com/en-US/MedtronicCareers/job/Fridley-Minnesota-United-States-of-America/Engineering-Intern---Summer-2027_R73623-1",
+   "source": "workday:MedtronicCareers",
+   "platform": "workday",
+   "active": true,
+   "role_area": "industrial_tech",
+   "why_relevant": "Broad engineering internship at a medical-device manufacturer, 21 US sites.",
+   "reachable_by": [
+    "workday"
+   ],
+   "observed_at": "2026-08-31"
+  },
+  {
+   "id": "ats-026",
+   "company": "Medtronic",
+   "title": "Supply Chain/Supply Management Intern- Summer 2027",
+   "url": "https://medtronic.wd1.myworkdayjobs.com/en-US/MedtronicCareers/job/Minneapolis-Minnesota-United-States-of-America/Supply-Chain-Supply-Management-Intern--Summer-2027_R73693-2",
+   "canonical_url": "https://medtronic.wd1.myworkdayjobs.com/en-US/MedtronicCareers/job/Minneapolis-Minnesota-United-States-of-America/Supply-Chain-Supply-Management-Intern--Summer-2027_R73693-2",
+   "source": "workday:MedtronicCareers",
+   "platform": "workday",
+   "active": true,
+   "role_area": "industrial_tech",
+   "why_relevant": "Manufacturing supply-chain internship at a device maker.",
+   "reachable_by": [
+    "workday"
+   ],
+   "observed_at": "2026-08-31"
+  },
+  {
+   "id": "ats-027",
+   "company": "Agilent",
+   "title": "Electrical Engineering Intern",
+   "url": "https://agilent.wd5.myworkdayjobs.com/en-US/Agilent_Student_Careers/job/US-DE-Wilmington/Electrical-Engineering-Intern_4038526",
+   "canonical_url": "https://agilent.wd5.myworkdayjobs.com/en-US/Agilent_Student_Careers/job/US-DE-Wilmington/Electrical-Engineering-Intern_4038526",
+   "source": "workday:Agilent_Student_Careers",
+   "platform": "workday",
+   "active": true,
+   "role_area": "industrial_tech",
+   "why_relevant": "Instrumentation engineering internship at an analytical-instruments maker, Wilmington DE.",
+   "reachable_by": [
+    "workday"
+   ],
+   "observed_at": "2026-08-31"
+  },
+  {
+   "id": "ats-028",
+   "company": "Clorox",
+   "title": "Plant Intern",
+   "url": "https://clorox.wd1.myworkdayjobs.com/en-US/Clorox/job/Burnside-KY---USA/Plant-Intern_21841",
+   "canonical_url": "https://clorox.wd1.myworkdayjobs.com/en-US/Clorox/job/Burnside-KY---USA/Plant-Intern_21841",
+   "source": "workday:Clorox",
+   "platform": "workday",
+   "active": true,
+   "role_area": "cpg",
+   "why_relevant": "CPG plant internship — consumer-goods manufacturing, Burnside KY.",
+   "reachable_by": [
+    "workday"
+   ],
+   "observed_at": "2026-08-31"
+  },
+  {
+   "id": "ats-029",
+   "company": "GE Vernova",
+   "title": "GE Vernova Operations Intern - Customer Data Management 2027",
+   "url": "https://gevernova.wd5.myworkdayjobs.com/en-US/Vernova_ExternalSite/job/Schenectady/GE-Vernova-Operations-Intern---Customer-Data-Management-2027_R5050478-2",
+   "canonical_url": "https://gevernova.wd5.myworkdayjobs.com/en-US/Vernova_ExternalSite/job/Schenectady/GE-Vernova-Operations-Intern---Customer-Data-Management-2027_R5050478-2",
+   "source": "workday:Vernova_ExternalSite",
+   "platform": "workday",
+   "active": true,
+   "role_area": "energy",
+   "why_relevant": "Operations internship at a power-equipment maker; the employer that was 38% of the founder's live inventory.",
+   "reachable_by": [
+    "workday"
+   ],
+   "observed_at": "2026-08-31"
+  },
+  {
+   "id": "ats-030",
+   "company": "Kairos Power",
+   "title": "Chemical and Materials Engineering Internship - Summer 2027",
+   "url": "https://job-boards.greenhouse.io/kairospower/jobs/6122803004",
+   "canonical_url": "https://job-boards.greenhouse.io/kairospower/jobs/6122803004",
+   "source": "greenhouse:kairospower",
+   "platform": "greenhouse",
+   "active": true,
+   "role_area": "energy",
+   "why_relevant": "Molten-salt reactor chemistry and materials — chemical engineering in advanced nuclear.",
+   "reachable_by": [
+    "greenhouse"
+   ],
+   "observed_at": "2026-08-31"
+  },
+  {
+   "id": "ats-031",
+   "company": "Kairos Power",
+   "title": "Mechanical and Manufacturing Engineering Internship - Summer 2027",
+   "url": "https://job-boards.greenhouse.io/kairospower/jobs/6123676004",
+   "canonical_url": "https://job-boards.greenhouse.io/kairospower/jobs/6123676004",
+   "source": "greenhouse:kairospower",
+   "platform": "greenhouse",
+   "active": true,
+   "role_area": "manufacturing",
+   "why_relevant": "Manufacturing engineering at a reactor developer.",
+   "reachable_by": [
+    "greenhouse"
+   ],
+   "observed_at": "2026-08-31"
+  },
+  {
+   "id": "ats-032",
+   "company": "Kairos Power",
+   "title": "Nuclear Engineering Internship - Summer 2027",
+   "url": "https://job-boards.greenhouse.io/kairospower/jobs/6123830004",
+   "canonical_url": "https://job-boards.greenhouse.io/kairospower/jobs/6123830004",
+   "source": "greenhouse:kairospower",
+   "platform": "greenhouse",
+   "active": true,
+   "role_area": "energy",
+   "why_relevant": "Reactor engineering internship — energy, adjacent to process engineering.",
+   "reachable_by": [
+    "greenhouse"
+   ],
+   "observed_at": "2026-08-31"
+  },
+  {
+   "id": "ats-033",
+   "company": "Ginkgo Bioworks",
+   "title": "Automation Scientist Intern, RAC Operations",
+   "url": "https://job-boards.greenhouse.io/ginkgobioworks/jobs/5022683007",
+   "canonical_url": "https://job-boards.greenhouse.io/ginkgobioworks/jobs/5022683007",
+   "source": "greenhouse:ginkgobioworks",
+   "platform": "greenhouse",
+   "active": true,
+   "role_area": "ai_industry",
+   "why_relevant": "Lab automation at a biomanufacturing company — automation applied to a wet-lab process.",
+   "reachable_by": [
+    "greenhouse"
+   ],
+   "observed_at": "2026-08-31"
+  },
+  {
+   "id": "ats-034",
+   "company": "3M",
+   "title": "Internship - 2027 Undergraduate IT Intern",
+   "url": "https://3m.wd1.myworkdayjobs.com/en-US/Search/job/US-Minnesota-Maplewood/Internship---2027-Undergraduate-IT-Intern_R01170403-1",
+   "canonical_url": "https://3m.wd1.myworkdayjobs.com/en-US/Search/job/US-Minnesota-Maplewood/Internship---2027-Undergraduate-IT-Intern_R01170403-1",
+   "source": "workday:Search",
+   "platform": "workday",
+   "active": true,
+   "role_area": "ai_industry",
+   "why_relevant": "Digital/IT internship inside a materials manufacturer; the industrial-data edge of the direction.",
+   "reachable_by": [
+    "workday"
+   ],
+   "observed_at": "2026-08-31"
+  },
+  {
+   "id": "ats-035",
+   "company": "Merck",
+   "title": "2026 Future Talent Program – Manufacturing and Reliability Engineering Co-Op",
+   "url": "https://msd.wd5.myworkdayjobs.com/en-US/SearchJobs/job/USA---Pennsylvania---West-Point/XMLNAME-2026-Future-Talent-Program---Manufacturing-and-Reliability-Engineering-Co-Op_R395901/apply",
+   "canonical_url": "https://msd.wd5.myworkdayjobs.com/en-US/SearchJobs/job/USA---Pennsylvania---West-Point/XMLNAME-2026-Future-Talent-Program---Manufacturing-and-Reliability-Engineering-Co-Op_R395901/apply",
+   "source": "phenom:jobs.merck.com",
+   "platform": "phenom",
+   "active": true,
+   "role_area": "pharma",
+   "why_relevant": "Manufacturing and reliability engineering co-op at Merck's West Point PA site. Found only through the Phenom search surface.",
+   "reachable_by": [
+    "phenom"
+   ],
+   "observed_at": "2026-08-31"
+  },
+  {
+   "id": "ats-036",
+   "company": "Merck",
+   "title": "2026 Future Talent Program - Vaccine Manufacturing Co-op",
+   "url": "https://msd.wd5.myworkdayjobs.com/en-US/SearchJobs/job/USA---Pennsylvania---West-Point/XMLNAME-2026-Future-Talent-Program---Vaccine-Manufacturing-Co-op_R395900/apply",
+   "canonical_url": "https://msd.wd5.myworkdayjobs.com/en-US/SearchJobs/job/USA---Pennsylvania---West-Point/XMLNAME-2026-Future-Talent-Program---Vaccine-Manufacturing-Co-op_R395900/apply",
+   "source": "phenom:jobs.merck.com",
+   "platform": "phenom",
+   "active": true,
+   "role_area": "pharma",
+   "why_relevant": "Vaccine manufacturing co-op, West Point PA. Found only through the Phenom search surface.",
+   "reachable_by": [
+    "phenom"
+   ],
+   "observed_at": "2026-08-31"
+  },
+  {
+   "id": "ats-037",
+   "company": "Merck",
+   "title": "Reliability Engineer Intern",
+   "url": "https://msd.wd5.myworkdayjobs.com/en-US/SearchJobs/job/SGP---Singapore---Singapore-70-Tuas-West-Dr/Reliability-Engineer-Intern_R415054",
+   "canonical_url": "https://msd.wd5.myworkdayjobs.com/en-US/SearchJobs/job/SGP---Singapore---Singapore-70-Tuas-West-Dr/Reliability-Engineer-Intern_R415054",
+   "source": "workday:SearchJobs",
+   "platform": "workday",
+   "active": true,
+   "role_area": "pharma",
+   "why_relevant": "Reliability engineering intern on Merck's Workday board (Singapore site).",
+   "reachable_by": [
+    "workday"
+   ],
+   "observed_at": "2026-08-31"
+  },
+  {
+   "id": "ats-038",
+   "company": "Baker Hughes",
+   "title": "Intern – Manufacturing - Florence, Italy - 2026 (M/F/D)",
+   "url": "https://bakerhughes.wd5.myworkdayjobs.com/en-US/BakerHughes/job/IT-FI-FLORENCE-VIA-FELICE-MATTEUCCI-2/Emerging-Talent---Manufacturing-Intern-2026-Opportunities--Florence-_R158416",
+   "canonical_url": "https://bakerhughes.wd5.myworkdayjobs.com/en-US/BakerHughes/job/IT-FI-FLORENCE-VIA-FELICE-MATTEUCCI-2/Emerging-Talent---Manufacturing-Intern-2026-Opportunities--Florence-_R158416",
+   "source": "workday:BakerHughes",
+   "platform": "workday",
+   "active": true,
+   "role_area": "energy",
+   "why_relevant": "Manufacturing internship at an energy-technology manufacturer; non-US, kept so the country filter is measurable.",
+   "reachable_by": [
+    "workday"
+   ],
+   "observed_at": "2026-08-31"
+  },
+  {
+   "id": "ats-039",
+   "company": "Rockwell Automation",
+   "title": "EHS Co-op/ Intern",
+   "url": "https://rockwellautomation.wd1.myworkdayjobs.com/en-US/External_Rockwell_Automation/job/Cambridge-Ontario-Canada/EHS-Co-op--Intern_R26-6480",
+   "canonical_url": "https://rockwellautomation.wd1.myworkdayjobs.com/en-US/External_Rockwell_Automation/job/Cambridge-Ontario-Canada/EHS-Co-op--Intern_R26-6480",
+   "source": "workday:External_Rockwell_Automation",
+   "platform": "workday",
+   "active": true,
+   "role_area": "industrial_tech",
+   "why_relevant": "Environment/health/safety co-op at an industrial-automation company.",
+   "reachable_by": [
+    "workday"
+   ],
+   "observed_at": "2026-08-31"
+  },
+  {
+   "id": "ats-040",
+   "company": "Pfizer",
+   "title": "2027 Internship - Pfizer, Grange Castle",
+   "url": "https://pfizer.wd1.myworkdayjobs.com/en-US/PfizerCareers/job/Ireland---Dublin---Grange-Castle/XMLNAME-2027-Internship---Pfizer--Grange-Castle_4962930",
+   "canonical_url": "https://pfizer.wd1.myworkdayjobs.com/en-US/PfizerCareers/job/Ireland---Dublin---Grange-Castle/XMLNAME-2027-Internship---Pfizer--Grange-Castle_4962930",
+   "source": "workday:PfizerCareers",
+   "platform": "workday",
+   "active": true,
+   "role_area": "pharma",
+   "why_relevant": "Site internship at a pharmaceutical manufacturing campus; non-US.",
+   "reachable_by": [
+    "workday"
+   ],
+   "observed_at": "2026-08-31"
+  },
+  {
+   "id": "sim-001",
+   "company": "WEC Energy Group",
+   "title": "Energy Analytics Intern",
+   "url": "https://careers.wecenergygroup.com/We_Energies/job/Milwaukee-Intern-Energy-Analytics-WI-53203/1420267800/?ats=successfactors",
+   "canonical_url": "https://careers.wecenergygroup.com/We_Energies/job/Milwaukee-Intern-Energy-Analytics-WI-53203/1420267800/?ats=successfactors",
+   "source": "simplify:summer-2027",
+   "platform": "feed",
+   "active": true,
+   "role_area": "energy",
+   "why_relevant": "The only energy-analytics posting in the Summer 2027 feed.",
+   "reachable_by": [
+    "simplify"
+   ],
+   "observed_at": "2026-08-31"
+  },
+  {
+   "id": "sim-002",
+   "company": "Brunswick",
+   "title": "Advanced Manufacturing/Operations Analytics Engineering Co-op - Global Operations Excellence",
+   "url": "https://brunswick.wd1.myworkdayjobs.com/en-US/search/job/Fond-du-Lac-WI/Mercury-Marine--Advanced-Manufacturing-Operations-Analytics-Engineering-Co-op_JR-051238",
+   "canonical_url": "https://brunswick.wd1.myworkdayjobs.com/en-US/search/job/Fond-du-Lac-WI/Mercury-Marine--Advanced-Manufacturing-Operations-Analytics-Engineering-Co-op_JR-051238",
+   "source": "simplify:summer-2027",
+   "platform": "feed",
+   "active": true,
+   "role_area": "manufacturing",
+   "why_relevant": "Manufacturing operations analytics co-op — manufacturing plus data.",
+   "reachable_by": [
+    "simplify"
+   ],
+   "observed_at": "2026-08-31"
+  },
+  {
+   "id": "sim-003",
+   "company": "Micron Technology",
+   "title": "Advanced Spectroscopy and Nanoscale Materials Characterization Intern",
+   "url": "https://micron.wd1.myworkdayjobs.com/External/job/Boise-ID---Main-Site/XMLNAME-2027-Summer-Intern--Advanced-Spectroscopy-and-Nanoscale-Materials-Characterization_JR109071",
+   "canonical_url": "https://micron.wd1.myworkdayjobs.com/External/job/Boise-ID---Main-Site/XMLNAME-2027-Summer-Intern--Advanced-Spectroscopy-and-Nanoscale-Materials-Characterization_JR109071",
+   "source": "simplify:summer-2027",
+   "platform": "feed",
+   "active": true,
+   "role_area": "materials",
+   "why_relevant": "Materials characterisation — one of five non-software postings in 775.",
+   "reachable_by": [
+    "simplify"
+   ],
+   "observed_at": "2026-08-31"
+  },
+  {
+   "id": "sim-004",
+   "company": "GE Vernova",
+   "title": "Energy Optimization Software Engineer Intern - Summer 2027",
+   "url": "https://gevernova.wd5.myworkdayjobs.com/only_confidential_executive_recruiting/job/Bellevue/GE-Vernova---Energy-Optimization-Software-Engineer-Intern---Summer-2027_R5050022-1",
+   "canonical_url": "https://gevernova.wd5.myworkdayjobs.com/only_confidential_executive_recruiting/job/Bellevue/GE-Vernova---Energy-Optimization-Software-Engineer-Intern---Summer-2027_R5050022-1",
+   "source": "simplify:summer-2027",
+   "platform": "feed",
+   "active": true,
+   "role_area": "ai_industry",
+   "why_relevant": "Software applied to energy optimisation at a power-equipment maker.",
+   "reachable_by": [
+    "simplify"
+   ],
+   "observed_at": "2026-08-31"
+  }
+ ]
+}
