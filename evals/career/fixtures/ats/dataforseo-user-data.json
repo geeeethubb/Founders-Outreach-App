@@ -1,0 +1,28 @@
+{
+  "_fixture": "GET /v3/appendix/user_data — the free account-status endpoint used by healthCheck. HAND-WRITTEN to the documented shape.",
+  "version": "0.1.20260801",
+  "status_code": 20000,
+  "status_message": "Ok.",
+  "time": "0.0210 sec.",
+  "cost": 0,
+  "tasks_count": 1,
+  "tasks_error": 0,
+  "tasks": [
+    {
+      "id": "08311200-1234-0050-0000-c0ffee000009",
+      "status_code": 20000,
+      "status_message": "Ok.",
+      "cost": 0,
+      "result_count": 1,
+      "path": ["v3", "appendix", "user_data"],
+      "result": [
+        {
+          "login": "founder@example.com",
+          "timezone": "UTC",
+          "rates": { "limits": { "day": 2000, "minute": 2000 } },
+          "money": { "total": 50, "balance": 49.87, "limits": { "day": 0, "minute": 0 } }
+        }
+      ]
+    }
+  ]
+}

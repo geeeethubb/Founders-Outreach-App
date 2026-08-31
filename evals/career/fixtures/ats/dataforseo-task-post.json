@@ -1,0 +1,35 @@
+{
+  "_fixture": "POST /v3/serp/google/jobs/task_post/ — a successfully queued task. HAND-WRITTEN to the documented response shape (docs/JOB_SOURCE_MATRIX.md, verified 2026-08-31); there is no DataForSEO account on this machine, so this is not a recorded live response. depth 100 = 10 billed pages x $0.0006 = $0.006.",
+  "version": "0.1.20260801",
+  "status_code": 20000,
+  "status_message": "Ok.",
+  "time": "0.1874 sec.",
+  "cost": 0.006,
+  "tasks_count": 1,
+  "tasks_error": 0,
+  "tasks": [
+    {
+      "id": "08311200-1234-0139-0000-c0ffee000001",
+      "status_code": 20100,
+      "status_message": "Task Created.",
+      "time": "0.0061 sec.",
+      "cost": 0.006,
+      "result_count": 0,
+      "path": ["v3", "serp", "google", "jobs", "task_post"],
+      "data": {
+        "api": "serp",
+        "function": "task_post",
+        "se": "google",
+        "se_type": "jobs",
+        "keyword": "process engineering internship",
+        "language_code": "en",
+        "location_code": 2840,
+        "employment_type": ["intern"],
+        "depth": 100,
+        "device": "desktop",
+        "os": "windows"
+      },
+      "result": null
+    }
+  ]
+}

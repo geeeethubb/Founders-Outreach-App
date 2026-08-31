@@ -1,0 +1,28 @@
+{
+  "_fixture": "GET /v3/serp/google/jobs/task_get/advanced/{id} polled before the standard queue finished. HAND-WRITTEN to the documented shape. Status 40602 is 'not ready', NOT an error — the adapter must keep the receipt and hand back a resumable cursor rather than hold the run open for the queue's five minutes.",
+  "version": "0.1.20260801",
+  "status_code": 40602,
+  "status_message": "Task In Queue.",
+  "time": "0 sec.",
+  "cost": 0,
+  "tasks_count": 1,
+  "tasks_error": 1,
+  "tasks": [
+    {
+      "id": "08311200-1234-0139-0000-c0ffee000001",
+      "status_code": 40602,
+      "status_message": "Task In Queue.",
+      "time": "0 sec.",
+      "cost": 0,
+      "result_count": 0,
+      "path": ["v3", "serp", "google", "jobs", "task_get", "advanced"],
+      "data": {
+        "api": "serp",
+        "function": "task_get",
+        "se": "google",
+        "se_type": "jobs"
+      },
+      "result": null
+    }
+  ]
+}

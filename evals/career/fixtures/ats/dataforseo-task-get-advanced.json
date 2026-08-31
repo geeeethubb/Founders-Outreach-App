@@ -1,0 +1,102 @@
+{
+  "_fixture": "GET /v3/serp/google/jobs/task_get/advanced/{id} — a finished task. HAND-WRITTEN to the documented response shape (docs/JOB_SOURCE_MATRIX.md, verified 2026-08-31); there is no DataForSEO account on this machine, so this is not a recorded live response. The four items are chosen to exercise the four cases the adapter must distinguish: a first-party Workday apply link, a first-party Oracle Fusion link (a recognised family with no listing adapter), a card whose only link is an aggregator, and a non-job SERP row.",
+  "version": "0.1.20260801",
+  "status_code": 20000,
+  "status_message": "Ok.",
+  "time": "0.0932 sec.",
+  "cost": 0,
+  "tasks_count": 1,
+  "tasks_error": 0,
+  "tasks": [
+    {
+      "id": "08311200-1234-0139-0000-c0ffee000001",
+      "status_code": 20000,
+      "status_message": "Ok.",
+      "time": "0.0410 sec.",
+      "cost": 0,
+      "result_count": 1,
+      "path": ["v3", "serp", "google", "jobs", "task_get", "advanced"],
+      "data": {
+        "api": "serp",
+        "function": "task_get",
+        "se": "google",
+        "se_type": "jobs",
+        "keyword": "process engineering internship",
+        "language_code": "en",
+        "location_code": 2840,
+        "employment_type": ["intern"],
+        "depth": 100
+      },
+      "result": [
+        {
+          "keyword": "process engineering internship",
+          "type": "google_jobs",
+          "se_domain": "google.com",
+          "location_code": 2840,
+          "language_code": "en",
+          "check_url": "https://www.google.com/search?q=process+engineering+internship&ibp=htl;jobs&hl=en&gl=US",
+          "datetime": "2026-08-31 12:04:11 +00:00",
+          "item_types": ["google_jobs_search"],
+          "items_count": 4,
+          "items": [
+            {
+              "type": "google_jobs_search",
+              "rank_group": 1,
+              "rank_absolute": 1,
+              "title": "Process Development Engineering Intern - Summer 2027",
+              "job_id": "eyJqb2JfdGl0bGUiOiJQcm9jZXNzIERldmVsb3BtZW50IiwiaHRpZG9jaWQiOiIxIn0=",
+              "employer_name": "Merck",
+              "employer_logo": "https://encrypted-tbn0.gstatic.com/images?q=logo1",
+              "location": "Rahway, NJ",
+              "is_remote": false,
+              "employment_type": ["Internship"],
+              "description": "As a Process Development Engineering Intern you will support scale-up of biologics drug substance processes, run bench-scale bioreactor experiments, analyse yield and purity data, and present a technical summary to the process development organisation at the end of the programme. Requirements: pursuing a BS or MS in Chemical Engineering, Biochemical Engineering or a related discipline; coursework in transport phenomena, reaction kinetics and separations; familiarity with JMP or Python for data analysis.",
+              "timestamp": "2026-08-27 00:00:00 +00:00",
+              "time_ago": "4 days ago",
+              "salary": null,
+              "apply_urls": [
+                { "title": "Apply on Merck Careers", "url": "https://msd.wd5.myworkdayjobs.com/en-US/SearchJobs/job/Rahway-NJ/Process-Development-Engineering-Intern_R345678" },
+                { "title": "Apply on LinkedIn", "url": "https://www.linkedin.com/jobs/view/4123456789" }
+              ]
+            },
+            {
+              "type": "google_jobs_search",
+              "rank_group": 2,
+              "rank_absolute": 2,
+              "title": "Chemical Engineering Co-Op (Spring 2027)",
+              "job_id": "eyJqb2JfdGl0bGUiOiJDaGVtaWNhbCBFbmdpbmVlcmluZyBDby1PcCJ9",
+              "employer_name": "DuPont",
+              "location": "Wilmington, DE",
+              "is_remote": false,
+              "employment_type": "Internship",
+              "description": "Six-month co-op supporting continuous manufacturing operations: troubleshoot unit operations, build mass and energy balances, run DOEs on a pilot line and deliver a capital-justification memo. Chemical engineering students in their third year or later.",
+              "timestamp": "2026-08-20 00:00:00 +00:00",
+              "apply_urls": ["https://ehhh.fa.us6.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_2/job/998877"]
+            },
+            {
+              "type": "google_jobs_search",
+              "rank_group": 3,
+              "rank_absolute": 3,
+              "title": "Materials Science Intern",
+              "job_id": "eyJqb2JfdGl0bGUiOiJNYXRlcmlhbHMgU2NpZW5jZSBJbnRlcm4ifQ==",
+              "employer_name": "Corning",
+              "location": "Corning, NY",
+              "description": "Characterise glass-ceramic compositions, run thermal analysis, and support a materials development programme.",
+              "timestamp": null,
+              "time_ago": "12 days ago",
+              "apply_urls": [{ "title": "Apply on LinkedIn", "url": "https://www.linkedin.com/jobs/view/4111111111" }]
+            },
+            {
+              "type": "google_jobs_related_searches",
+              "rank_group": 4,
+              "rank_absolute": 4,
+              "title": null,
+              "employer_name": null,
+              "items": [{ "title": "chemical engineering internship summer 2027" }]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
