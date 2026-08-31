@@ -116,6 +116,17 @@ export interface ResumeQaInput {
   pdfInfo?: PdfInfo
   /** Plain text, `**` stripped. */
   expectedBullets: string[]
+  /**
+   * Text the tailor proposed and the pipeline REFUSED — auto-rejected changes,
+   * and anything the verifier did not support. None of it may reach the page.
+   *
+   * `expectedBullets` proves the approved changes arrived; this proves the
+   * refused ones did not, and the two failure modes are opposite. A rejected
+   * change keeps its original bullet, so a caller must pass only text that
+   * actually differs from the original — an emphasis-only rejection strips to
+   * the original and would otherwise report itself as leaked.
+   */
+  rejectedTexts?: string[]
   /** The master's page count, normally 1. */
   expectedPages: number
   /** The master's fonts (`fontsUsed`). */
@@ -204,6 +215,24 @@ export async function qaResumeDocument(input: ResumeQaInput): Promise<DocumentQa
     ? `${input.expectedBullets.length} bullet(s) present${pdfSquashed !== null ? ' in DOCX and PDF' : ' in DOCX (no PDF)'}`
     : [missingDocx.length ? `missing from DOCX: ${missingDocx.map((b) => `"${b.slice(0, 60)}"`).join('; ')}` : '', missingPdf.length ? `missing from PDF: ${missingPdf.map((b) => `"${b.slice(0, 60)}"`).join('; ')}` : ''].filter(Boolean).join(' | ')
   checks.push(check('content_match', contentOk, contentDetail))
+
+  // The opposite failure: text the pipeline refused, printed anyway. This is the
+  // one that cannot be caught by reading the patch — the patch says "rejected",
+  // and only the rendered bytes can say whether anything acted on it.
+  const rejected = input.rejectedTexts ?? []
+  const leaked: string[] = []
+  for (const t of rejected) {
+    const needle = squash(stripMarkdown(t))
+    if (!needle) continue
+    if (docxSquashed.includes(needle) || (pdfSquashed !== null && pdfSquashed.includes(needle))) leaked.push(t)
+  }
+  checks.push(
+    check(
+      'no_rejected_text',
+      leaked.length === 0,
+      leaked.length ? `refused text in the document: ${leaked.map((t) => `"${t.slice(0, 60)}"`).join('; ')}` : `${rejected.length} refused change(s), none present`
+    )
+  )
 
   checks.push(check('filename_pattern', filenameMatches(input.filename, input.company, 'resume'), input.filename))
 

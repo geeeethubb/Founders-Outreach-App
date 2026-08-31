@@ -315,6 +315,14 @@ async function buildResumeDocuments(params: ResumeDocumentsParams, tmp: string, 
     pdfPath: fit.pdfPath,
     pdfInfo: info,
     expectedBullets,
+    // Everything the pipeline refused, or the reviewer did not approve, that
+    // proposed text DIFFERENT from the bullet it was changing. A rejected change
+    // keeps its original, so identical-after-stripping text is the original
+    // legitimately on the page, not a leak.
+    rejectedTexts: params.changes
+      .filter((c) => !live(c, true) && !!c.proposed_text)
+      .filter((c) => stripMarkdown(c.proposed_text ?? '').trim() !== stripMarkdown(c.original_text ?? '').trim())
+      .map((c) => c.proposed_text as string),
     expectedPages,
     allowedFonts: fontsUsed(masterFile.documentXml),
     allowedFontSizes: fontSizesUsed(masterFile.documentXml),

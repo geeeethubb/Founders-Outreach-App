@@ -246,7 +246,33 @@ async function main(): Promise<void> {
   })
   for (const c of qa.checks) if (!c.pass) console.log(`  qa ${c.name}: ${c.detail}`)
   check('f: resume QA ok', qa.ok, qa.checks.filter((c) => !c.pass).map((c) => c.name).join(','))
-  check('f: QA has all check names', ['docx_valid', 'paragraph_count_sane', 'no_empty_bullets', 'fonts_unchanged', 'font_sizes_unchanged', 'sectpr_unchanged', 'no_placeholders', 'no_markdown_leak', 'pdf_present', 'content_match', 'filename_pattern'].every((n) => qa.checks.some((c) => c.name === n)))
+  check('f: QA has all check names', ['docx_valid', 'paragraph_count_sane', 'no_empty_bullets', 'fonts_unchanged', 'font_sizes_unchanged', 'sectpr_unchanged', 'no_placeholders', 'no_markdown_leak', 'pdf_present', 'content_match', 'no_rejected_text', 'filename_pattern'].every((n) => qa.checks.some((c) => c.name === n)))
+
+  // The opposite of content_match: text the pipeline REFUSED must not be on the
+  // page. content_match cannot see this — it only asks whether the approved
+  // bullets arrived, and a document carrying both would pass it.
+  {
+    const qaRejectedName = (r: Awaited<ReturnType<typeof qaResumeDocument>>) => r.checks.find((c) => c.name === 'no_rejected_text')
+    const clean = await qaResumeDocument({
+      docx: combined.docx, pdfPath, expectedBullets: expected, expectedPages: 1, allowedFonts: masterFonts, allowedFontSizes: masterSizes,
+      masterSectPr: masterSect, masterParagraphCount: masterParas, filename: names.docx, company: 'Procter & Gamble', renderer: renderer?.id ?? null,
+      rejectedTexts: ['Directed a $40M capital programme across four continents'],
+    })
+    check('f: refused text absent from the document passes', qaRejectedName(clean)?.pass === true, qaRejectedName(clean)?.detail)
+
+    // Feed it a bullet that IS in the document, as a rejected proposal. The check
+    // must fail — otherwise it can never catch the case it exists for.
+    const leaked = await qaResumeDocument({
+      docx: combined.docx, pdfPath, expectedBullets: expected, expectedPages: 1, allowedFonts: masterFonts, allowedFontSizes: masterSizes,
+      masterSectPr: masterSect, masterParagraphCount: masterParas, filename: names.docx, company: 'Procter & Gamble', renderer: renderer?.id ?? null,
+      rejectedTexts: [expected[0]],
+    })
+    check('f: refused text present in the document fails QA', qaRejectedName(leaked)?.pass === false && leaked.ok === false, qaRejectedName(leaked)?.detail)
+    check('f: an empty refused list is not a failure', qaRejectedName(clean) !== undefined && (await qaResumeDocument({
+      docx: combined.docx, pdfPath, expectedBullets: expected, expectedPages: 1, allowedFonts: masterFonts, allowedFontSizes: masterSizes,
+      masterSectPr: masterSect, masterParagraphCount: masterParas, filename: names.docx, company: 'Procter & Gamble', renderer: renderer?.id ?? null,
+    })).checks.find((c) => c.name === 'no_rejected_text')?.pass === true)
+  }
 
   // (g) cover letter
   console.log('(g) cover letter')
