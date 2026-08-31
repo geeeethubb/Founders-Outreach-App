@@ -225,6 +225,51 @@ export async function recordProgress(
   return { written: true, notRunning: false, progress, migrationMissing: false, error: null }
 }
 
+// ─── The task cursor ─────────────────────────────────────────────────────────
+
+export interface CursorResult {
+  ok: boolean
+  /** The guarded update matched nothing: the run is no longer 'running'. */
+  notRunning: boolean
+  migrationMissing: boolean
+  error: string | null
+}
+
+/**
+ * Write where this run has GOT TO onto its own row.
+ *
+ * A BROAD or EXHAUSTIVE run legitimately outlives one worker invocation, and
+ * "continue it" is only cheaper than "start again" if something actually
+ * persisted the cursor. Nothing did: the orchestrator emitted it, the worker
+ * dropped it, and `continueRun` re-planned, re-swept and re-executed every
+ * strategy at full price while reporting `resuming: 'nothing done yet'`.
+ *
+ * It is merged onto the run's EXISTING params — the cursor says what is done,
+ * never what the run is — and mirrored into `progress` so the reader has two
+ * places to find it and the UI can show the pass number. Guarded on the run
+ * still being active unless `force` (the finishing write, which races the
+ * status change it is part of).
+ */
+export async function recordRunCursor(
+  runId: string,
+  cursor: Record<string, unknown>,
+  opts: { db?: RunStoreDb; force?: boolean } = {}
+): Promise<CursorResult> {
+  const db = opts.db ?? liveRunStoreDb()
+  const before = await db.getRun(runId)
+  if (before.error) return { ok: false, notRunning: false, migrationMissing: isMissingSchema(before.error), error: before.error }
+  if (!before.row) return { ok: false, notRunning: true, migrationMissing: false, error: 'run not found' }
+  const params = (before.row.params && typeof before.row.params === 'object' ? (before.row.params as Record<string, unknown>) : {}) as Record<string, unknown>
+  const progress = (before.row.progress && typeof before.row.progress === 'object' ? (before.row.progress as Record<string, unknown>) : {}) as Record<string, unknown>
+  const { rows, error } = await db.patchRun(
+    runId,
+    { params: { ...params, cursor }, progress: { ...progress, cursor } },
+    opts.force ? undefined : { status: 'running' }
+  )
+  if (error) return { ok: false, notRunning: false, migrationMissing: isMissingSchema(error), error }
+  return { ok: rows.length > 0, notRunning: rows.length === 0, migrationMissing: false, error: rows.length ? null : 'the run is no longer running' }
+}
+
 export interface TouchResult {
   ok: boolean
   /** The guarded update matched nothing: the run is no longer 'running'. */

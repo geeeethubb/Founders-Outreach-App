@@ -270,6 +270,14 @@ export interface TierOptions {
  * those, not this table.
  */
 export function locationTier(parsed: ParsedLocation, geoTiers: GeoTier[], opts: TierOptions = {}): 1 | 2 | 3 | null {
+  // NO TIER TABLE MEANS NO TIER. Since migration 017 the shipped mission states
+  // no place preference, so `geo_tiers` is normally empty — and the old code
+  // still walked to the bottom of this function and stamped every US posting
+  // tier 3. That number is not neutral: it reaches ranking as a geography
+  // penalty and reaches the fit evaluator as "(mission geography tier 3)",
+  // reintroducing the exact preference the mission just said it does not have.
+  // A posting scored against nothing has no tier, and says so.
+  if (!geoTiers.length) return null
   const sorted = [...geoTiers].sort((a, b) => a.tier - b.tier)
   for (const tier of sorted) {
     const aliases = tier.locations.flatMap(aliasesFor)

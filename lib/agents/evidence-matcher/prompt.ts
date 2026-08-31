@@ -29,7 +29,12 @@ export interface EvidenceMatcherInput {
 }
 
 export const evidenceMatcherPrompt: VersionedPrompt<EvidenceMatcherInput> = {
-  version: '1.0.0',
+  // 1.1.0 — the user message changed without a word of this file changing: it
+  // renders the job through the fit evaluator's `renderJobForPrompt()`, and
+  // migration 017 dropped the "(not in any mission geography tier)" stamp a
+  // tier-less posting used to carry. ADR-009 is about what the model SAW, not
+  // about which file the edit landed in.
+  version: '1.1.0',
 
   build(input) {
     const system = `You decide which parts of one person's record matter for ONE job — and which parts of the job the

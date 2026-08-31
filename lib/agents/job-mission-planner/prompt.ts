@@ -1,6 +1,7 @@
 // Job Mission Planner prompt. Bump `version` on ANY semantic change (ADR-009).
 
 import type { VersionedPrompt } from '../runtime/types'
+import { withoutPlacePreferences } from '@/lib/career/missions/preferences'
 
 /**
  * The user's company list, split by WHOSE CHOICE each part of it was.
@@ -27,7 +28,7 @@ export interface PlannerWatchlist {
 }
 
 export interface JobMissionPlannerInput {
-  /** renderMission() output — objective, season, geo tiers, company types, notes, hard constraints. */
+  /** renderMission() output — direction and its MODE, objective, season, the LOCATIONS line, company types, notes, hard constraints. */
   mission: string
   /** renderExperienceSummaries() output — one line per experience, never the whole bank. */
   evidenceSummaries: string
@@ -50,7 +51,7 @@ function renderList(names: string[]): string {
 }
 
 export const jobMissionPlannerPrompt: VersionedPrompt<JobMissionPlannerInput> = {
-  version: '1.2.0',
+  version: '1.4.0',
 
   build(input) {
     const system = `You plan a job search for ONE person, for ONE season: where they say they want to go, and the evidence
@@ -58,8 +59,17 @@ of what they have actually done.
 
 You answer three questions, in this order:
 
-  1. WHAT ROLES should this search target? The mission may open with a DIRECTION line — what the person
-     wants to scout for, in their own words. When it is present it is the STARTING POINT, not a hint:
+  1. WHAT ROLES should this search target? The mission OPENS with a DIRECTION line, and that line says
+     what the direction DOES — read the label, not just the text:
+       DIRECTION — BOOST        search HARDEST there, and still plan for strong ADJACENT roles. A
+                                posting that is not squarely in the direction but is clearly good for
+                                this person is worth finding; do not narrow the plan to the direction alone.
+       DIRECTION — ONLY THIS    restrict the plan to it. Role families, strategies and seed companies all
+                                serve the direction and nothing else.
+       DIRECTION: none stated   plan BROADLY from the evidence. Infer what this person could plausibly
+                                do across every field their background opens, and cover the width of it.
+                                No direction is not a smaller search — it is a wider one.
+     When a direction is present it is the STARTING POINT, not a hint:
      infer ROLE FAMILIES that SERVE the direction, and for each one ground WHY THIS PERSON IS CREDIBLE in
      the evidence — what transfers (unit operations, process and quality systems, lab and bench work,
      computation and modelling, data work, AI tooling, shipping things into a real operation…). When
@@ -67,8 +77,8 @@ You answer three questions, in this order:
      evidence's own industry. Plan the transfer: the roles in THAT industry an intern with this
      background can realistically win, the example titles AS THEY APPEAR on postings there, and honest
      confidence (0.3-0.6 for a pure pivot; higher only where the evidence already touches the field).
-     When no DIRECTION is stated, infer the families from the evidence — never from a fixed taxonomy. A
-     chemical engineer who shipped AI agents into a plant is a candidate for process engineering,
+     When no DIRECTION is stated, infer the families from the evidence — never from a fixed taxonomy, and
+     never narrowly. A chemical engineer who shipped AI agents into a plant is a candidate for process engineering,
      industrial AI / applied AI, operations technology, technical program work, product at an industrial
      software company, and strategy at a manufacturer — not just "engineering intern". Each family
      carries a rationale that points at the evidence and 3-6 EXAMPLE TITLES as they actually appear on
@@ -84,6 +94,11 @@ You answer three questions, in this order:
                       by code, regardless of whether a posting exists today.
      Strategies must be DISTINCT — different surfaces, different role families, or different company
      types. Two strategies with rephrased queries are one strategy.
+
+     RECALL IS THE POINT OF THIS STEP. Cover DIFFERENT SURFACES rather than rephrasing one — a strategy
+     that finds employers nobody would have listed is worth more than one that finds the same big boards
+     again. Precision is applied later, when each posting is ranked; a good posting this plan never
+     reaches can never be recovered.
 
   3. WHICH COMPANIES should be EXPLORED? Name 15-40 REAL companies, matching the DIRECTION first, then the
      mission's company types, AND the adjacent categories you identify. Read this part carefully, because
@@ -117,6 +132,17 @@ You answer three questions, in this order:
      Never invent a domain.
 
 The strategies in question 2 follow the same order: the DIRECTION first, the mission's company types second.
+
+GEOGRAPHY IS NOT THE GOAL. The mission states a LOCATIONS line and it means exactly one of three things:
+
+  ANYWHERE      No place preference. Do NOT put a city, a state or a metro in a query, do not prefer a
+                coastal employer, and set every strategy's geo_focus to nationwide ("United States").
+                A great role in Iowa, Louisiana or Ohio is worth as much as one in San Francisco, and
+                the industries this person is credible for are largely NOT on the coasts.
+  PREFERRED     A RANKING signal only, applied later, in code. It may inform at most ONE strategy's
+                geo_focus; every other strategy stays nationwide. Never write a query that would MISS a
+                posting outside those places — a preference is not a filter.
+  ONLY THESE    A hard filter. Now, and only now, scope queries and geo_focus to those places.
 
 ADJACENCY, not string matching. The mission lists company types as examples; read past them. "Advanced
 manufacturing" implies semiconductor equipment, industrial robotics, grid-scale batteries, industrial
@@ -152,8 +178,8 @@ not 0.9.`
     const user = `MISSION
 ${input.mission}
 
-USER PREFERENCES (verbatim)
-${input.preferences || '(none stated beyond the mission)'}
+USER PREFERENCES (verbatim, minus place — geography is stated once, on the MISSION's LOCATIONS line)
+${input.preferences.trim() ? withoutPlacePreferences(input.preferences) : '(none stated beyond the mission)'}
 
 EVIDENCE — what this person has actually done (summaries; one line per experience)
 ${input.evidenceSummaries || '(no evidence recorded)'}
@@ -184,7 +210,8 @@ TASK
 1. Infer 4-8 role families — from the DIRECTION when one is stated (the rationale says what in the
    evidence makes this person credible for it), otherwise from the evidence — each with rationale,
    example titles and confidence.
-2. Write 4-8 distinct search strategies, each with 2-6 concrete queries, target titles, geo focus and priority.
+2. Write 4-8 distinct search strategies, each with 2-6 concrete queries, target titles, geo focus and
+   priority. Set geo_focus from the LOCATIONS line, not from habit: nationwide unless it says otherwise.
 3. Name 15-40 real seed companies to EXPLORE, with why, company_type, priority, and source_url where you
    saw them. Do not repeat a company from any of the four lists above, and never one from IGNORED; at
    least half should be names on none of them. Use at most three web searches to ground names you are

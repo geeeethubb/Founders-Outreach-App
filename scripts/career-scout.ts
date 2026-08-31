@@ -169,23 +169,26 @@ async function main() {
     : null
   // A throw here must still close the row, or the Jobs page polls a run that
   // will never move again until the reaper notices.
+  // ONE mapping from the stored row to what the orchestrator executes, shared
+  // with the worker and the inline route (`toJobScoutParams`). Listing the
+  // fields here by hand is how a run queued by the UI with a mode and a spend
+  // ceiling would be executed by `--run <id>` as an uncapped legacy run.
   const result = await runJobScout(
     {
-      userId,
-      missionId: params.missionId,
+      ...dispatch.toJobScoutParams(params, {
+        userId,
+        deadlineMs,
+        onProgress: (stage: string, detail: string, counts?: Record<string, number>) => {
+          console.log(`  [${stage}] ${detail}`)
+          if (runId) progress = progress.then(() => runStore.recordProgress(runId as string, { stage, detail, counts })).catch(() => {})
+        },
+        // A CLI run that is killed (or runs out of deadline) still leaves a
+        // resumable cursor on the row, so the next `--run <id>` continues.
+        onCursor: (cursor) => {
+          if (runId) progress = progress.then(() => runStore.recordRunCursor(runId as string, cursor as unknown as Record<string, unknown>)).catch(() => {})
+        },
+      }),
       ...(directionOverride !== null ? { directionOverride } : {}),
-      budget: { deadlineMs },
-      maxStrategies: params.strategies,
-      maxRoundsPerStrategy: params.rounds,
-      maxCompaniesFirst: params.companies,
-      maxExtract: params.extract,
-      verify: params.verify,
-      rank: params.rank,
-      label: params.label,
-      onProgress: (stage: string, detail: string, counts?: Record<string, number>) => {
-        console.log(`  [${stage}] ${detail}`)
-        if (runId) progress = progress.then(() => runStore.recordProgress(runId as string, { stage, detail, counts })).catch(() => {})
-      },
     },
     store ? { store } : {}
   ).catch(async (e: unknown) => {
@@ -198,7 +201,14 @@ async function main() {
   await progress.catch(() => {})
 
   if (runId) {
-    const status = runStore.terminalStatusFor({ migrationMissing: result.migrationMissing, deadlineHit: result.stats.deadline_hit, errors: result.errors })
+    await runStore.recordRunCursor(runId, result.cursor as unknown as Record<string, unknown>, { force: true }).catch(() => {})
+    const status = runStore.terminalStatusFor({
+      migrationMissing: result.migrationMissing,
+      deadlineHit: result.stats.deadline_hit,
+      errors: result.errors,
+      partial: result.partial,
+      stopped: result.stopped,
+    })
     await runStore.finishScoutRun(runId, status, {
       stats: { ...result.stats, jobs: result.jobs.length, rejected: result.rejected.length, errors: result.errors.slice(0, 10) },
       error: result.errors[0] ?? null,

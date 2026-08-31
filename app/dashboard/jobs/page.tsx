@@ -7,7 +7,8 @@
 import { Suspense, useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
-import type { CareerMission } from '@/lib/career/types'
+import type { CareerMission, DirectionMode } from '@/lib/career/types'
+import { missionDirectionMode } from '@/lib/career/types'
 import { api } from '@/components/career/api'
 import InlineNotice, { MigrationNotice } from '@/components/career/InlineNotice'
 import JobCard, { type JobCardData } from './JobCard'
@@ -16,7 +17,7 @@ import ScoutPanel, { readScoutEnvironment } from './ScoutPanel'
 import RunResults from './RunResults'
 import AddByUrl from './AddByUrl'
 import DirectionCard, { type DirectionStatus } from './DirectionCard'
-import { directionDirty, directionPatch } from './direction'
+import { directionDialDirty, directionModeFor, directionPatch } from './direction'
 
 // 50 rows a page: at 400 postings, 25 makes sixteen pages of scrolling.
 const PAGE = 50
@@ -76,6 +77,10 @@ function JobsView() {
   // The direction draft lives here, not in the card: Scout now must be able to
   // save it first, so a run never plans from text the founder has not stored.
   const [direction, setDirection] = useState('')
+  // What that direction DOES — "search harder for this" or "only show me this".
+  // Half of the dial, and the half that decides whether a paid run hides things,
+  // so it is saved with the text and shown in the Scout panel before a run.
+  const [directionMode, setDirectionMode] = useState<Exclude<DirectionMode, 'off'>>('boost')
   const [directionTouched, setDirectionTouched] = useState(false)
   const [directionSaving, setDirectionSaving] = useState(false)
   const [directionStatus, setDirectionStatus] = useState<DirectionStatus | null>(null)
@@ -121,7 +126,10 @@ function JobsView() {
       // Only seed the textarea from the server while it is untouched; a reload after a
       // scout run must not overwrite what the founder is typing.
       setDirectionTouched((touched) => {
-        if (!touched) setDirection(active?.preferences.direction ?? '')
+        if (!touched) {
+          setDirection(active?.preferences.direction ?? '')
+          setDirectionMode(directionModeFor(active?.preferences.direction ?? '', active?.preferences.direction_mode ?? null))
+        }
         return touched
       })
     }
@@ -164,16 +172,16 @@ function JobsView() {
     setFilters(next)
   }
 
-  const directionIsDirty = mission ? directionDirty(direction, mission.preferences.direction) : false
+  const directionIsDirty = directionDialDirty(direction, directionMode, mission?.preferences)
 
-  /** PATCH only preferences.direction (the store merges it over the stored row). Resolves true on success. */
+  /** PATCH only the direction and its mode (the store merges it over the stored row). Resolves true on success. */
   async function saveDirection(): Promise<boolean> {
     if (!mission) return false
     setDirectionSaving(true)
     setDirectionStatus(null)
     const r = await api<{ mission: CareerMission }>(`/api/career/missions/${mission.id}`, {
       method: 'PATCH',
-      json: directionPatch(direction),
+      json: directionPatch(direction, directionMode),
     })
     setDirectionSaving(false)
     if (!r.ok || !r.data?.mission) {
@@ -183,6 +191,7 @@ function JobsView() {
     // The server's copy is the truth: ScoutPanel and the header read it from here.
     setMission(r.data.mission)
     setDirection(r.data.mission.preferences.direction ?? '')
+    setDirectionMode(directionModeFor(r.data.mission.preferences.direction ?? '', r.data.mission.preferences.direction_mode ?? null))
     setDirectionTouched(false)
     setDirectionStatus({ kind: 'ok', text: 'Saved — leads the next Scout run' })
     return true
@@ -286,6 +295,12 @@ function JobsView() {
           saving={directionSaving}
           disabled={migrationMissing || !mission}
           status={directionStatus}
+          mode={directionMode}
+          onModeChange={(next) => {
+            setDirectionMode(next)
+            setDirectionTouched(true)
+            setDirectionStatus(null)
+          }}
         />
       </div>
 
@@ -294,6 +309,7 @@ function JobsView() {
           <ScoutPanel
             missionId={mission?.id ?? null}
             direction={mission?.preferences.direction}
+            directionMode={mission ? missionDirectionMode(mission.preferences) : null}
             initialRunId={resumeRunId}
             durable={scoutDurable}
             onFinished={() => {

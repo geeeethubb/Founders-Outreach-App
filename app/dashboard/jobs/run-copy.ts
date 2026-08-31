@@ -146,7 +146,60 @@ export function statsLines(stats: Record<string, unknown> | null): string[] {
   ]
   const cost = typeof stats.cost_usd === 'number' ? stats.cost_usd : null
   if (cost !== null) lines.push(`cost: $${cost.toFixed(4)}${stats.deadline_hit === true ? ' · deadline hit' : ''}`)
+  // What THIS workstream measures: how big the run was allowed to be, which
+  // lane found the jobs, what it spent against its ceiling and why it stopped.
+  // Without these a run that ran out of money is indistinguishable on screen
+  // from one that swept the market.
+  for (const note of discoveryNotes(stats)) lines.push(note)
   return lines
+}
+
+// ─── The discovery report ────────────────────────────────────────────────────
+
+/** `stats.discovery`, as the orchestrator writes it, or null. */
+function discovery(stats: Record<string, unknown> | null | undefined): Record<string, unknown> | null {
+  const d = stats?.discovery
+  return d && typeof d === 'object' && !Array.isArray(d) ? (d as Record<string, unknown>) : null
+}
+
+/** The run's own report lines — budget, lanes, yield, spend, stopping reason. */
+export function discoveryNotes(stats: Record<string, unknown> | null | undefined): string[] {
+  const notes = discovery(stats)?.notes
+  return Array.isArray(notes) ? notes.filter((n): n is string => typeof n === 'string').slice(0, 8) : []
+}
+
+export interface RunContinuation {
+  /** There is work left and a later pass would not redo what is done. */
+  canContinue: boolean
+  /** 'complete' | 'deadline' | 'budget' | 'saturated', or null on a run that predates the report. */
+  stopped: string | null
+  /** One line for the button's neighbour: why continuing is worth a click. */
+  note: string | null
+}
+
+/**
+ * Can this run be picked up where it stopped?
+ *
+ * Only when the run's own report says it stopped short AND its cursor is not
+ * marked done. A saturated run is finished — the sources had nothing new left
+ * — and offering to continue it would sell a second pass over an exhausted
+ * market. A run with no report at all (pre-modes, or a legacy CLI run) is not
+ * continuable: there is nothing to continue FROM, and starting one that
+ * silently re-ran everything at full price is the failure this replaces.
+ */
+export function runContinuation(run: RunDetail): RunContinuation {
+  const d = discovery(run.stats)
+  const stopped = typeof d?.stopped === 'string' ? d.stopped : null
+  const cursor = d?.cursor && typeof d.cursor === 'object' ? (d.cursor as Record<string, unknown>) : null
+  const stages = Array.isArray(cursor?.stages) ? (cursor?.stages as unknown[]).filter((s): s is string => typeof s === 'string') : []
+  if (!stopped || stages.includes('done')) return { canContinue: false, stopped, note: null }
+  if (stopped === 'budget') {
+    return { canContinue: true, stopped, note: 'It stopped at its spend limit. Continuing picks up where it stopped — raise the limit to go further.' }
+  }
+  if (stopped === 'deadline') {
+    return { canContinue: true, stopped, note: 'It ran out of time. Continuing picks up at the strategies and companies it never reached.' }
+  }
+  return { canContinue: false, stopped, note: null }
 }
 
 // ─── Is the run detached from this request? ──────────────────────────────────

@@ -34,15 +34,21 @@ import { verifyJobs, type VerifiableRow, type VerifyStore } from '../lib/career/
 import { addJobFromUrl, EXCLUDED_PLATFORM_MESSAGE } from '../lib/career/jobs/manual'
 import type { ApplicationState, CareerMission, CareerMissionPreferences } from '../lib/career/types'
 
-// renderMission() of the default mission, pinned verbatim: the direction must
-// not change what every agent already reads when none is stated.
+// renderMission() of the default mission, pinned verbatim: adding a direction
+// must not change any other line an agent reads.
+//
+// Since migration 017 the shipped default names NO city: geography went from a
+// built-in preference to a dial the user sets, and "no direction" renders as an
+// instruction to explore broadly rather than as two coastal tiers. If a city
+// reappears in this fixture, that is the bug — scripts/test-career-mission.ts
+// defends the property directly.
 const RENDERED_DEFAULT_MISSION = [
-  'OBJECTIVE: Find high-quality Summer 2027 internships where I will learn fast, own real work, and sit with intelligent colleagues on technically interesting, important problems — in the Bay Area or New York first, other strong coastal cities second.',
+  'DIRECTION: none stated — explore broadly from the evidence. Do not assume a role family, an industry, or a place; infer what this person could plausibly do and search wide.',
+  'OBJECTIVE: Find high-quality Summer 2027 internships where I will learn fast, own real work, and sit with intelligent colleagues on technically interesting, important problems — anywhere in the United States.',
   'SEASON: summer_2027',
-  'GEOGRAPHY TIER 1: San Francisco / Bay Area; New York City',
-  'GEOGRAPHY TIER 2: Boston; Seattle; Los Angeles; Washington DC — other large, vibrant East or West Coast cities — genuinely strong urban markets',
+  'LOCATIONS: ANYWHERE in the United States — no place preference. Where a role is neither counts for it nor against it. Do not put a city in a query and do not prefer one posting over another for where it is.',
   'COMPANY TYPES: high-quality startups, growth-stage technology companies, major industrial companies, energy / oil & gas, advanced manufacturing, industrial AI, chemicals, materials, CPG, healthcare, medical technology, pharma where relevant, robotics / automation, other technically interesting industries',
-  'OPTIMIZE FOR (in order): learning > ownership > intelligent colleagues > technically interesting work > mentorship > exposure to important problems > professional growth > strong career optionality > location > company quality > mission relevance',
+  'OPTIMIZE FOR (in order): learning > ownership > intelligent colleagues > technically interesting work > mentorship > exposure to important problems > professional growth > strong career optionality > company quality > mission relevance',
   'WORK MODES: onsite, hybrid, remote',
   'NOTES: Do not equate prestige with quality. Learn adjacent categories rather than filtering on these strings. Roles may span technical, engineering, technical strategy, product, industrial innovation, operations technology, AI/manufacturing, analytical, or cross-functional work — when no direction is stated, infer plausible roles from the evidence bank; when one is, it decides the roles and the evidence explains why I am credible for them.',
   'HARD CONSTRAINTS: Internships only; Not a different season; United States',
@@ -289,10 +295,14 @@ async function main() {
     check('stats: verification histogram sums to every job handed to the store', Object.values(r.stats.verification).reduce((a, b) => a + b, 0) === mem.batches.flat().length)
     check('stats: web searches and model calls counted', r.stats.web_searches >= 2 && r.stats.model_calls >= 4)
     check('post-scout ranking asked for every stored id, research skipped, within the deadline', mem.ranked.length === 1 && mem.ranked[0].ids.length === mem.jobs.length && mem.ranked[0].skipResearch && mem.ranked[0].deadlineMs > 0 && mem.ranked[0].deadlineMs < 270_000 && mem.ranked[0].concurrency === 3, JSON.stringify(mem.ranked))
-    check('post-scout ranking puts the extracted, board-verified Summer 2027 tier-1 intern first and the unverified lead last', mem.ranked[0]?.ids[0] === `job-${mem.jobs.indexOf(acme!)}` && mem.ranked[0]?.ids[mem.ranked[0].ids.length - 1] === `job-${mem.jobs.indexOf(delta!)}`, JSON.stringify(mem.ranked[0]?.ids))
+    check('post-scout ranking puts the extracted, board-verified Summer 2027 intern first and the unverified lead last', mem.ranked[0]?.ids[0] === `job-${mem.jobs.indexOf(acme!)}` && mem.ranked[0]?.ids[mem.ranked[0].ids.length - 1] === `job-${mem.jobs.indexOf(delta!)}`, JSON.stringify(mem.ranked[0]?.ids))
     check('stats: ranked count and rank cost recorded', r.stats.jobs_ranked === mem.jobs.length && r.stats.rank_cost_usd === 0.03, `${r.stats.jobs_ranked} ranked, $${r.stats.rank_cost_usd}`)
     check('stats: cost from the run plus ranking', r.costUsd === 0.08 && mem.runs[0].stats.cost_usd === 0.08, `${r.costUsd}`)
-    check('location tier from mission geo tiers', acme?.location_tier === 1 && beta?.location_tier === 1)
+    // The mission fixture is the SHIPPED default, and since migration 017 that
+    // states no place preference at all — so nothing may stamp a geography tier
+    // on a posting. (locationTier itself, and the tiers a dial writes, are
+    // exercised in scripts/test-career-jobs.ts against the old tier fixture.)
+    check('no geography tier is stamped when the mission prefers no place', acme?.location_tier == null && beta?.location_tier == null, `${acme?.location_tier} / ${beta?.location_tier}`)
     check('summarizeStats renders lines', summarizeStats(r.stats).length === 8 && summarizeStats(r.stats)[3].includes('Internships only'))
   }
 
@@ -533,7 +543,13 @@ async function main() {
     check('planner failure is surfaced', r.errors.some((e) => /planner/.test(e)) && r.plan === null)
     check('job-first still runs on the fallback strategies', seen.length === 2 && seen.every((n) => n.startsWith('fallback')))
     check('the fallback is labelled in errors', r.errors.some((e) => /deterministic fallback strategies/.test(e)))
-    check('fallback strategies carry the season and a tier-1 city', fallbackStrategies({ season: 'summer_2027', preferences: DEFAULT_MISSION_PREFERENCES }).every((s) => s.queries.some((q) => q.includes('Summer 2027')) && s.geo_focus[0] === 'San Francisco / Bay Area'))
+    // Under the neutral default the fallback is NATIONWIDE. A deterministic
+    // floor that quietly appended "San Francisco / Bay Area" to every query was
+    // the product having a place preference nobody stated.
+    const fb = fallbackStrategies({ season: 'summer_2027', preferences: DEFAULT_MISSION_PREFERENCES })
+    check('fallback strategies carry the season', fb.every((s) => s.queries.some((q) => q.includes('Summer 2027'))))
+    check('fallback strategies go nationwide when no place is preferred', fb.every((s) => s.geo_focus[0] === 'United States'), JSON.stringify(fb.map((s) => s.geo_focus)))
+    check('no fallback query names a city the founder never asked for', !/San Francisco|New York|Boston|Seattle|Los Angeles|Washington DC/.test(JSON.stringify(fb)))
   }
 
   // ─── B2. The stated direction ─────────────────────────────────────────────
@@ -550,14 +566,18 @@ async function main() {
 
     const withoutDirection = renderMission(MISSION)
     check('renderMission without a direction is unchanged (fixture equality)', withoutDirection === RENDERED_DEFAULT_MISSION, withoutDirection)
-    check('renderMission: notes are optional; no direction line ever appears', !withoutDirection.includes('DIRECTION'))
+    // "No direction" is no longer silence. Since 017 it is an instruction — the
+    // widest search there is — and it is the FIRST thing an agent reads either way.
+    check('renderMission without a direction says so, and says to explore broadly', withoutDirection.split('\n')[0].startsWith('DIRECTION: none stated — explore broadly from the evidence'))
 
     const DIRECTION = 'Life Sciences / genomic bio research — as a chemical engineer my experience is very transferable'
     const directed = renderMission({ ...MISSION, preferences: { ...MISSION.preferences, direction: DIRECTION } })
     const lines = directed.split('\n')
-    check('renderMission with a direction puts DIRECTION first', lines[0] === `DIRECTION (what I want to scout for — this leads the plan): ${DIRECTION}` && lines[1].startsWith('OBJECTIVE: '), lines[0])
+    // The direction line now says what the direction DOES, not just what it is:
+    // BOOST is the default, and it means "search hardest here" — not "only this".
+    check('renderMission with a direction puts DIRECTION first, and says it is a boost', lines[0] === `DIRECTION — BOOST (search hardest here, and still take strong adjacent postings): ${DIRECTION}` && lines[1].startsWith('OBJECTIVE: '), lines[0])
     check('renderMission with a direction relabels company types as default examples', directed.includes('COMPANY TYPES (default examples — the DIRECTION above takes precedence where they differ): high-quality startups'))
-    check('renderMission with a direction otherwise renders the same lines', lines.slice(1).map((l) => l.replace(/^COMPANY TYPES \([^)]*\)/, 'COMPANY TYPES').replace(/^NOTES \([^)]*\)/, 'NOTES')).join('\n') === withoutDirection)
+    check('renderMission with a direction otherwise renders the same lines', lines.slice(1).map((l) => l.replace(/^COMPANY TYPES \([^)]*\)/, 'COMPANY TYPES').replace(/^NOTES \([^)]*\)/, 'NOTES')).join('\n') === withoutDirection.split('\n').slice(1).join('\n'))
 
     check('directionPhrases: split on slashes / commas / and, filler and the credential clause dropped', directionPhrases(DIRECTION).join('|') === 'Life Sciences|genomic bio research', directionPhrases(DIRECTION).join('|'))
     check('directionPhrases: "pivot into", "I want" and "or" handled, capped at 4', directionPhrases('I want to pivot into quantum computing, synthetic biology or robotics, energy storage, semiconductors').join('|') === 'quantum computing|synthetic biology|robotics|energy storage')
@@ -582,7 +602,7 @@ async function main() {
       planner: async (input) => { seenMission = input.mission; return agentResult<JobMissionPlan>(null, 'job_mission_planner', 'x') },
       session: async (p) => { seenStrategies.push({ name: p.strategy.name, queries: p.strategy.queries }); return sessionResult([]) },
     })
-    check('directionOverride reaches the planner as the first mission line', seenMission.startsWith('DIRECTION (what I want to scout for — this leads the plan): computational biology\n'), seenMission.split('\n')[0])
+    check('directionOverride reaches the planner as the first mission line', seenMission.startsWith('DIRECTION — BOOST (search hardest here, and still take strong adjacent postings): computational biology\n'), seenMission.split('\n')[0])
     check('directionOverride does not touch the mission object', JSON.stringify(MISSION) === before && MISSION.preferences.direction == null)
     check('progress says which direction the plan started from', progressLines.some((l) => l === 'plan: planning from your direction: computational biology'), progressLines.join(' | '))
     check('directionOverride reaches the fallback strategies too', seenStrategies[0]?.name === 'fallback · stated direction' && seenStrategies[0].queries.some((q) => q.includes('computational biology')), JSON.stringify(seenStrategies))

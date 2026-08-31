@@ -5,8 +5,9 @@
 // so this card is presentational: a textarea, a hint, a Save button, a status.
 
 import Link from 'next/link'
+import type { DirectionMode } from '@/lib/career/types'
 import { MAX_DIRECTION_CHARS } from '@/lib/career/missions/direction'
-import { DIRECTION_HINT_LEAD, DIRECTION_PLACEHOLDER } from './direction'
+import { DIRECTION_HINT_LEAD, DIRECTION_MODE_EMPTY_HINT, DIRECTION_MODE_OPTIONS, DIRECTION_PLACEHOLDER } from './direction'
 
 export interface DirectionStatus {
   kind: 'ok' | 'error'
@@ -21,6 +22,8 @@ export default function DirectionCard({
   saving,
   disabled,
   status,
+  mode,
+  onModeChange,
 }: {
   value: string
   onChange: (next: string) => void
@@ -30,7 +33,11 @@ export default function DirectionCard({
   /** No mission loaded, or migration 014 missing — nothing to bind to. */
   disabled: boolean
   status: DirectionStatus | null
+  /** What the direction does. Optional: a caller that has not wired it yet renders the card without the choice. */
+  mode?: Exclude<DirectionMode, 'off'>
+  onModeChange?: (next: Exclude<DirectionMode, 'off'>) => void
 }) {
+  const hasText = value.trim().length > 0
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-4">
       <div className="flex items-start justify-between gap-3">
@@ -63,6 +70,29 @@ export default function DirectionCard({
         placeholder={DIRECTION_PLACEHOLDER}
         className="mt-2 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm text-slate-900 placeholder:text-slate-400 disabled:bg-slate-50"
       />
+      {onModeChange && (
+        <fieldset className="mt-2" disabled={disabled || !hasText}>
+          <legend className="sr-only">What this direction does</legend>
+          <div className={`space-y-1 ${hasText ? '' : 'opacity-50'}`}>
+            {DIRECTION_MODE_OPTIONS.map((o) => (
+              <label key={o.value} className="flex items-start gap-2 text-sm text-slate-700">
+                <input
+                  type="radio"
+                  name="direction-mode"
+                  className="mt-1"
+                  checked={(mode ?? 'boost') === o.value}
+                  onChange={() => onModeChange(o.value)}
+                />
+                <span>
+                  <span className="font-medium text-slate-900">{o.label}</span>
+                  <span className="block text-xs text-slate-500">{o.hint}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+          {!hasText && <p className="mt-1 text-xs text-slate-500">{DIRECTION_MODE_EMPTY_HINT}</p>}
+        </fieldset>
+      )}
       <p className="mt-1 text-xs text-slate-500">
         {DIRECTION_HINT_LEAD} Locations, company types and hard constraints live on the{' '}
         <Link href="/dashboard/jobs/mission" className="text-indigo-600 hover:underline">

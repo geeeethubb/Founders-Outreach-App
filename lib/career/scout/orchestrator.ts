@@ -37,13 +37,13 @@
 // memory under test with stub agents and a stub store. Production callers pass
 // nothing and get the live modules.
 
-import { runJobMissionPlanner, type SearchStrategy } from '@/lib/agents/job-mission-planner'
+import { runJobMissionPlanner, type JobMissionPlan, type SearchStrategy } from '@/lib/agents/job-mission-planner'
 import type { AgentResult, ToolContext } from '@/lib/agents/runtime/types'
 import { renderPreferences, renderSkills } from '../evidence/render'
 import { getRelevantPersonalEvidence, renderRelevantEvidence } from '../evidence/retrieval'
 import { renderFeedbackHints } from '../fit/feedback'
 import { normalizeCompanyName, type NormalizedJob } from '../jobs/normalize'
-import { sweepWatchlist, SWEEP_MAX_COMPANIES, type SweepResult, type SweepStore } from '../jobs/sweep'
+import { SWEEP_MAX_COMPANIES, type SweepResult } from '../jobs/sweep'
 import { runIntelligenceBatch } from '../intelligence/orchestrator'
 import { renderMission, sanitizeDirection } from '../missions/store'
 import { DEFAULT_SCOUT_BUDGET, type CareerBudget, type CareerRun } from '../runs'
@@ -52,12 +52,17 @@ import { getPageFetcher } from '../sources/fetch'
 import { getSourceRegistry } from '../sources/registry'
 import type { RawJobPosting } from '../sources/types'
 import type { CareerMission, VerificationStatus } from '../types'
+import { createSpendLedger, STAGE_COST_ESTIMATE_USD, type YieldSample } from '../discovery/budget'
+import { resolveRunBudget, type RunMode } from '../discovery/modes'
+import { emptyCursor, sanitizeCursor, type ScoutCursor } from './run-dispatch'
+import { buildRunReport, isRunFinished, stopReasonOf, type JobScoutRunReport, type ScoutStopReason } from './run-report'
+import { collectRunJobs, runRankStage, RANK_DEADLINE_RESERVE_MS } from './rank-stage'
 import { seedWatchlistFromPlan } from './company-first'
-import { fallbackStrategies, selectJobsToRank } from './direction'
+import { fallbackStrategies } from './direction'
 import { extractPending, type PendingExtractionStore, type RejectedJob } from './extract'
 import { isAtsListingSource, persistBatch, type BatchContext } from './persist'
 import type { FetchBudget } from './resolve'
-import { runCompanyFirstStage, runJobFirstStage, type StageRun } from './stages'
+import { runCompanyFirstStage, runJobFirstStage, runSweepStage, type DiscoveryLane, type StageRun } from './stages'
 import { bump, emptyStats, noteQuery } from './stats'
 import { buildPlannerWatchlist, liveScoutStore, toWatched, type ScoutedWatchCompany, type ScoutStore } from './store'
 import type { JobScoutDeps, JobScoutParams, JobScoutResult, JobScoutResultJob, ScoutProgressCounts, ScoutRunStats } from './types'
@@ -68,6 +73,7 @@ export { directionMatches, directionPhrases, directionTerms, fallbackStrategies,
 export { buildPlannerWatchlist, liveScoutStore, toWatched, type ScoutedWatchCompany, type ScoutStore } from './store'
 export { MAX_SCOUT_COMPANY_CHECKS } from './stages'
 export type { CompaniesSelected, JobScoutDeps, JobScoutParams, JobScoutResult, JobScoutResultJob, ScoutProgressCounts, ScoutRunStats } from './types'
+export { buildRunReport, isRunFinished, stopReasonOf, type JobScoutRunReport, type ScoutStopReason } from './run-report'
 
 /**
  * The share of the run's wall clock company-first may spend. The watchlist is
@@ -85,13 +91,6 @@ const COMPANY_FIRST_TIME_SHARE = 0.55
  * handed straight back to discovery.
  */
 const SWEEP_TIME_SHARE = 0.25
-// Post-scout ranking: how many of this run's jobs get a fit number before the
-// run returns, how many at once, and how much of the deadline must be left.
-// Research is skipped here (it is the slow stage); the package flow runs it.
-const MAX_RANK_JOBS = 12
-const RANK_CONCURRENCY = 3
-const RANK_DEADLINE_RESERVE_MS = 20_000
-const RANK_MIN_WINDOW_MS = 30_000
 
 /**
  * The wide, cheap half of a run, and the paid pass over what it found.
@@ -127,24 +126,117 @@ export interface JobScoutSweepDeps {
   pendingStore?: PendingExtractionStore
 }
 
+/**
+ * How big this run is, as ONE choice — and where a previous invocation of it
+ * stopped.
+ *
+ * Every field is optional, and a caller that passes none of them gets exactly
+ * the behaviour this orchestrator had before run modes existed (LEGACY_BUDGET:
+ * no spend ceiling, no saturation stopping, the old per-stage numbers). That
+ * is deliberate: the CLI, the eval and the offline suites must not change
+ * behaviour on the day a mode is added.
+ */
+export interface JobScoutModeParams {
+  /** QUICK · BROAD · EXHAUSTIVE. Omitted means "the legacy numbers". */
+  mode?: RunMode
+  /** A hard ceiling in dollars. Overrides the mode's own. */
+  maxSpendUsd?: number
+  /** Where the last invocation of this run stopped. Omitted means "start at the beginning". */
+  cursor?: ScoutCursor | null
+  /**
+   * Called whenever the cursor moves, so the caller can persist it on the run
+   * row DURING the run rather than only at the end — a worker that is killed
+   * between stages must still leave a resumable cursor behind.
+   */
+  onCursor?: (cursor: ScoutCursor) => void
+}
+
+export type JobScoutRunResult = JobScoutResult & JobScoutRunReport
+
 export function scoutToolContext(userId: string, runId: string | null, budget: CareerBudget): ToolContext {
   return { user_id: userId, run_id: runId, budget: { maxCompanies: 0, maxPeoplePerCompany: 0, maxApolloCalls: 0, maxWebSearches: budget.maxWebSearches, maxAgentSteps: budget.maxAgentSteps } }
 }
 
 // ─── The run ─────────────────────────────────────────────────────────────────
 
-export async function runJobScout(params: JobScoutParams & JobScoutSweepParams, deps: JobScoutDeps & JobScoutSweepDeps = {}): Promise<JobScoutResult> {
+export async function runJobScout(
+  params: JobScoutParams & JobScoutSweepParams & JobScoutModeParams,
+  deps: JobScoutDeps & JobScoutSweepDeps = {}
+): Promise<JobScoutRunResult> {
   const started = Date.now()
   const store = deps.store ?? liveScoutStore()
   const registry = deps.registry ?? getSourceRegistry()
   const fetcher = deps.fetcher ?? getPageFetcher()
   const budget: CareerBudget = { ...DEFAULT_SCOUT_BUDGET, ...(params.budget ?? {}) }
-  const deadline = started + budget.deadlineMs
+
+  // ── How big is this run, and where did the last invocation stop? ──
+  //
+  // The mode is the only knob a user turns; everything below reads its budget
+  // rather than a constant. A caller that named no mode gets LEGACY_BUDGET,
+  // which has no spend ceiling — a ceiling nobody asked for could truncate the
+  // founder's twenty-minute CLI run, so one only exists when a mode or an
+  // explicit maxSpendUsd says so.
+  const runBudget = resolveRunBudget(params.mode ?? null, {
+    maxSpendUsd: params.maxSpendUsd ?? null,
+    maxExtract: params.maxExtract ?? null,
+    maxStrategies: params.maxStrategies ?? null,
+    maxRoundsPerStrategy: params.maxRoundsPerStrategy ?? null,
+    maxCompanyFirst: params.maxCompaniesFirst ?? null,
+  })
+  const cursor: ScoutCursor = params.cursor ? sanitizeCursor(params.cursor) : emptyCursor()
+  cursor.attempts += 1
+
+  // ── Two clocks, and the smaller one wins ──
+  //
+  // `budget.deadlineMs` is what THIS invocation has (280s on Vercel, 1200s
+  // locally). `runBudget.maxRuntimeMs` is what the whole run may take across
+  // however many invocations — an hour for EXHAUSTIVE — and the cursor
+  // carries how much of it earlier passes already used. Without this second
+  // clock the mode's runtime was a sentence in the UI that no code read, and
+  // a run could be continued forever.
+  //
+  // It applies only to a run that NAMED a mode: a legacy caller's clock is
+  // exactly the deadline it passed, as it has always been.
+  const openingElapsedMs = cursor.elapsed_ms
+  const runtimeLeftMs = params.mode ? Math.max(0, runBudget.maxRuntimeMs - openingElapsedMs) : budget.deadlineMs
+  const windowMs = Math.max(0, Math.min(budget.deadlineMs, runtimeLeftMs))
+  const deadline = started + windowMs
+  const doneStages = new Set(cursor.stages)
+  const checkedCompanies = new Set(cursor.companies)
+  const doneStrategies = new Set(cursor.strategies)
+  // What earlier invocations of this run already spent. Held separately from
+  // `cursor.spent_usd`, which is REWRITTEN below with the ledger's running
+  // total — adding a total to itself would double-count every stage and let a
+  // run refuse work it could afford (or, worse, believe it was under a ceiling
+  // it had passed).
+  const openingUsd = cursor.spent_usd
+  const ledger = createSpendLedger({ limitUsd: runBudget.maxSpendUsd, openingUsd })
+  const lanes: Record<DiscoveryLane, number> = { broad_market: 0, company_first: 0 }
+  let stageYields: YieldSample[] = []
+  let budgetStopped: string | null = null
+  let saturationStopped: string | null = null
+  /** The ledger follows the run's own trace, so it prices nothing itself. */
+  const syncSpend = (stage: string) => {
+    ledger.syncTotal(openingUsd + runCost(), { stage })
+    cursor.spent_usd = ledger.spent()
+  }
+  const noteCursor = (patch: Partial<ScoutCursor> = {}) => {
+    Object.assign(cursor, patch)
+    cursor.stages = [...doneStages]
+    cursor.companies = [...checkedCompanies].slice(-3000)
+    cursor.strategies = [...doneStrategies]
+    cursor.elapsed_ms = openingElapsedMs + (Date.now() - started)
+    cursor.updated_at = new Date().toISOString()
+    params.onCursor?.({ ...cursor, pages: { ...cursor.pages } })
+  }
   // The API client stops retrying past this point too (see setAnthropicDeadline):
   // a run that has already given up must not sit inside a retry storm.
   setAnthropicDeadline(deadline)
   const stats: ScoutRunStats = { ...emptyStats(), companies_selected: { target: 0, watching: 0, suggested: 0, skipped: 0 }, job_first_reserve_ms: 0 }
   const errors: string[] = []
+  // Set at stage (b). Everything before it is free, so an unset run costs $0.
+  let runRef: CareerRun | null = null
+  const runCost = (): number => (runRef ? runRef.costUsd() : 0) + stats.rank_cost_usd
   const rejected: RejectedJob[] = []
   const counts: ScoutProgressCounts = { discovered: 0, companies_checked: 0, jobs_extracted: 0, jobs: 0, inserted: 0, verified_open: 0, likely_open: 0, closed: 0, ranked: 0, rejected: 0 }
   let postingsFound = 0
@@ -159,13 +251,58 @@ export async function runJobScout(params: JobScoutParams & JobScoutSweepParams, 
     params.onProgress?.(stage, detail, { ...counts })
   }
   const pastDeadline = (stage: string): boolean => {
-    if (Date.now() <= deadline) return false
-    if (!stats.deadline_hit) errors.push(`deadline reached before ${stage}`)
+    // `runtimeLeftMs <= 0` is checked in its own right, not left to the clock:
+    // a run continued after its whole runtime is used has a zero-length
+    // window, and "is now past a deadline equal to now" is a millisecond race
+    // that let a stage slip through.
+    if (runtimeLeftMs > 0 && Date.now() <= deadline) return false
+    if (!stats.deadline_hit) {
+      // Which clock ran out matters to the founder: one is "give it another
+      // pass", the other is "this run has had its hour".
+      errors.push(
+        runtimeLeftMs <= 0
+          ? `the run has used all ${Math.round(runBudget.maxRuntimeMs / 60_000)} minutes it was allowed, so ${stage} was not started`
+          : `deadline reached before ${stage}`
+      )
+    }
     stats.deadline_hit = true
     return true
   }
-  const fail = (message: string, migrationMissing = false): JobScoutResult => ({
+  /**
+   * How this run stopped, and everything a report needs to say why.
+   *
+   * A run stopped by money or by the clock has work left and its cursor says
+   * where. A SATURATED run does not: every remaining strategy was deliberately
+   * skipped because the last ones added nothing new, so the cursor is marked
+   * done and the run is finished — while `stopped` still says saturation, so
+   * nobody reads it as a full sweep of a market that was simply exhausted
+   * early. (`isRunFinished` in run-report.ts is the one place that decides.)
+   */
+  const report = (everyStageRan: boolean): JobScoutRunReport => {
+    const stopped: ScoutStopReason = stopReasonOf({ everyStageRan, deadlineHit: stats.deadline_hit, budgetStopped, saturationStopped })
+    if (isRunFinished(stopped)) doneStages.add('done')
+    cursor.stages = [...doneStages]
+    cursor.companies = [...checkedCompanies].slice(-3000)
+    cursor.strategies = [...doneStrategies]
+    cursor.spent_usd = ledger.spent()
+    cursor.elapsed_ms = openingElapsedMs + (Date.now() - started)
+    cursor.updated_at = new Date().toISOString()
+    return buildRunReport({
+      budget: runBudget,
+      cursor,
+      spend: ledger.summary(),
+      cost: ledger.metrics({ uniquePostings: postingsFound, storedJobs: counts.jobs, rankedJobs: stats.jobs_ranked }),
+      lanes: { ...lanes },
+      yields: stageYields,
+      everyStageRan,
+      deadlineHit: stats.deadline_hit,
+      budgetStopped,
+      saturationStopped,
+    })
+  }
+  const fail = (message: string, migrationMissing = false): JobScoutRunResult => ({
     runId: null, mission: null, plan: null, stats, jobs: [], rejected: [], errors: [...errors, message], costUsd: 0, latencyMs: Date.now() - started, migrationMissing, partial: stats.deadline_hit,
+    ...report(false),
   })
 
   // (a) Inputs.
@@ -200,51 +337,83 @@ export async function runJobScout(params: JobScoutParams & JobScoutSweepParams, 
 
   // (b) The run row. Agent traces attach to it from here on.
   const run = await store.startRun({ userId: params.userId, kind: 'job_scout', label: params.label ?? `job scout · ${mission.name}`, mission: { name: mission.name, objective: mission.objective }, budget, careerMissionId: mission.id })
+  runRef = run
   const ctx = scoutToolContext(params.userId, run.runId, budget)
   const traced = async (res: AgentResult<unknown>, refs: Record<string, unknown>) => {
     stats.model_calls++
     stats.web_searches += res.trace.web_searches
     await run.trace(res, refs)
+    // Every agent call is priced by the runtime, so the ledger follows the
+    // trace rather than guessing: what a run REPORTS having spent is always
+    // what it actually spent, and only what it DARES to start next uses an
+    // estimate.
+    syncSpend((refs.stage as string) ?? 'agents')
   }
 
   // (c) Plan. The company list is one input, and the planner is told whose
   // choice each part of it was.
-  progress('plan', direction ? `planning from your direction: ${direction.slice(0, 100)}${direction.length > 100 ? '…' : ''}` : 'planning from the evidence (no direction stated)')
-  progress('plan', 'asking the mission planner')
-  const planner = deps.planner ?? runJobMissionPlanner
-  const planRes = await planner(
-    {
-      mission: missionText,
-      evidenceSummaries: renderRelevantEvidence(getRelevantPersonalEvidence({ bank: bankRes.bank, mission: missionText, target: { kind: 'generic' }, maxExperiences: 8, maxFacts: 16 }), { style: 'compact' }),
-      skills: renderSkills(bankRes.bank),
-      preferences: renderPreferences(bankRes.bank),
-      watchlist: buildPlannerWatchlist(watchlist, ignoredCompanies, feedback),
-      recentFeedback: renderFeedbackHints(feedback),
-    },
-    ctx
-  )
-  await traced(planRes as AgentResult<unknown>, { mission_id: mission.id })
-  const plan = planRes.output
-  if (!plan) errors.push(`planner ${planRes.status}: ${planRes.error ?? 'no plan'} — company-first only`)
-  else {
-    for (const s of plan.strategies) for (const q of s.queries) noteQuery(stats, q)
-    // Seeds are EXPLORATION CANDIDATES. seedWatchlistFromPlan writes them as
-    // suggestions with a planner origin — never as targets; only the user
-    // promotes a company (ADR-039).
-    const seeded = await seedWatchlistFromPlan(params.userId, plan.seed_companies, [...watchlist.map((w) => w.name), ...ignoredCompanies.map((c) => c.name)], { store })
-    if (seeded.migrationMissing) return finish(run, 'failed', 'migration 014_career_os.sql has not been applied', true)
-    errors.push(...seeded.errors)
-    progress('plan', `${plan.strategies.length} strategies, ${plan.seed_companies.length} seeds (${seeded.added} new to explore)`)
-    if (seeded.added) {
-      const again = await store.listWatchlist(params.userId)
-      if (!again.error) watchlist.splice(0, watchlist.length, ...again.companies.map(toWatched))
+  //
+  // A CONTINUATION does not re-plan. The plan is the run's most expensive
+  // single call, it is deterministic work from the same inputs, and paying for
+  // it once per worker invocation would be the most expensive possible way to
+  // resume — so the cursor carries the strategies and this stage is skipped.
+  let plan: JobMissionPlan | null = null
+  let resumedStrategies: SearchStrategy[] | null = null
+  if (doneStages.has('plan') && cursor.planned && cursor.planned.length > 0) {
+    resumedStrategies = cursor.planned
+    progress('plan', `resuming: ${resumedStrategies.length} strategies from the plan this run already paid for`)
+  } else {
+    const allowedToPlan = ledger.canSpend(STAGE_COST_ESTIMATE_USD.plan, { stage: 'the mission planner' })
+    if (!allowedToPlan.ok) {
+      budgetStopped = allowedToPlan.reason
+      errors.push(`planning skipped: ${allowedToPlan.reason}`)
+      progress('plan', `skipped: ${allowedToPlan.reason}`)
+    } else {
+      progress('plan', direction ? `planning from your direction: ${direction.slice(0, 100)}${direction.length > 100 ? '…' : ''}` : 'planning from the evidence (no direction stated)')
+      progress('plan', 'asking the mission planner')
+      const planner = deps.planner ?? runJobMissionPlanner
+      const planRes = await planner(
+        {
+          mission: missionText,
+          evidenceSummaries: renderRelevantEvidence(getRelevantPersonalEvidence({ bank: bankRes.bank, mission: missionText, target: { kind: 'generic' }, maxExperiences: 8, maxFacts: 16 }), { style: 'compact' }),
+          skills: renderSkills(bankRes.bank),
+          preferences: renderPreferences(bankRes.bank),
+          watchlist: buildPlannerWatchlist(watchlist, ignoredCompanies, feedback),
+          recentFeedback: renderFeedbackHints(feedback),
+        },
+        ctx
+      )
+      await traced(planRes as AgentResult<unknown>, { mission_id: mission.id, stage: 'plan' })
+      plan = planRes.output
+      if (!plan) errors.push(`planner ${planRes.status}: ${planRes.error ?? 'no plan'} — company-first only`)
+      else {
+        for (const s of plan.strategies) for (const q of s.queries) noteQuery(stats, q)
+        // Seeds are EXPLORATION CANDIDATES. seedWatchlistFromPlan writes them as
+        // suggestions with a planner origin — never as targets; only the user
+        // promotes a company (ADR-039).
+        const seeded = await seedWatchlistFromPlan(params.userId, plan.seed_companies, [...watchlist.map((w) => w.name), ...ignoredCompanies.map((c) => c.name)], { store })
+        if (seeded.migrationMissing) return finish(run, 'failed', 'migration 014_career_os.sql has not been applied', true)
+        errors.push(...seeded.errors)
+        progress('plan', `${plan.strategies.length} strategies, ${plan.seed_companies.length} seeds (${seeded.added} new to explore)`)
+        if (seeded.added) {
+          const again = await store.listWatchlist(params.userId)
+          if (!again.error) watchlist.splice(0, watchlist.length, ...again.companies.map(toWatched))
+        }
+        // Written to the cursor NOW, before any discovery: a worker killed
+        // mid-run must never make the next one pay for this again.
+        doneStages.add('plan')
+        noteCursor({ planned: plan.strategies })
+      }
     }
   }
 
   // The batch tail, shared by every flush point below.
   const fetchBudget: FetchBudget = { left: budget.maxPageFetches }
   const atsListedUrls = new Set<string>()
-  const extractBudget = { left: params.maxExtract ?? 40 }
+  // The mode's number, with an explicit params.maxExtract still winning (it is
+  // applied inside resolveRunBudget), so a caller that passes its own number
+  // keeps exactly that number.
+  const extractBudget = { left: runBudget.maxExtract }
   const persistedJobs: NormalizedJob[] = []
   const idByJob = new Map<NormalizedJob, string>()
   // Stored ROWS, not sightings: a posting two stages both found is one row.
@@ -266,9 +435,10 @@ export async function runJobScout(params: JobScoutParams & JobScoutSweepParams, 
   }
 
   const pending: RawJobPosting[] = []
-  const keepRaw = (p: RawJobPosting) => {
+  const keepRaw = (p: RawJobPosting, lane: DiscoveryLane = 'company_first') => {
     pending.push(p)
     postingsFound++
+    lanes[lane]++
     if (p.source_type && isAtsListingSource(p.source_type)) atsListedUrls.add(p.canonical_url ?? p.source_url)
     bump(stats.sources_consulted, p.source_type)
   }
@@ -282,7 +452,20 @@ export async function runJobScout(params: JobScoutParams & JobScoutSweepParams, 
     if (pending.length === 0) return true
     const raws = pending.splice(0, pending.length)
     progress('extract', `${raws.length} raw postings from ${label}`)
+    // The ceiling reaches inside the batch too. Extraction is a model call per
+    // posting and it is where a long run's money actually goes, so what is
+    // affordable is recomputed at every checkpoint — a run stops READING
+    // postings at its ceiling, but never stops STORING them.
+    const affordable = ledger.affordable(STAGE_COST_ESTIMATE_USD.extract)
+    if (affordable < extractBudget.left) {
+      if (affordable === 0 && extractBudget.left > 0 && !budgetStopped) {
+        budgetStopped = ledger.canSpend(STAGE_COST_ESTIMATE_USD.extract, { stage: 'extraction' }).reason
+        errors.push(`extraction stopped: ${budgetStopped} — postings are still stored, just not read`)
+      }
+      extractBudget.left = affordable
+    }
     const out = await persistBatch(raws, batch, extractBudget)
+    syncSpend('extract')
     rejected.push(...out.rejected)
     errors.push(...out.errors)
     if (out.migrationMissing) return false
@@ -342,74 +525,68 @@ export async function runJobScout(params: JobScoutParams & JobScoutSweepParams, 
   //      What company-first still owns is the run's account of the user's own
   //      choices (`companies_selected`), which is a different question from
   //      "what is on the market today".
+  //
+  //      A mode turns it on by itself (every mode sweeps — it is free), while
+  //      a caller that named no mode keeps the old opt-in. A continuation
+  //      skips it: the boards were listed on the first pass and re-listing
+  //      them would spend the new invocation's clock on work already done.
   const sweepJobs: SweepResult['jobs'] = []
-  if (params.sweep === true && !pastDeadline('sweep')) {
-    progress('sweep', 'listing every resolvable board on the watchlist (no model calls)')
-    try {
-      // Its OWN stats object. The two passes see the same postings — the sweep
-      // lists a board, company-first re-lists it from cache — so sharing one
-      // record would count every rejection and every verdict twice and quietly
-      // double the funnel the founder reads.
-      const sweepStats = emptyStats()
-      const sw = await sweepWatchlist(
-        params.userId,
-        {
-          mission,
-          limit: params.maxSweepCompanies ?? SWEEP_MAX_COMPANIES,
-          deadline: Math.min(deadline, started + Math.floor(budget.deadlineMs * SWEEP_TIME_SHARE)),
-          runId: run.runId,
-          ctx,
-          stats: sweepStats,
-          onProgress: (stage, detail) => progress(stage, detail),
-        },
-        { store: store as SweepStore, registry, fetcher }
-      )
-      if (sw.migrationMissing) return finish(run, 'failed', 'migration 014_career_os.sql has not been applied', true)
-      errors.push(...sw.errors)
-      // The sweep persisted through the same `upsertJobs`, so its rows belong
-      // to this run's counts exactly as a stage's do. Merged by hand, once, so
-      // it is obvious which numbers a sweep contributes.
-      stats.companies_checked += sw.checked
-      stats.companies_with_openings += sw.withOpenings
-      stats.postings_seen += sw.postingsListed
-      stats.postings_resolved += sw.postingsListed
-      stats.jobs_inserted += sw.inserted
-      stats.jobs_updated += sw.updated
-      bump(stats.sources_consulted, 'sweep:postings', sw.postingsListed)
-      bump(stats.sources_consulted, 'sweep:boards', sw.withBoard)
-      // Prefixed so they are visible without colliding with the stages' own
-      // counts for the same rule — nothing a sweep discards is hidden.
-      for (const [reason, n] of Object.entries(sw.rejected)) bump(stats.jobs_rejected, `sweep:${reason}`, n)
-      postingsFound += sw.postingsListed
-      insertedRows += sw.inserted
-      for (const j of sw.jobs) {
-        sweepJobs.push(j)
-        persistedIds.add(j.id)
-        statusById.set(j.id, j.verification_status as VerificationStatus)
-      }
-      countStored()
-      progress('sweep', `${sw.checked} companies · ${sw.postingsListed} postings · ${sw.inserted} new, ${sw.updated} updated${sw.remaining ? ` · ${sw.remaining} companies left for the next sweep` : ''}`)
-    } catch (e) {
-      // A sweep is an optimisation, never a precondition: a run whose sweep
-      // throws still does everything it did before the sweep existed.
-      errors.push(`sweep: ${e instanceof Error ? e.message : String(e)}`)
+  const doSweep = params.sweep ?? runBudget.sweep
+  if (doSweep && doneStages.has('sweep')) progress('sweep', 'resuming: the watchlist was already swept on an earlier pass')
+  if (doSweep && !doneStages.has('sweep') && !pastDeadline('sweep')) {
+    const sw = await runSweepStage(stageRun, {
+      mission,
+      limit: params.maxSweepCompanies ?? SWEEP_MAX_COMPANIES,
+      stageDeadline: Math.min(deadline, started + Math.floor(budget.deadlineMs * SWEEP_TIME_SHARE)),
+      runId: run.runId,
+    })
+    if (!sw.ok) return finish(run, 'failed', 'migration 014_career_os.sql has not been applied', true)
+    postingsFound += sw.postings
+    // The sweep reads the WATCHLIST, so its yield is company-first however
+    // free it was. Counting it as market discovery would flatter exactly the
+    // number this run is supposed to be honest about.
+    lanes.company_first += sw.postings
+    insertedRows += sw.inserted
+    for (const j of sw.jobs) {
+      sweepJobs.push(j)
+      persistedIds.add(j.id)
+      statusById.set(j.id, j.verification_status as VerificationStatus)
     }
+    countStored()
+    // Only a sweep that reached every company is finished for good; one that
+    // left companies behind stays open so the next pass picks them up.
+    if (sw.complete) doneStages.add('sweep')
+    noteCursor()
   }
 
   // (d) Company-first, by INTENT: every Target, then Watching, then a rotating
   //     least-recently-checked sample of Explore. The watchlist is an input to
   //     the run, never its ceiling — hence both the explore cap inside
   //     selectCompaniesToCheck and the wall-clock floor kept for job-first.
-  const cfReserveMs = Math.max(0, budget.deadlineMs - Math.floor(budget.deadlineMs * COMPANY_FIRST_TIME_SHARE))
+  //
+  //     In BROAD and EXHAUSTIVE this lane is deliberately SECONDARY: Targets
+  //     are still checked first and Watching regularly, but `exploreShare`
+  //     falls to 15 % / 10 % (from 40 %), so the scout's own accumulated
+  //     guesses take a small slice of a wide run and the rest of the clock
+  //     goes to the market. `lanes.broad_market_share` reports whether that
+  //     actually happened.
+  const cfTimeShare = runBudget.companyFirstTimeShare ?? COMPANY_FIRST_TIME_SHARE
+  const cfReserveMs = Math.max(0, budget.deadlineMs - Math.floor(budget.deadlineMs * cfTimeShare))
   stats.job_first_reserve_ms = cfReserveMs
-  if (!pastDeadline('company-first')) {
+  if (doneStages.has('company-first')) progress('company-first', 'resuming: every company on the list was checked on an earlier pass')
+  else if (!pastDeadline('company-first')) {
     const cf = await runCompanyFirstStage(stageRun, {
       watchlist,
-      budget: params.maxCompaniesFirst ?? 25,
+      budget: runBudget.maxCompanyFirst,
       reserveMs: cfReserveMs,
       stageDeadline: Math.min(deadline, started + budget.deadlineMs - cfReserveMs),
+      exploreShare: runBudget.exploreShare,
+      skip: checkedCompanies,
+      onChecked: (id) => checkedCompanies.add(id),
     })
     stats.companies_selected = { ...cf.selection.counts, skipped: cf.selection.skipped }
+    if (cf.complete) doneStages.add('company-first')
+    noteCursor()
     if (!cf.ok) return finish(run, 'failed', 'migration 014_career_os.sql has not been applied', true)
   }
 
@@ -420,14 +597,21 @@ export async function runJobScout(params: JobScoutParams & JobScoutSweepParams, 
   // saw exactly that: one schema-invalid plan, and a $4.71 run found nothing.
   // Without a plan the strategies are built deterministically from the mission —
   // fewer and blunter than a planned set, and labelled as such in the errors.
-  const strategySource: SearchStrategy[] = plan ? plan.strategies : fallbackStrategies(mission)
-  if (!plan && strategySource.length) errors.push(`job-first ran on ${strategySource.length} deterministic fallback strategies (planner failed)`)
-  if (strategySource.length && !pastDeadline('job-first')) {
+  //
+  // This is also where a run STOPS BEING A COUNTER. A strategy no longer aims
+  // at twelve postings; it aims at the mode's number, and the loop ends when
+  // the strategies are exhausted, the deadline arrives, the spend ceiling is
+  // reached, or marginal unique yield collapses (`saturated`). Whichever it
+  // was is recorded, and everything not executed stays in the cursor.
+  const strategySource: SearchStrategy[] = resumedStrategies ?? (plan ? plan.strategies : fallbackStrategies(mission))
+  if (!plan && !resumedStrategies && strategySource.length) errors.push(`job-first ran on ${strategySource.length} deterministic fallback strategies (planner failed)`)
+  if (doneStages.has('job-first')) progress('job-first', 'resuming: every strategy was executed on an earlier pass')
+  else if (strategySource.length && !pastDeadline('job-first')) {
     const jf = await runJobFirstStage(stageRun, {
       missionText,
       strategies: strategySource,
-      maxStrategies: params.maxStrategies ?? 3,
-      maxRounds: params.maxRoundsPerStrategy ?? 2,
+      maxStrategies: runBudget.maxStrategies,
+      maxRounds: runBudget.maxRoundsPerStrategy,
       maxAtsLookups: budget.maxAtsLookups,
       maxPageFetches: budget.maxPageFetches,
       fetchBudget,
@@ -436,7 +620,27 @@ export async function runJobScout(params: JobScoutParams & JobScoutSweepParams, 
       session: deps.session,
       lookupBoard: deps.lookupBoard,
       fetchPage: deps.fetchPage,
+      targetCount: runBudget.maxPostingsPerStrategy,
+      // Saturation stopping is a MODE's behaviour. A legacy caller keeps
+      // executing exactly the strategies it asked for.
+      saturation: params.mode ? runBudget.saturation : undefined,
+      maxScoutCompanyChecks: runBudget.maxScoutCompanyChecks,
+      skipStrategies: doneStrategies,
+      onStrategyDone: (name) => {
+        doneStrategies.add(name)
+        noteCursor()
+      },
+      canStart: ({ strategy }) => {
+        const c = ledger.canSpend(STAGE_COST_ESTIMATE_USD.strategy, { stage: `strategy "${strategy}"` })
+        if (!c.ok) budgetStopped = c.reason
+        return { ok: c.ok, reason: c.reason }
+      },
     })
+    stageYields = jf.yields
+    if (jf.stopReason && !budgetStopped) saturationStopped = jf.stopReason
+    if (jf.complete) doneStages.add('job-first')
+    syncSpend('job-first')
+    noteCursor()
     if (!jf.ok) return finish(run, 'failed', 'migration 014_career_os.sql has not been applied', true)
   }
 
@@ -452,7 +656,9 @@ export async function runJobScout(params: JobScoutParams & JobScoutSweepParams, 
   //      run's own extraction cap: it spends what in-flight extraction did not.
   //      Off unless the caller asks for it and injects (or is in production
   //      with) a pending-extraction store.
-  const deferred = Math.min(params.deferredExtract ?? 0, Math.max(0, extractBudget.left))
+  //      The spend ceiling reaches it through `extractBudget.left`, which the
+  //      flush above already clamped to what is affordable.
+  const deferred = Math.min(params.deferredExtract ?? 0, Math.max(0, extractBudget.left), ledger.affordable(STAGE_COST_ESTIMATE_USD.extract))
   if (deferred > 0 && !pastDeadline('deferred extraction')) {
     progress('extract', `filling in the ${deferred} highest-relevance postings stored without an extraction`)
     const ep = await extractPending(params.userId, {
@@ -471,88 +677,52 @@ export async function runJobScout(params: JobScoutParams & JobScoutSweepParams, 
     })
     extractBudget.left = Math.max(0, extractBudget.left - ep.extracted)
     errors.push(...ep.errors)
+    syncSpend('deferred extraction')
     if (ep.migrationMissing) return finish(run, 'failed', 'migration 014_career_os.sql has not been applied', true)
     progress('extract', `deferred: ${ep.extracted} of ${ep.candidates} pending rows extracted ($${ep.costUsd.toFixed(4)})`)
   }
 
   // (g) Rank what was just stored, so the list the user gets back has fit
-  // numbers on it. Stored evaluations at the current prompt version are reused
-  // inside the batch, so only jobs without one cost anything. Bounded by count,
-  // by concurrency and by what is left of the deadline; a batch that cannot
-  // start is reported, never silently skipped.
-  // One entry per STORED row. Two stages can see the same posting — the store
-  // matched the second sighting to the first row — so it is ranked and
-  // reported once, under the id the store gave it.
-  const rankJobs: NormalizedJob[] = []
-  const rankIds: string[] = []
-  const resultJobs: JobScoutResultJob[] = []
-  const seenIds = new Set<string>()
-  for (const job of persistedJobs) {
-    const id = idByJob.get(job)
-    if (id) {
-      if (seenIds.has(id)) continue
-      seenIds.add(id)
-      rankJobs.push(job)
-      rankIds.push(id)
-    }
-    resultJobs.push({
-      id, title: job.title, company_name: job.company_name, location_raw: job.location_raw, location_tier: job.location_tier, season_relevance: job.season_relevance,
-      employment_type: job.employment_type, verification_status: job.verification_status, canonical_url: job.canonical_url, source_types: [...new Set(job.sources.map((s) => s.source_type))],
+  //     numbers on it.
+  //
+  //     Both halves live in ./rank-stage.ts: which distinct STORED ROWS this
+  //     run touched, and how many of them may be judged. HOW MANY is the
+  //     mode's `maxFullFit`, capped by what the ceiling can still buy —
+  //     twelve was the audit's second binding limit, and a run could discover
+  //     four hundred postings and still judge twelve of them.
+  const collected = collectRunJobs({ persistedJobs, idByJob, sweepJobs })
+  const resultJobs = collected.resultJobs
+  if (params.rank !== false) {
+    const affordable = ledger.affordable(STAGE_COST_ESTIMATE_USD.rank)
+    const ranked = await runRankStage({
+      userId: params.userId,
+      mission,
+      jobs: collected,
+      maxFullFit: runBudget.maxFullFit,
+      affordable,
+      refusalReason: affordable === 0 ? ledger.canSpend(STAGE_COST_ESTIMATE_USD.rank, { stage: 'ranking' }).reason : null,
+      windowMs: deadline - Date.now() - RANK_DEADLINE_RESERVE_MS,
+      directionOverridden: params.directionOverride !== undefined,
+      rank: deps.rank ?? runIntelligenceBatch,
+      progress,
     })
-  }
-  // The sweep's rows are this run's too. They arrive already ordered by
-  // relevance, and any the stages re-found are dropped by id — a posting the
-  // sweep listed and company-first re-listed is one row, reported once.
-  const sweepOnly: string[] = []
-  for (const j of sweepJobs) {
-    if (seenIds.has(j.id)) continue
-    seenIds.add(j.id)
-    sweepOnly.push(j.id)
-    resultJobs.push({
-      id: j.id, title: j.title, company_name: j.company_name, location_raw: j.location_raw, location_tier: j.location_tier,
-      season_relevance: j.season_relevance, employment_type: j.employment_type, verification_status: j.verification_status as VerificationStatus,
-      canonical_url: j.canonical_url, source_types: j.source_types,
-    })
-  }
-  if ((rankIds.length > 0 || sweepOnly.length > 0) && params.rank !== false) {
-    const window = deadline - Date.now() - RANK_DEADLINE_RESERVE_MS
-    if (params.directionOverride !== undefined) {
-      // Fit rows are persisted under the stored mission's id and reused at the
-      // same prompt version; judging them against a direction that was never
-      // saved would pollute every later run. Say so rather than rank quietly
-      // against the wrong direction.
-      const skip = 'ranking skipped: --direction is not applied to fit (fit rows are stored against the saved mission — save the direction on the Jobs page to rank against it)'
-      errors.push(skip)
-      progress('rank', skip)
-    } else if (window < RANK_MIN_WINDOW_MS) {
-      errors.push(`ranking skipped: ${Math.max(0, Math.round(window / 1000))}s left of the deadline`)
-    } else {
-      // The stages' rows are chosen by `selectJobsToRank` (which can see the
-      // whole NormalizedJob); the sweep's are already relevance-ordered and top
-      // up whatever room is left. A run whose inventory came entirely from the
-      // sweep still ranks the best of it.
-      const toRank = selectJobsToRank(rankJobs, rankIds, MAX_RANK_JOBS, mission.preferences.direction)
-      for (const id of sweepOnly) {
-        if (toRank.length >= MAX_RANK_JOBS) break
-        toRank.push(id)
-      }
-      progress('rank', `${toRank.length} jobs`)
-      const rank = deps.rank ?? runIntelligenceBatch
-      try {
-        const r = await rank(params.userId, toRank, { concurrency: RANK_CONCURRENCY, deadlineMs: window, skip: { research: true }, label: `post-scout ranking · ${mission.name}` })
-        stats.jobs_ranked = Object.values(r.results).filter((x) => x.fit !== null).length
-        stats.rank_cost_usd = Number(r.costUsd.toFixed(4))
-        if (r.skipped.length) errors.push(`ranking: ${r.skipped.length} job(s) not started before the deadline`)
-        errors.push(...r.errors)
-      } catch (e) {
-        errors.push(`ranking: ${e instanceof Error ? e.message : String(e)}`)
-      }
-    }
+    stats.jobs_ranked = ranked.ranked
+    stats.rank_cost_usd = ranked.costUsd
+    errors.push(...ranked.errors)
+    // Discovery is allowed to eat the whole ceiling — but then the run must
+    // SAY that ranking did not happen, rather than returning an unranked list
+    // that looks like a ranked one.
+    if (ranked.budgetStopped) budgetStopped = budgetStopped ?? ranked.budgetStopped
+    if (!ranked.skipped) doneStages.add('rank')
   }
 
+  // Every stage is behind us. Whether the run is FINISHED is `report`'s call —
+  // a run that stopped because the market saturated is finished too, and only
+  // a finished run's cursor says 'done', which is what stops a follow-up
+  // invocation from re-running work there is no point repeating.
   return finish(run, 'succeeded', null, false, resultJobs)
 
-  async function finish(r: CareerRun, status: 'succeeded' | 'failed', error: string | null, migrationMissing: boolean, out: JobScoutResultJob[] = []): Promise<JobScoutResult> {
+  async function finish(r: CareerRun, status: 'succeeded' | 'failed', error: string | null, migrationMissing: boolean, out: JobScoutResultJob[] = []): Promise<JobScoutRunResult> {
     // The deadline belongs to this run only; a later call in the same process
     // (a package build, an eval) must not inherit an expired one.
     setAnthropicDeadline(null)
@@ -560,16 +730,27 @@ export async function runJobScout(params: JobScoutParams & JobScoutSweepParams, 
     // The ranking batch runs under its own run row; its cost is added here so the scout's number is what the whole call cost.
     stats.cost_usd = Number((r.costUsd() + stats.rank_cost_usd).toFixed(4))
     stats.latency_ms = Date.now() - started
+    syncSpend('final')
+    const rep = report(status === 'succeeded' && !stats.deadline_hit && !budgetStopped && !saturationStopped)
+    // The report's own lines belong in the run's stats: this is what "why did
+    // the run stop, and what did each lane and each stage cost?" is answered
+    // from, in the UI and in the CLI, without re-deriving anything.
+    const statsOut = { ...stats, discovery: { mode: rep.budget.mode, stopped: rep.stopped, lanes: rep.lanes, spend: rep.spend, cost: rep.cost, notes: rep.notes, cursor: rep.cursor } }
     progress('done', `${out.length} jobs · ${stats.jobs_inserted} new`)
-    await r.finish(status, { ...stats }, error)
+    await r.finish(status, statsOut, error)
+    noteCursor()
     return {
       runId: r.runId,
       mission: { id: mission.id, name: mission.name },
       plan: plan ? { role_families: plan.role_families.map((f) => f.name), strategies: plan.strategies.map((s) => ({ name: s.name, kind: s.kind, priority: s.priority })), seed_companies_count: plan.seed_companies.length, adjacent_categories: plan.adjacent_categories } : null,
       stats, jobs: out, rejected, errors, costUsd: stats.cost_usd, latencyMs: stats.latency_ms, migrationMissing,
-      // A run that ran out of clock still succeeded at what it managed; the
-      // caller records it as `partial` so nobody reads it as a full sweep.
-      partial: stats.deadline_hit && status === 'succeeded',
+      // A run that ran out of clock or of money still succeeded at what it
+      // managed; the caller records it as `partial` so nobody reads it as a
+      // full sweep, and its cursor says where to continue from. A SATURATED
+      // run is not partial — there was nothing left worth finding, which is
+      // the intended good ending of a wide run (isRunFinished).
+      partial: !isRunFinished(rep.stopped) && status === 'succeeded',
+      ...rep,
     }
   }
 }

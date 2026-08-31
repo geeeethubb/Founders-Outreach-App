@@ -691,6 +691,51 @@ RLS follows the V1 pattern on every table; child tables (`job_sources`, `job_sna
 
 ---
 
+### Mission neutrality — `017_mission_neutrality.sql` (written, **not applied**)
+
+Reasoning: [ADR-042](ARCHITECTURE.md#adr-042). Two new columns, one data migration, and a
+rule about what a migration is allowed to touch.
+
+```
+career_missions + mission_migration_notes     jsonb array, DISMISSIBLE
+                    [{ kind, migration, created_at, message, …extra }]
+                    A migration that CHANGED, or DECLINED to change, a preference writes
+                    one here; the Mission page renders each with a Dismiss button, which
+                    PATCHes the shorter array. Never a filter, never read by an agent.
+
+                + mission_migrations_applied   jsonb array, DURABLE, not null default '[]'
+                    ["017:geography_review", "017:evidence_geography_review", …]
+                    The ledger. Written ONLY by migration SQL; `sanitizeMissionPatch` does
+                    not know the key exists, so no PATCH can clear it. Every note-writing
+                    step guards on THIS, never on the note's own presence — otherwise a
+                    dismissed suggestion would come back on the next re-run, and
+                    re-running a hand-applied migration is the normal operating condition.
+
+preferences (jsonb) gains:
+  locations       { mode: 'anywhere' | 'prefer' | 'only', regions: string[] }
+                  Read through missionLocations(); a pre-017 row has no such key and
+                  its geo_tiers are read as 'prefer' — which is what tiers already meant.
+  direction_mode  'boost' | 'exclusive'   (never stored as 'off' — see ADR-042)
+  geo_tiers       kept, and now purely a RANKING table driven by `locations`.
+                  Empty in the shipped default. Empty means NO tier is stamped at all.
+```
+
+**What it changes, and what it refuses to.** The pre-V2 geography was system-generated, so
+the migration neutralises it — but only where the stored value is **byte-identical** to what
+shipped: the exact tier arrays, the exact objective string, and in `evidence_preferences` the
+exact `(value, weight, "tier N" note)` triples the seed wrote. `isShippedPreV2Geography()` and
+the SQL `where` clause are the same predicate in two languages, and
+`scripts/test-career-mission.ts` parses the literal out of the `.sql` file so they cannot
+drift. Anything a person edited is left untouched and gets a note instead.
+
+**It touches two tables.** `evidence_preferences` held the same geography a second time (six
+coastal `location` rows plus `location` in `optimize_for`, seeded from the same defaults), and
+`renderPreferences()` prints those rows into the same prompts `renderMission()` feeds. The
+prompts no longer depend on this having run — `withoutPlacePreferences()` strips place lines
+whatever the table holds — so the deletes are the database catching up with the contract.
+
+---
+
 ### Scout durability and company intent — `016_scout_durability_and_company_intent.sql` (shipped)
 
 Reasoning: [ADR-039](ARCHITECTURE.md#adr-039) and [ADR-040](ARCHITECTURE.md#adr-040).

@@ -6,6 +6,156 @@ architecturally and why.
 
 ---
 
+## 2026-08-31 — Geography stops being a built-in preference; direction becomes a dial
+
+**Type:** architecture (ADR-042) + migration 017 · **Behavior change:** the product ships no
+city, no coastal tier and no `location` in `optimize_for`; "where" is a three-way choice the
+user makes; a stated direction says whether it boosts the search or restricts it.
+
+### What was actually wrong
+
+The default mission put "San Francisco / Bay Area" and "New York City" in geography tier 1
+and four coastal cities in tier 2 — and said the same thing four more times: in the objective
+prose, in `optimize_for`, in six weighted `location` rows seeded into `evidence_preferences`,
+and in `fallbackStrategies()`, which appended a tier-1 city to every deterministic query.
+`locationTier()` then stamped a tier on every posting so ranking could score it. The founder's
+own stated direction read *"I don't care about location or which company"*. A preference the
+product invented was outranking the one the user stated.
+
+### What changed
+
+- **`lib/career/missions/preferences.ts`** (new, pure, no value imports) — the two dials and
+  their resolvers: `missionLocations`, `locationHardFilter`, `rankingGeoTiers`,
+  `geoTiersForLocations`, `missionDirectionMode`, `withoutPlacePreferences`. Split out of
+  `types.ts`, which was 1016 lines against CLAUDE.md's ~400 rule; `types.ts` re-exports
+  everything so no import path changed.
+- **Three named location behaviours** — `anywhere` (ships as the default: no city anywhere),
+  `prefer` (ranking only), `only` (a **real** hard filter: `locationOnlyConstraint()` writes a
+  `location_tier` constraint onto the mission, and `applyHardConstraints()` enforces it before
+  fit is scored). `reconcileLocationConstraints()` keeps the derived rule in step with the dial
+  on every patch, and never touches a constraint a person typed.
+- **Direction is a mode** — `boost` (default whenever a direction is set) or `exclusive`.
+  Derived, never stored as `off`. `renderMission()` states the mode in words; no direction
+  renders as "explore broadly from the evidence".
+- **`locationTier()` returns `null` on an empty tier table.** It used to fall through and stamp
+  every US posting tier 3, which reached ranking as a penalty and the fit prompt as
+  "(mission geography tier 3)" — geography reasserting itself under a mission with no opinion.
+- **`withoutPlacePreferences()`** strips `location` rows (and `optimize_for: location`) out of
+  the Evidence Bank block in both prompts, so one user message can never say "no place
+  preference" and "location: San Francisco / Bay Area (weight 1)" at once. A `[HARD]` row a
+  person typed is left alone.
+- **Prompts bumped** — planner `1.4.0`, fit evaluator `1.3.0`, and evidence matcher `1.1.0`
+  (its user message renders the job through the fit prompt's `renderJobForPrompt`, which
+  changed; ADR-009 is about what the model saw, not which file the edit landed in).
+- **UI** — the Mission page offers "Anywhere in the US / Prefer these places / Only these
+  places" and refuses to save either non-neutral choice with nowhere to point; the Jobs page
+  now actually renders, saves and dirties the "Search harder for this / Only show me this"
+  choice, and hands the Scout panel the resolved mode so a paid run cannot start without
+  saying "Scouting for **ONLY**:" when it will hide things.
+
+### Migration 017 — migrate what shipped, flag what a person wrote
+
+`career_missions.preferences.geo_tiers`, the objective, and the six seeded
+`evidence_preferences` rows are replaced **only when byte-identical** to what shipped.
+`isShippedPreV2Geography()` and the SQL `where … = '[…]'::jsonb` are the same predicate twice;
+`scripts/test-career-mission.ts` parses the literal out of the `.sql` file and feeds it to the
+TypeScript one so they cannot drift. Anything edited gets a **suggestion** in the new
+`mission_migration_notes` jsonb, which the Mission page shows with a Dismiss button. Because
+that array is dismissible it cannot be the "have I run yet?" guard, so a second column,
+`mission_migrations_applied`, is the durable ledger — written only by migration SQL, unknown to
+`sanitizeMissionPatch`. Re-running the file is a genuine no-op. **Not yet applied.**
+
+### Tests
+
+`scripts/test-career-mission.ts` (new, offline, ~150 checks): the shipped default names no
+city and no coastal language; `prefer` never filters and `only` does; the three renders differ;
+a stale tier table is suppressed under `anywhere`; the SQL and TypeScript predicates agree; the
+call sites really pass the dial through (the "Scouting for ONLY:" warning passed as a unit test
+for a whole review cycle while the panel called it with one argument). Fixtures in
+`test-career-jobs`, `test-career-scout` and `test-career-discovery-agents` were updated — the
+prompt-version pins there are now `atLeast(...)` rather than equality, so the next honest bump
+in another workstream does not turn the gate red. `npm run test:career`: 23/23 suites pass.
+`npx tsc --noEmit`: clean.
+
+### Left undone, deliberately
+
+Seven call sites still pass `mission.preferences.geo_tiers` into `buildNormalizedJob()` rather
+than `rankingGeoTiers(...)`; two of them are in `lib/career/scout/`, owned by another
+workstream in flight. The write path clears tiers under `anywhere` and an empty table is now
+inert, so the invariant holds — but a row written outside the API could still hold both.
+`fallbackStrategies()` (also scout-owned) reads tier 1 directly, which is harmless under the
+neutral default and would narrow queries under `prefer`.
+
+---
+
+## 2026-08-31 — A run is a mode, a ceiling and a cursor (not four sliders and a counter)
+
+**Type:** architecture (ADR-041) · **Behavior change:** the Jobs page offers three run
+modes and one spend limit instead of four sliders; a run stops when its sources stop
+producing anything new, when its money runs out or when its clock does; and a run that
+stopped short can be continued instead of started again.
+
+### What was actually wrong
+
+The audit measured 284 postings from 34 companies, 37 extracted, 27 ranked — and the
+binding limits were not supply. `targetCount: 12` per strategy (scout/stages.ts) and
+twelve jobs given a fit evaluation were the product's ceiling: a $4 run returned twelve
+jobs however much the market held. Nothing bounded what a run could spend. Nothing let a
+run that hit Vercel's 300-second function ceiling continue rather than restart.
+
+### The three pieces
+
+- `lib/career/discovery/modes.ts` — QUICK · BROAD · EXHAUSTIVE as declarative budgets.
+  Pure objects: no behaviour, no I/O. A caller that names no mode gets `LEGACY_BUDGET`,
+  which keeps today's numbers **and** today's absence of a ceiling, so the CLI, the eval
+  and the offline suites are unchanged until they opt in.
+- `lib/career/discovery/budget.ts` — a spend ledger asked *before* each paid stage and
+  reconciled against the run's own trace afterwards, plus `saturated()`: a pure function
+  over marginal unique yield. A productive strategy is never cut off; one that adds almost
+  nothing new twice in a row ends the loop.
+- The task cursor (`ScoutCursor` in `scout/run-dispatch.ts`) — stages, strategies and
+  companies done, the plan already paid for, dollars and milliseconds already used —
+  persisted on the run row by the worker as it works, and read back by
+  `POST /api/career/scout { continueRun }`.
+
+### What the review caught, and what it cost
+
+Two blockers, both the same shape: the pieces existed and the product could not reach
+them.
+
+1. The durable worker — the only executor the Jobs page ever uses — built the
+   orchestrator's argument object by hand and omitted `mode`, `maxSpendUsd` and `cursor`.
+   Every web run therefore executed the legacy budget with no ceiling at all, whichever
+   card was pressed and whatever number was typed into "Spend at most". It now maps the
+   row through `toJobScoutParams`, the one function every executor shares.
+2. Nothing wrote a cursor to a run row, so "continue" re-planned, re-swept and re-executed
+   every strategy at full price while reporting "nothing done yet". `recordRunCursor`
+   patches the row while the run is alive and once more at the end, and `readRunCursor`
+   also reads the copy the orchestrator's own report leaves in `stats.discovery`.
+
+Also fixed: a budget stop was recorded as `succeeded` (a green run that in fact ran out of
+money); `LEGACY_BUDGET` had silently inherited BROAD's 40/40 counts on the one path with
+no ceiling; `attempts` was incremented twice per continuation; a posted ceiling was
+clamped to $1000 and echoed back while $100 would be enforced; a saturated run reported
+itself resumable when saturation is the *good* ending; and the mode's runtime is now a
+real bound across invocations (`cursor.elapsed_ms`) rather than a sentence in the UI.
+
+### Honest limits
+
+Saturation is applied at STRATEGY granularity. `maxPagesPerSource`, `maxQueryFamilies` and
+the cursor's `pages`/`families` are declared and persisted and consumed by nothing yet —
+per-source pagination and query-family planning are the next workstream's. `usePaidSources`
+is a declared constraint with no paid provider to constrain today, and the UI copy claims
+nothing more than the ceiling. The mode cost estimates ($0.25–0.75 / $4 / $15) are
+estimates: no live run was made.
+
+**Files:** `lib/career/discovery/{modes,budget}.ts` · `lib/career/scout/{orchestrator,
+stages,run-dispatch,run-report,rank-stage,run-store,run-record}.ts` ·
+`app/api/career/scout/{route.ts,worker/route.ts}` · `app/dashboard/jobs/{ScoutPanel.tsx,
+run-copy.ts}` · `scripts/test-career-modes.ts` (95 offline checks).
+
+---
+
 ## 2026-08-31 — Inventory stops being capped by what we can afford to read
 
 **Type:** architecture · **Behavior change:** the watchlist is swept in full for

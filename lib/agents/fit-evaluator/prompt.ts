@@ -7,6 +7,7 @@
 
 import type { VersionedPrompt } from '../runtime/types'
 import { FIT_DIMENSIONS } from '@/lib/career/types'
+import { withoutPlacePreferences } from '@/lib/career/missions/preferences'
 import { FIT_DIMENSION_QUESTIONS } from '@/lib/career/fit/dimensions'
 
 /**
@@ -55,7 +56,7 @@ const list = (items: string[], empty = 'none stated'): string =>
 export function renderJobForPrompt(job: FitJobInput): string {
   return `Title: ${job.title}
 Company: ${job.company}
-Location: ${job.location_raw ?? 'unknown'}${job.location_tier ? ` (mission geography tier ${job.location_tier})` : ' (not in any mission geography tier)'}
+Location: ${job.location_raw ?? 'unknown'}${job.location_tier ? ` (mission geography tier ${job.location_tier})` : ''}
 Work mode: ${job.work_mode} · Employment type: ${job.employment_type} · Season: ${job.season_relevance}
 Posted: ${job.posted_at ?? 'unknown'} · Deadline: ${job.deadline ?? 'none stated'}
 Industry: ${job.industry ?? 'unknown'} · Company size/stage: ${job.company_size_stage ?? 'unknown'}
@@ -79,7 +80,7 @@ ${job.description_excerpt || '(none)'}`
 }
 
 export const fitEvaluatorPrompt: VersionedPrompt<FitEvaluatorInput> = {
-  version: '1.1.0',
+  version: '1.3.0',
 
   build(input) {
     const dimensions = FIT_DIMENSIONS.map((d) => `  ${d}\n     ${FIT_DIMENSION_QUESTIONS[d]}`).join('\n\n')
@@ -124,15 +125,49 @@ RULES THAT OVERRIDE ENTHUSIASM
 
   3. ROLE FIT IS ABOUT THE WORK, NOT THE TITLE. Read the responsibilities and the description.
 
-  4. THE DIRECTION IS WHERE THE PERSON WANTS TO GO. The MISSION may open with a DIRECTION line — what
-     they want to scout for, possibly a pivot away from the industry their evidence comes from. When it
-     is present, judge role_fit and mission_interest_fit as TRANSFERABILITY toward that direction: does
-     the background map to the actual work described? — never as a match to past titles or a past
-     industry. A posting squarely in the stated direction is NOT penalized on role_fit because the
-     person's prior industry differs; explain what transfers (unit operations, process and quality
-     systems, lab work, computation, data, AI tooling…) and where the gap is. A posting squarely in the
-     prior industry that the direction does not mention scores LOWER on mission_interest_fit, however
-     comfortable the role_fit looks, unless the direction says it is also open to it.
+  4. THE DIRECTION IS WHERE THE PERSON WANTS TO GO — AND ITS LABEL SAYS HOW HARD IT BINDS. The MISSION
+     opens with a DIRECTION line that is one of three things, and you must read which:
+
+       DIRECTION — BOOST       Where they most want to go, possibly a pivot away from the industry their
+                               evidence comes from. A posting squarely in it scores HIGH on
+                               mission_interest_fit. A STRONG ADJACENT posting is still a real option and
+                               is NOT scored near zero — mark it mid-to-high and say in the explanation
+                               what it is adjacent to. Boost is not a filter.
+       DIRECTION — ONLY THIS   A posting outside the direction scores LOW on mission_interest_fit,
+                               however good it looks otherwise. Say plainly that it is outside the
+                               stated direction.
+       DIRECTION: none stated  There is nothing to score against. Judge mission_interest_fit on the
+                               EVIDENCE and the stated preferences — what this person has actually done
+                               and said they optimise for — and never on how closely the title matches
+                               a job they have held before. An unfamiliar title in an unfamiliar
+                               industry is not a bad fit; it may be the best one this run found.
+
+     When a direction binds (BOOST or ONLY THIS), judge role_fit and mission_interest_fit as
+     TRANSFERABILITY toward that direction: does the background map to the actual work described? —
+     never as a match to past titles or a past industry. A posting squarely in the stated direction is
+     NOT penalized on role_fit because the person's prior industry differs; explain what transfers (unit
+     operations, process and quality systems, lab work, computation, data, AI tooling…) and where the
+     gap is. Under ONLY THIS, a posting in the prior industry that the direction does not mention scores
+     LOWER on mission_interest_fit however comfortable the role_fit looks; under BOOST it is scored on
+     its own merits as an adjacent option, just below one that is squarely on target.
+
+     A POSTING NEVER HAS TO RESEMBLE A PREVIOUS TITLE. Titles are not the unit of fit — the work is.
+
+  5. GEOGRAPHY IS A RANKING SIGNAL, NOT A VERDICT. The MISSION carries a LOCATIONS line saying which of
+     three things it means, and geography never affects eligibility either way:
+
+       LOCATIONS: ANYWHERE     There is NO place preference. Where the role is must not move a single
+                               number, up or down, and must not appear in a red flag or an uncertainty.
+                               A role in a small industrial town is not worse than one in a big coastal
+                               city — for most of the industries this person is credible for, it is
+                               where the work actually is.
+       LOCATIONS — PREFERRED   A soft preference. It may lift or lower location_fit alone. Every other
+                               dimension is judged as if the role were next door.
+       LOCATIONS — ONLY THESE  A hard filter, and it has already been applied in code before you saw
+                               this posting. Do not re-apply it and do not score against it.
+
+     A "mission geography tier" on the job line, when present, is that ranking signal — never a hurdle
+     the posting failed. No tier shown means geography simply did not come into it.
 
 ELIGIBILITY — a verdict, not a score
 
@@ -174,8 +209,8 @@ OUTPUT, BEYOND THE DIMENSIONS
     const user = `MISSION
 ${input.mission}
 
-PERSONAL PREFERENCES
-${input.preferences}
+PERSONAL PREFERENCES (place removed — geography is stated once, on the MISSION's LOCATIONS line above)
+${input.preferences.trim() ? withoutPlacePreferences(input.preferences) : '(none recorded)'}
 
 JOB
 ${renderJobForPrompt(input.job)}

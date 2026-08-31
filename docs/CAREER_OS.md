@@ -82,6 +82,35 @@ A fit row records the direction it was judged toward (`prompt_version` is `<vers
 when one is set), so saving or editing the direction invalidates every stored rank: the next rank —
 post-scout or **Re-rank** — re-evaluates each job at cost, exactly as a prompt bump would.
 
+### The two dials: where, and what direction
+
+Both live on `preferences`, both are read through resolvers in
+`lib/career/missions/preferences.ts` (never off the row — a mission can predate migration 017),
+and both are stated to the model exactly once, in `renderMission()`. Reasoning:
+[ADR-042](ARCHITECTURE.md#adr-042).
+
+**Where — `preferences.locations.mode`.** Three behaviours that are never conflated:
+
+| Mode | On screen | What actually happens |
+|---|---|---|
+| `anywhere` *(default)* | "Anywhere in the US" | No place preference at all. No query carries a city, no posting is scored on where it is, and `locationTier()` stamps nothing. |
+| `prefer` | "Prefer these places" | A **ranking** signal. In-region postings rank higher; everything else is still discovered, stored and shown. |
+| `only` | "Only these places" | A **hard filter** — `locationOnlyConstraint()` writes it onto `hard_constraints`, and `applyHardConstraints()` rejects postings before fit is ever scored, reporting the label that did it. |
+
+The product ships **none** of them: the default mission names no city, the objective says
+"anywhere in the United States", and `optimize_for` no longer lists `location`. Geography is
+something the user turns on. `withoutPlacePreferences()` also strips `location` rows out of the
+Evidence Bank block before the planner or the fit evaluator sees it, so one user message can
+never say "no place preference" and "location: San Francisco (weight 1)" at the same time.
+
+**Direction — `preferences.direction_mode`.** `boost` (the default whenever a direction is
+set) searches hardest in that direction while still ingesting strong adjacent postings;
+`exclusive` restricts discovery and ranking to it, and the Scout panel says "Scouting for
+**ONLY**:" before a paid run so nothing is hidden without warning. The mode is derived, never
+stored as `off`: a stored `off` would survive every partial patch and let the Jobs page save a
+direction that then did nothing. With no direction the mission renders "explore broadly from
+the evidence" — a **wider** search, not a smaller one.
+
 Two loops feed back deliberately and narrowly:
 
 - **Feedback → ranking.** `LOVE / INTERESTED / MAYBE / NOT_INTERESTED` with reasons adjusts
@@ -302,6 +331,57 @@ orders and counts in the database over the whole set, so the header's counts and
 agree. The inbox keeps its defaults; the two are visually distinct (a bordered run card with
 one way back, "← Back to all jobs") and never conflated. The Runs page links a `job_scout` row
 straight to it.
+
+### How big a run is: a mode, a ceiling, a cursor (ADR-041)
+
+The four sliders (Strategies, Rounds, Companies, Extract) are gone from the panel. They were
+implementation details of stages nobody operates, and the numbers they carried were the
+product's ceiling: `targetCount: 12` per strategy and twelve fit evaluations meant a $4 run
+returned twelve jobs however much the market held.
+
+What the founder chooses now is a **mode** and, if they want, a **spend limit**:
+
+| | QUICK | BROAD | EXHAUSTIVE |
+|---|---|---|---|
+| Postings per strategy | 12 | 40 | 100 |
+| Jobs given a full fit evaluation | 12 | 40 | 120 |
+| Extractions | 15 | 80 | 250 |
+| Ceiling | $0.75 | $4 | $15 |
+| Whole-run clock | 5 min | 20 min | 60 min |
+| Explore share of company-first | 40 % | 15 % | 10 % |
+
+`lib/career/discovery/modes.ts` holds them as plain objects — no behaviour, no I/O. A caller
+that names **no** mode gets `LEGACY_BUDGET`: the numbers this system already ran with and *no
+ceiling*, so `npm run career:scout`, the eval and the offline suites are unchanged until they
+opt in.
+
+**The ceiling is enforced, not decorative.** `lib/career/discovery/budget.ts` is asked before
+every paid stage (`canSpend`) and reconciled against the run's own trace afterwards
+(`syncTotal`), so what a run reports spending is what it spent, and only what it *dares to
+start* uses an estimate. At the ceiling nothing new starts: the run finishes cleanly, says
+`stopped: 'budget'` and which stage it refused, and the row records **partial** — a run that
+ran out of money must not look like one that swept the market.
+
+**It stops on saturation, not on a counter.** `saturated(history, policy)` reads the marginal
+unique yield of the last few strategies: a productive one is never cut off however many came
+before it, and one that adds almost nothing new twice in a row ends the loop. Saturation is the
+*good* ending of a wide run — terminal, not partial, and its cursor is marked done, so nobody
+is offered a second pass over an exhausted market.
+
+**A run can outlive one worker.** The row carries a **task cursor**: stages, strategies and
+companies already done, the plan already paid for, and the dollars and milliseconds already
+used. The worker writes it while it works and once more at the end; `POST /api/career/scout
+{ continueRun }` reads it **from the row, never from the request** and the next pass skips what
+the last one paid for. "Continue this run" appears on the panel only when the run's own report
+says it stopped at the clock or the ceiling. The mode's clock is the whole run's, across
+passes.
+
+Every executor — the worker, the pre-016 inline path, the CLI — maps the stored row through
+one function, `toJobScoutParams`. Listing the fields by hand is exactly how `mode`,
+`maxSpendUsd` and `cursor` once failed to reach the worker, which made the spend limit on
+screen do nothing.
+
+Offline: `npx tsx scripts/test-career-modes.ts`.
 
 ### The company list is an input, not the universe
 

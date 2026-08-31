@@ -6,14 +6,23 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
-import type { CareerMission, CareerMissionPreferences, FitWeights, GeoTier, HardConstraint } from '@/lib/career/types'
-import { FIT_DIMENSIONS } from '@/lib/career/types'
+import type { CareerMission, CareerMissionPreferences, DirectionMode, FitWeights, HardConstraint, LocationMode } from '@/lib/career/types'
+import { FIT_DIMENSIONS, missionDirectionMode, missionLocations } from '@/lib/career/types'
 import { api } from '@/components/career/api'
 import InlineNotice, { MigrationNotice } from '@/components/career/InlineNotice'
 import ListEditor from './ListEditor'
 import WeightsEditor from './WeightsEditor'
 import ConstraintsEditor from './ConstraintsEditor'
-import { DIRECTION_HINT, DIRECTION_PLACEHOLDER } from '../direction'
+import {
+  DIRECTION_HINT,
+  DIRECTION_MODE_EMPTY_HINT,
+  DIRECTION_MODE_OPTIONS,
+  DIRECTION_PLACEHOLDER,
+  LOCATION_MODE_OPTIONS,
+  LOCATION_EMPTY_WARNING,
+  locationChoiceIncomplete,
+  locationsPatch,
+} from '../direction'
 
 interface MissionsResponse {
   missions: CareerMission[]
@@ -25,9 +34,6 @@ interface MissionsResponse {
 // (docs/CAREER_OS.md §5) and the only mission is the active one whatever its status.
 const WORK_MODES: CareerMissionPreferences['work_modes'] = ['remote', 'hybrid', 'onsite']
 
-function tier(prefs: CareerMissionPreferences, n: 1 | 2 | 3): GeoTier {
-  return prefs.geo_tiers.find((t) => t.tier === n) ?? { tier: n, locations: [] }
-}
 
 function Section({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
   return (
@@ -69,11 +75,12 @@ export default function MissionPage() {
   function patchPrefs(p: Partial<CareerMissionPreferences>) {
     setDraft((d) => (d ? { ...d, preferences: { ...d.preferences, ...p } } : d))
   }
-  function patchTier(n: 1 | 2 | 3, p: Partial<GeoTier>) {
+  // The dial and the ranking table it drives are written together, so the two
+  // can never disagree about what was asked for (see locationsPatch).
+  function patchLocations(next: { mode?: LocationMode; regions?: string[] }) {
     if (!draft) return
-    const others = draft.preferences.geo_tiers.filter((t) => t.tier !== n)
-    const next = { ...tier(draft.preferences, n), ...p }
-    patchPrefs({ geo_tiers: [...others, next].sort((a, b) => a.tier - b.tier) })
+    const current = missionLocations(draft.preferences)
+    patchPrefs(locationsPatch({ mode: next.mode ?? current.mode, regions: next.regions ?? current.regions }))
   }
 
   async function save() {
@@ -88,6 +95,7 @@ export default function MissionPage() {
       preferences: draft.preferences,
       hard_constraints: draft.hard_constraints.filter((c) => c.dimension.trim()),
       fit_weights: draft.fit_weights,
+      ...(draft.mission_migration_notes ? { mission_migration_notes: draft.mission_migration_notes } : {}),
     }
     const r = await api<{ mission: CareerMission }>(`/api/career/missions/${draft.id}`, { method: 'PATCH', json: body })
     if (!r.ok || !r.data) {
@@ -133,6 +141,17 @@ export default function MissionPage() {
   if (!draft || !loaded) return <p className="p-8 text-sm text-slate-500">Loading…</p>
 
   const prefs = draft.preferences
+  // The RAW draft dial, not the resolved one: `missionLocations` collapses a
+  // regionless "prefer"/"only" to "anywhere", which would snap the radio back
+  // before the user has typed the first place. It resolves only for a pre-017
+  // row that has no dial stored yet.
+  const locations = prefs.locations ?? missionLocations(prefs)
+  const hasDirection = (prefs.direction ?? '').trim().length > 0
+  const directionMode = missionDirectionMode(prefs) === 'exclusive' ? 'exclusive' : 'boost'
+  const notes = draft.mission_migration_notes ?? []
+  // A place choice with nowhere to point is a 400 at the API. Refuse it here,
+  // in front of the person, rather than letting them press Save and be told no.
+  const placeIncomplete = locationChoiceIncomplete(locations)
   const weights: FitWeights = { ...loaded.defaults.weights, ...(draft.fit_weights ?? {}) }
   const dirty = JSON.stringify(draft) !== JSON.stringify(loaded.missions.find((m) => m.id === draft.id))
 
@@ -152,7 +171,7 @@ export default function MissionPage() {
           </label>
           <p className="text-sm text-slate-500 mt-1">What you are looking for. The planner reads all of it; the fit evaluator reads the preferences and answers ten questions weighted below.</p>
         </div>
-        <button type="button" onClick={save} disabled={saving || !dirty} className="px-3 py-1.5 rounded-md bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 shrink-0">
+        <button type="button" onClick={save} disabled={saving || !dirty || placeIncomplete} className="px-3 py-1.5 rounded-md bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 shrink-0">
           {saving ? 'Saving…' : dirty ? 'Save changes' : 'Saved'}
         </button>
       </div>
@@ -160,6 +179,26 @@ export default function MissionPage() {
       {notice && (
         <div className="mb-4">
           <InlineNotice kind={notice.kind}>{notice.text}</InlineNotice>
+        </div>
+      )}
+      {/* Written by a migration that changed something, or declined to change
+          something, rather than overwriting a preference in silence. */}
+      {notes.length > 0 && (
+        <div className="mb-4 space-y-2">
+          {notes.map((n, i) => (
+            <InlineNotice key={`${n.kind}-${i}`} kind="warn">
+              <span className="flex items-start justify-between gap-3">
+                <span>{n.message}</span>
+                <button
+                  type="button"
+                  onClick={() => patch({ mission_migration_notes: notes.filter((_, j) => j !== i) })}
+                  className="shrink-0 text-xs underline hover:no-underline"
+                >
+                  Dismiss
+                </button>
+              </span>
+            </InlineNotice>
+          ))}
         </div>
       )}
       <div className="space-y-4">
@@ -179,17 +218,56 @@ export default function MissionPage() {
             />
             <span className="block mt-1 text-xs font-normal text-slate-500">{DIRECTION_HINT} Also editable on the Jobs page — it is one value.</span>
           </label>
+          <fieldset className="mt-3" disabled={!hasDirection}>
+            <legend className="text-xs font-semibold text-slate-600">What this direction does</legend>
+            <div className={`mt-1 space-y-1 ${hasDirection ? '' : 'opacity-50'}`}>
+              {DIRECTION_MODE_OPTIONS.map((o) => (
+                <label key={o.value} className="flex items-start gap-2 text-sm text-slate-700">
+                  <input
+                    type="radio"
+                    name="direction-mode"
+                    className="mt-1"
+                    checked={directionMode === o.value}
+                    onChange={() => patchPrefs({ direction_mode: o.value as DirectionMode })}
+                  />
+                  <span>
+                    <span className="font-medium text-slate-900">{o.label}</span>
+                    <span className="block text-xs font-normal text-slate-500">{o.hint}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+            {!hasDirection && <p className="mt-1 text-xs font-normal text-slate-500">{DIRECTION_MODE_EMPTY_HINT}</p>}
+          </fieldset>
         </Section>
 
-        <Section title="Where" hint="Tier 1 is where you most want to be; tier 3 is acceptable. The tier-2 description is interpreted by the planner, so write it as you would say it.">
+        <Section title="Where" hint="Three different things, and only one of them hides jobs from you.">
           <div className="space-y-3">
-            <ListEditor label="Tier 1 locations" value={tier(prefs, 1).locations} onChange={(v) => patchTier(1, { locations: v })} />
-            <ListEditor label="Tier 2 locations" value={tier(prefs, 2).locations} onChange={(v) => patchTier(2, { locations: v })} />
-            <label className="block text-xs font-semibold text-slate-600">
-              Tier 2 description
-              <input value={tier(prefs, 2).description ?? ''} onChange={(e) => patchTier(2, { description: e.target.value })} placeholder="e.g. other large, vibrant East or West Coast cities" className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1 text-sm font-normal" />
-            </label>
-            <ListEditor label="Tier 3 locations" value={tier(prefs, 3).locations} onChange={(v) => patchTier(3, { locations: v })} />
+            <fieldset>
+              <legend className="sr-only">Where I will go</legend>
+              <div className="space-y-1">
+                {LOCATION_MODE_OPTIONS.map((o) => (
+                  <label key={o.value} className="flex items-start gap-2 text-sm text-slate-700">
+                    <input type="radio" name="location-mode" className="mt-1" checked={locations.mode === o.value} onChange={() => patchLocations({ mode: o.value })} />
+                    <span>
+                      <span className="font-medium text-slate-900">{o.label}</span>
+                      <span className="block text-xs text-slate-500">{o.hint}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+            {locations.mode !== 'anywhere' && (
+              <>
+                <ListEditor
+                  label={locations.mode === 'only' ? 'Only these places' : 'Preferred places'}
+                  value={locations.regions}
+                  onChange={(v) => patchLocations({ regions: v })}
+                  placeholder="Houston, Texas, the Midwest…"
+                />
+                {locationChoiceIncomplete(locations) && <InlineNotice kind="warn">{LOCATION_EMPTY_WARNING[locations.mode as 'prefer' | 'only']}</InlineNotice>}
+              </>
+            )}
             <div>
               <span className="block text-xs font-semibold text-slate-600 mb-1">Work modes</span>
               <div className="flex gap-3">
@@ -242,7 +320,7 @@ export default function MissionPage() {
       </div>
 
       <div className="mt-5 flex justify-end">
-        <button type="button" onClick={save} disabled={saving || !dirty} className="px-3 py-1.5 rounded-md bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-50">
+        <button type="button" onClick={save} disabled={saving || !dirty || placeIncomplete} className="px-3 py-1.5 rounded-md bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-50">
           {saving ? 'Saving…' : dirty ? 'Save changes' : 'Saved'}
         </button>
       </div>

@@ -21,24 +21,39 @@ import { createClient } from '@/lib/supabase/server'
 import { isDynamicUsage } from '@/lib/http/dynamic'
 import { runJobScout } from '@/lib/career/scout/orchestrator'
 import {
+  continuationParams,
+  describeCursor,
   dispatchScoutWorker,
+  isCursorComplete,
+  readRunCursor,
   sanitizeScoutParams,
   scoutCaps,
+  toJobScoutParams,
   VERCEL_CAPS,
   VERCEL_DEADLINE_MS,
   workerBaseUrl,
 } from '@/lib/career/scout/run-dispatch'
 import { reapStaleRuns } from '@/lib/career/scout/run-reaper'
-import { activeJobScoutRun, enqueueScoutRun, getRunJobCounts, toRunView } from '@/lib/career/scout/run-store'
+import { activeJobScoutRun, enqueueScoutRun, getRunJobCounts, getScoutRun, toRunView } from '@/lib/career/scout/run-store'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
 
 /**
- * POST { missionId?, strategies?, rounds?, companies?, extract?, verify?, label?, force? }
+ * POST { missionId?, mode?, maxSpendUsd?, verify?, rank?, label?, force?, continueRun? }
  *   → 202 { runId, status: 'queued', durable: true, dispatched }
  *   → 409 { runId, status, alreadyActive: true, run }        (a scout is already going)
  *   → 200 { durable: false, migrationMissing, ...JobScoutResult }  (pre-016 fallback)
+ *
+ * `mode` is the whole of "how big is this run" (QUICK · BROAD · EXHAUSTIVE) and
+ * `maxSpendUsd` is the ceiling. The four old per-stage numbers — strategies,
+ * rounds, companies, extract — are still accepted and still win over the mode
+ * for one release, so an old client or a saved script keeps working unchanged.
+ *
+ * `continueRun` carries a previous run's cursor into a new row: a BROAD or
+ * EXHAUSTIVE run legitimately outlives one worker invocation, and continuing
+ * must not mean paying for the plan, the sweep and the finished strategies
+ * again.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -47,7 +62,32 @@ export async function POST(request: NextRequest) {
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const body = ((await request.json().catch(() => ({}))) ?? {}) as Record<string, unknown>
-    const params = sanitizeScoutParams(body, scoutCaps())
+    let params = sanitizeScoutParams(body, scoutCaps())
+    let continuedFrom: string | null = null
+
+    // A continuation: same work, new invocation. The cursor comes from the
+    // stored row — never from the request — so a caller cannot dictate what a
+    // run believes it has already done.
+    if (typeof body.continueRun === 'string' && body.continueRun) {
+      const prior = await getScoutRun(user.id, body.continueRun)
+      if (!prior.run) {
+        return NextResponse.json({ error: prior.error ?? 'that run was not found', migrationMissing: prior.migrationMissing }, { status: 404 })
+      }
+      const cursor = readRunCursor(prior.run)
+      if (isCursorComplete(cursor)) {
+        return NextResponse.json({ error: 'that run finished every stage — there is nothing left to continue', runId: prior.run.id }, { status: 409 })
+      }
+      const priorParams = sanitizeScoutParams((prior.run.params ?? {}) as Record<string, unknown>, scoutCaps())
+      params = continuationParams({ ...priorParams, label: `${priorParams.label} · continued` }, cursor)
+      // A continuation is the same run at the same shape — EXCEPT its ceiling.
+      // "It stopped at its spend limit" is only actionable if raising the
+      // limit and continuing does something, and the spend already made
+      // counts against the new ceiling either way (the cursor carries it).
+      if (body.maxSpendUsd !== undefined) {
+        params = { ...params, maxSpendUsd: sanitizeScoutParams({ maxSpendUsd: body.maxSpendUsd }, scoutCaps()).maxSpendUsd }
+      }
+      continuedFrom = prior.run.id
+    }
 
     // "No paid work without a click" has to hold on the server too: the button
     // being hidden does not survive a second tab or a direct call. Reap first,
@@ -84,6 +124,10 @@ export async function POST(request: NextRequest) {
         status: 'queued',
         durable: true,
         dispatched,
+        mode: params.mode,
+        maxSpendUsd: params.maxSpendUsd,
+        continuedFrom,
+        resuming: continuedFrom ? describeCursor(params.cursor) : null,
         // Not fatal: polling the run re-dispatches one still queued after ~10s.
         dispatchError: error,
       },
@@ -102,17 +146,9 @@ export async function POST(request: NextRequest) {
  */
 async function runInline(userId: string, body: Record<string, unknown>, migrationMissing: boolean, enqueueError: string | null) {
   const p = sanitizeScoutParams(body, VERCEL_CAPS)
-  const result = await runJobScout({
-    userId,
-    missionId: p.missionId,
-    budget: { deadlineMs: VERCEL_DEADLINE_MS - 10_000 },
-    maxStrategies: p.strategies,
-    maxRoundsPerStrategy: p.rounds,
-    maxCompaniesFirst: p.companies,
-    maxExtract: p.extract,
-    verify: p.verify,
-    label: p.label,
-  })
+  // One mapping, shared with the worker and the CLI, so a field added to the
+  // run's parameters cannot reach one executor and not another.
+  const result = await runJobScout(toJobScoutParams(p, { userId, deadlineMs: VERCEL_DEADLINE_MS - 10_000 }))
   if (result.migrationMissing) {
     return NextResponse.json({ error: 'Apply supabase/migrations/014_career_os.sql first', migrationMissing: true, durable: false, result }, { status: 409 })
   }

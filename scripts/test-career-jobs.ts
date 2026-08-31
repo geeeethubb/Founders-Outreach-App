@@ -27,7 +27,7 @@ import { clusterJobs, duplicateRate, shingleJaccard, titleSimilarity, TITLE_SIMI
 import { verifyJob, applyStaleness, titleCoverage } from '../lib/career/jobs/verify'
 import { applyHardConstraints, isInternshipLike } from '../lib/career/jobs/filters'
 import { buildSnapshot, descriptionSha } from '../lib/career/jobs/snapshot'
-import { DEFAULT_MISSION_PREFERENCES, DEFAULT_HARD_CONSTRAINTS } from '../lib/career/missions/store'
+import { PRE_V2_DEFAULT_GEO_TIERS, DEFAULT_HARD_CONSTRAINTS } from '../lib/career/missions/store'
 
 let passed = 0
 let failed = 0
@@ -199,7 +199,12 @@ eq('loc Jersey City', L('Jersey City, NJ').state, 'NJ')
 
 // ─── locationTier ────────────────────────────────────────────────────────────
 
-const tiers = DEFAULT_MISSION_PREFERENCES.geo_tiers
+// A FIXTURE, deliberately not the shipped default any more: since migration 017
+// the product ships NO geography (DEFAULT_MISSION_PREFERENCES.geo_tiers is []),
+// so using it here would test locationTier against an empty table and assert
+// nothing. These are the old shipped tiers, kept as the tier fixture because
+// they exercise every metro-matching branch.
+const tiers = PRE_V2_DEFAULT_GEO_TIERS
 const T = (raw: string) => locationTier(parseLocation(raw), tiers)
 eq('tier SF', T('San Francisco, CA'), 1)
 eq('tier Brooklyn', T('Brooklyn, NY'), 1)
@@ -221,6 +226,16 @@ eq('tier London', T('London, United Kingdom'), null)
 eq('tier multi incl SF', T('Toronto, New York, San Francisco'), 1)
 eq('tier multi no tier1', T('Atlanta, Georgia, United States; Boston, Massachusetts, United States'), 2)
 eq('tier empty', T(''), null)
+
+// NO TIER TABLE MEANS NO TIER (migration 017). The shipped mission now states no
+// place preference, so geo_tiers is normally []. Walking to the bottom of
+// locationTier and stamping every US posting tier 3 put a geography penalty back
+// into ranking, and "(mission geography tier 3)" back into the fit prompt, under
+// a mission that had just said place does not matter.
+eq('tier with NO tier table — a US city', locationTier(parseLocation('Baton Rouge, LA'), []), null)
+eq('tier with NO tier table — remote US', locationTier(parseLocation('Remote - US'), []), null)
+eq('tier with NO tier table — a coastal city gets no head start either', locationTier(parseLocation('San Francisco, CA'), []), null)
+eq('tier with NO tier table — non-US still null', locationTier(parseLocation('London, United Kingdom'), []), null)
 
 // ─── titles, families, employment, season ────────────────────────────────────
 

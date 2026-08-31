@@ -19,8 +19,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { isDynamicUsage } from '@/lib/http/dynamic'
 import { attachCareerRun } from '@/lib/career/runs'
 import { liveScoutStore, runJobScout, type ScoutStore } from '@/lib/career/scout/orchestrator'
-import { readScoutParams, scoutCaps, scoutDeadlineMs } from '@/lib/career/scout/run-dispatch'
-import { claimScoutRun, finishScoutRun, recordProgress, resetProgressCache, terminalStatusFor, touchScoutRun } from '@/lib/career/scout/run-store'
+import { readScoutParams, scoutCaps, scoutDeadlineMs, toJobScoutParams, type ScoutCursor } from '@/lib/career/scout/run-dispatch'
+import { claimScoutRun, finishScoutRun, recordProgress, recordRunCursor, resetProgressCache, terminalStatusFor, touchScoutRun } from '@/lib/career/scout/run-store'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
@@ -32,6 +32,14 @@ export const maxDuration = 300
  * the process still exists — and the reaper reads it.
  */
 const HEARTBEAT_MS = 30_000
+
+/**
+ * How often the task cursor is written while the run is alive. A cursor moves
+ * after every strategy and every company; the row only needs to be right
+ * enough that a killed worker leaves a useful resume point, and the finishing
+ * write is unthrottled.
+ */
+const CURSOR_MIN_INTERVAL_MS = 10_000
 
 /** POST { runId, token } → { runId, status, jobs, errors } */
 export async function POST(request: NextRequest) {
@@ -87,6 +95,29 @@ async function execute(runId: string, userId: string, params: ReturnType<typeof 
       })
   }
 
+  // Where the run has got to, written onto its own row WHILE it works.
+  //
+  // A worker that is killed at its platform deadline must leave a resumable
+  // cursor behind, so this cannot wait for the finishing write: the whole
+  // point of the cursor is the invocation that does not get to finish. It is
+  // throttled (a cursor moves on every strategy and every company) and it
+  // rides the same serialized chain as the progress writes, so at most one
+  // write is ever in flight.
+  let lastCursorAt = 0
+  let latestCursor: ScoutCursor | null = null
+  const onCursor = (cursor: ScoutCursor) => {
+    latestCursor = cursor
+    const now = Date.now()
+    if (now - lastCursorAt < CURSOR_MIN_INTERVAL_MS) return
+    lastCursorAt = now
+    chain = chain
+      .then(() => recordRunCursor(runId, cursor as unknown as Record<string, unknown>))
+      .then((r) => {
+        if (r.notRunning) lostRun = true
+      })
+      .catch(() => {})
+  }
+
   // One run row, not two: the scout's CareerRun attaches to the row the
   // enqueue step already created. It writes cost_usd and agent_calls; the
   // terminal status is finishScoutRun's, below.
@@ -104,26 +135,29 @@ async function execute(runId: string, userId: string, params: ReturnType<typeof 
   }, HEARTBEAT_MS)
 
   try {
-    const result = await runJobScout(
-      {
-        userId,
-        missionId: params.missionId,
-        budget: { deadlineMs },
-        maxStrategies: params.strategies,
-        maxRoundsPerStrategy: params.rounds,
-        maxCompaniesFirst: params.companies,
-        maxExtract: params.extract,
-        verify: params.verify,
-        rank: params.rank,
-        label: params.label,
-        onProgress,
-      },
-      { store }
-    )
+    // ONE mapping from the stored row to what the orchestrator executes,
+    // shared with the inline path and the CLI (toJobScoutParams). Listing the
+    // fields by hand here is how `mode`, `maxSpendUsd` and `cursor` failed to
+    // reach the only executor the Jobs page ever uses: every web run silently
+    // executed the legacy budget, so the ceiling the founder typed did
+    // nothing and a continuation had nothing to continue from.
+    const result = await runJobScout(toJobScoutParams(params, { userId, deadlineMs, onProgress, onCursor }), { store })
     clearInterval(beat)
+    // The last cursor the run emitted, written unthrottled — this is the one
+    // a continuation actually reads.
     await chain.catch(() => {})
+    await recordRunCursor(runId, result.cursor as unknown as Record<string, unknown>, { force: true }).catch(() => {})
 
-    const status = terminalStatusFor({ migrationMissing: result.migrationMissing, deadlineHit: result.stats.deadline_hit, errors: result.errors })
+    const status = terminalStatusFor({
+      migrationMissing: result.migrationMissing,
+      deadlineHit: result.stats.deadline_hit,
+      errors: result.errors,
+      // A run stopped by its spend ceiling is not a green tick: it stopped
+      // short of the market because it ran out of money, and the founder has
+      // to be able to see that (principle 11).
+      partial: result.partial,
+      stopped: result.stopped,
+    })
     const errors = [
       ...result.errors,
       ...(progressErrors ? [`${progressErrors} progress write(s) failed`] : []),
@@ -135,10 +169,16 @@ async function execute(runId: string, userId: string, params: ReturnType<typeof 
       stats: { ...result.stats, jobs: result.jobs.length, rejected: result.rejected.length, errors: errors.slice(0, 10) },
       error: errors[0] ?? null,
     })
-    return NextResponse.json({ runId, status, jobs: result.jobs.length, errors, finished: finished.ok, overrodeReap: finished.overrodeReap })
+    return NextResponse.json({
+      runId, status, jobs: result.jobs.length, errors, finished: finished.ok, overrodeReap: finished.overrodeReap,
+      mode: result.budget.mode, stopped: result.stopped, spentUsd: result.spend.spent_usd,
+    })
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e)
     await chain.catch(() => {})
+    // A run that threw still knows where it got to. Keeping that cursor is the
+    // difference between "continue" and "pay for all of it again".
+    if (latestCursor) await recordRunCursor(runId, latestCursor as unknown as Record<string, unknown>, { force: true }).catch(() => {})
     await finishScoutRun(runId, 'failed', { error: message })
     return NextResponse.json({ runId, status: 'failed', error: message }, { status: 500 })
   } finally {

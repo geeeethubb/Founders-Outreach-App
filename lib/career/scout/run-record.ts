@@ -217,16 +217,33 @@ export function toRunView(row: ScoutRunRow, jobs: RunJobCounts = emptyJobCounts(
 
 /**
  * What a finished run should be called. 'partial' is not a failure — it is
- * "this produced real jobs and then ran out of time". Hiding that behind
+ * "this produced real jobs and then stopped short". Hiding that behind
  * 'succeeded' would teach the founder to trust a short list; calling it
  * 'failed' would bury jobs they already paid for.
+ *
+ * There are three ways to stop short and only one of them is the clock:
+ *
+ *   deadline   the invocation, or the run's total runtime, ran out.
+ *   budget     the SPEND CEILING was reached — the run stopped starting paid
+ *              work. It used to be recorded as 'succeeded', so a run that
+ *              stopped because it ran out of money looked exactly like one
+ *              that had swept the market.
+ *   saturated  the sources stopped producing anything new. That is the
+ *              intended good ending of a wide run, and it is 'succeeded'.
  */
 export function terminalStatusFor(r: {
   migrationMissing: boolean
   deadlineHit: boolean
   errors: string[]
+  /** The orchestrator's own verdict, when the caller has one. */
+  partial?: boolean
+  /** 'complete' | 'deadline' | 'budget' | 'saturated', when the caller has one. */
+  stopped?: string | null
 }): Exclude<ScoutRunStatus, 'queued' | 'running'> {
   if (r.migrationMissing) return 'failed'
+  if (r.stopped === 'saturated') return 'succeeded'
+  if (r.stopped === 'budget' || r.stopped === 'deadline') return 'partial'
+  if (r.partial === true) return 'partial'
   if (r.deadlineHit) return 'partial'
   if (r.errors.some((e) => /deadline|not started before|skipped:/i.test(e))) return 'partial'
   return 'succeeded'

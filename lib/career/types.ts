@@ -9,6 +9,8 @@
 
 // ─── Missions ────────────────────────────────────────────────────────────────
 
+import type { DirectionMode, LocationPreference, MissionMigrationNote } from './missions/preferences'
+
 export type CareerSeason = 'summer_2027' | 'winter_2026_27' | 'fall_2026' | 'spring_2027' | 'other'
 
 export interface GeoTier {
@@ -18,6 +20,38 @@ export interface GeoTier {
   /** e.g. "other large, vibrant East or West Coast cities" — the planner interprets it. */
   description?: string
 }
+
+/**
+ * The two dials on a mission — WHERE and WHAT DIRECTION — live in
+ * ./missions/preferences.ts, which is pure and imports only types from here.
+ * They are re-exported so every existing `from '@/lib/career/types'` import
+ * keeps working; the module is the source of truth for all of it.
+ *
+ * Read the dials through the RESOLVERS (`missionLocations`, `rankingGeoTiers`,
+ * `locationHardFilter`, `missionDirectionMode`) — never off the row. A row can
+ * predate migration 017 and have no `locations` key at all.
+ */
+export type {
+  DirectionMode,
+  LocationMode,
+  LocationPreference,
+  MissionMigrationNote,
+} from './missions/preferences'
+export {
+  DEFAULT_LOCATION_PREFERENCE,
+  DIRECTION_MODES,
+  LOCATION_MODES,
+  LOCATION_ONLY_LABEL_PREFIX,
+  geoTiersForLocations,
+  isDerivedLocationConstraint,
+  locationHardFilter,
+  locationOnlyConstraint,
+  missionDirectionMode,
+  missionLocations,
+  rankingGeoTiers,
+  withoutPlacePreferences,
+} from './missions/preferences'
+
 
 export interface CareerMissionPreferences {
   geo_tiers: GeoTier[]
@@ -38,6 +72,19 @@ export interface CareerMissionPreferences {
    * person is credible for it. Empty → the planner infers from the evidence.
    */
   direction?: string | null
+  /**
+   * migration 017 — optional so pre-017 rows and fixtures still type-check.
+   * NEVER read this field directly: `missionDirectionMode()` resolves the
+   * default (boost with a direction, off without) and refuses a mode on an
+   * empty direction.
+   */
+  direction_mode?: DirectionMode
+  /**
+   * migration 017 — optional so pre-017 rows and fixtures still type-check.
+   * NEVER read this field directly: `missionLocations()` resolves it, falling
+   * back to whatever `geo_tiers` already said for a row written before 017.
+   */
+  locations?: LocationPreference
 }
 
 export interface HardConstraint {
@@ -59,6 +106,8 @@ export interface CareerMission {
   status: 'draft' | 'active' | 'paused' | 'archived'
   created_at: string
   updated_at: string
+  /** migration 017 — optional so pre-017 rows and fixtures still type-check. */
+  mission_migration_notes?: MissionMigrationNote[] | null
 }
 
 // ─── Personal Evidence Bank ──────────────────────────────────────────────────

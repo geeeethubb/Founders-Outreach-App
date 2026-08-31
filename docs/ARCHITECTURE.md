@@ -1112,6 +1112,144 @@ the same run row is left undone deliberately, and documented rather than faked.
 
 ---
 
+### ADR-041 — A run is a mode, a ceiling and a cursor
+
+**Context.** Discovery was parameterised by four sliders — Strategies, Rounds,
+Companies, Extract — and the numbers they carried were the product's real
+ceiling. `targetCount: 12` per strategy and twelve jobs given a fit evaluation
+meant a $4 run returned twelve jobs however much supply existed
+(`docs/JOB_DISCOVERY_V2_AUDIT.md` §3). Nothing bounded what a run could spend,
+nothing stopped a run for any reason except the clock, and nothing let a run
+that hit a platform deadline continue rather than start again.
+
+**Decision.** Three declarative pieces, and nothing else decides how big a run
+is.
+
+- **A mode** (`lib/career/discovery/modes.ts`) — QUICK · BROAD · EXHAUSTIVE — is
+  a plain object holding every number a stage may know about the run's size.
+  Pure, no I/O, so "how big is this run" is one value that is logged, persisted
+  on the row, asserted in a test and shown in the UI. A caller that names no
+  mode gets `LEGACY_BUDGET`: today's numbers and **no ceiling**, because a
+  ceiling nobody asked for could truncate the founder's CLI run. Its counts stay
+  at 12/12 for the same reason — the raise arrives with a mode, under a ceiling.
+- **A spend ledger** (`lib/career/discovery/budget.ts`) that is asked *before*
+  each paid stage starts and follows the run's own trace afterwards, so what a
+  run reports spending is what it spent and only what it DARES to start uses an
+  estimate. At the ceiling nothing new starts; the run finishes cleanly, reports
+  `stopped: 'budget'`, and the row records **partial** — a run that stopped for
+  money must never look like one that swept the market (principle 11).
+- **A stopping rule that is not a counter.** `saturated(history, policy)` reads
+  the *marginal unique yield* of the last few attempts: a productive strategy is
+  never cut off however many came before it, and one that adds almost nothing
+  new twice in a row ends the loop. Saturation is a run's **good ending** — it
+  is terminal, not partial, and its cursor is marked done so nobody is sold a
+  second pass over an exhausted market.
+- **A task cursor** persisted in the run row's `params` (and mirrored into
+  `progress`), carrying the stages, strategies and companies already done, the
+  plan already paid for, and the dollars and milliseconds already used. A worker
+  killed at its platform deadline leaves it behind; `POST /api/career/scout
+  { continueRun }` reads it from the row — never from the request — and the next
+  pass skips the plan, the sweep and the finished strategies. This is what
+  ADR-040 deliberately left undone.
+
+**Consequences.** The mode's `maxRuntimeMs` is the whole run's clock across
+invocations, so "up to an hour" is enforced rather than promised. Every executor
+maps the stored row through one function (`toJobScoutParams`): listing the
+fields by hand is how `mode`, `maxSpendUsd` and `cursor` once failed to reach
+the worker, which made the UI's spend limit decorative. Company-first shrinks as
+the run widens (`exploreShare` 40 % → 15 % → 10 %), and the run reports the
+share of discovery that came from broad market search, so "the market, not your
+watchlist" is a measured number rather than an intention.
+
+---
+
+### ADR-042 — Geography is a dial with three named behaviours, and the product ships none of them
+
+**Context.** The shipped default mission put "San Francisco / Bay Area" and
+"New York City" in geography tier 1 and four coastal cities in tier 2, said the
+same thing again in prose in the objective, listed `location` in `optimize_for`,
+and seeded all of it a third time into `evidence_preferences` as six weighted
+`location` rows. Every one of those reached the model: `renderMission()` printed
+the tiers, `renderPreferences()` printed the rows into the same user message,
+`fallbackStrategies()` appended a tier-1 city to deterministic queries, and
+`locationTier()` stamped a tier on every posting so ranking could score it.
+
+Nobody asked for any of it. The founder's own stated direction read *"I don't
+care about location or which company"*. A preference the **product** invented was
+outranking the one the **user** stated.
+
+**Decision.** Geography becomes a dial the user sets, with three behaviours that
+are named in the type and never conflated (`lib/career/missions/preferences.ts`):
+
+| `locations.mode` | What it does |
+|---|---|
+| `anywhere` *(default)* | No place preference at all. No query carries a city, no posting is scored on where it is, and no tier is stamped. |
+| `prefer` | A **ranking** signal only. In-region postings rank higher; everywhere else is still discovered, stored and shown. |
+| `only` | A **hard filter** — and a real one: `locationOnlyConstraint()` writes it onto the mission's `hard_constraints`, where `applyHardConstraints()` rejects postings and reports the label that did it. |
+
+Four rules hold the three apart:
+
+1. **Read the dial, never the row.** `missionLocations()`, `rankingGeoTiers()`
+   and `locationHardFilter()` are the only sanctioned readers. `prefer` returns
+   `null` from `locationHardFilter()` *by construction*, so a preference cannot
+   become a filter by accident, and `rankingGeoTiers()` returns nothing under
+   `anywhere` however many stale tiers the row still holds.
+2. **Never claim a filter you have not built.** "Only these places" is stated in
+   the UI, in the rendered mission and in the fit prompt — so it exists as a hard
+   constraint, applied in code before fit is ever scored. The prompt is allowed
+   to say "already applied" because it is.
+3. **No tier table means no tier.** `locationTier()` returns `null` on empty
+   tiers. It used to fall through and stamp every US posting tier 3, which
+   reached ranking as a penalty and the fit prompt as "(mission geography tier
+   3)" — geography reasserting itself under a mission that had just said it had
+   no opinion.
+4. **Place is stated exactly once**, on the mission's `LOCATIONS` line.
+   `withoutPlacePreferences()` strips `location` rows (and `optimize_for:
+   location`) out of the Evidence Bank block before either prompt sees it, so the
+   two halves of one user message cannot contradict each other whatever the
+   `evidence_preferences` table still holds. A `[HARD]` place row a *person*
+   typed is left in — removing that silently would be the same sin reversed.
+
+Direction gets the same treatment. `direction_mode` is `boost` (search hardest
+there, and still ingest strong adjacent postings) or `exclusive` (restrict
+discovery and ranking to it), derived as `boost` whenever a direction is set and
+`off` whenever it is empty — never *stored* as `off`, because a stored `off`
+survives every `{ ...defaults, direction }` spread and would let the Jobs page
+save a direction that then did nothing at all. No direction renders as *"explore
+broadly from the evidence"* — a **wider** search, not a smaller one.
+
+**Migrating what shipped, and only what shipped.** The old geography was
+system-generated, so migration 017 replaces it. A mission somebody **edited** is
+a preference a person expressed and is never overwritten — not one city of it.
+The whole test is **byte identity** with the shipped pre-V2 value:
+`isShippedPreV2Geography()` in TypeScript and the `where … = '[…]'::jsonb`
+predicate in SQL are the same test written twice, and
+`scripts/test-career-mission.ts` parses the literal *out of the SQL file* and
+feeds it to the TypeScript predicate so the twins cannot drift. The same rule
+governs the `evidence_preferences` rows: removed only when value, weight and the
+`tier N` note all match what the seed wrote.
+
+Anything that differs gets a **suggestion, not an edit** — an entry in
+`career_missions.mission_migration_notes` that the Mission page surfaces with a
+Dismiss button. Because that array is dismissible it can never be the "have I run
+this yet?" guard; a second column, `mission_migrations_applied`, is the durable
+ledger, written only by migration SQL and unknown to `sanitizeMissionPatch`.
+Re-running the file is then a genuine no-op, which is the normal operating
+condition for hand-applied migrations.
+
+**Consequences.** Discovery biases to recall and ranking to precision. The costs
+are real and accepted: a `prefer` user's mission must carry its regions
+explicitly, and the tier bonuses in `lib/career/jobs/relevance.ts` simply never
+fire for an `anywhere` mission. What is **not** done here: the seven call sites
+that pass `mission.preferences.geo_tiers` into `buildNormalizedJob()` still read
+the raw field rather than `rankingGeoTiers()`. The write path
+(`sanitizePreferences`) clears the tiers under `anywhere` and rule 3 makes an
+empty table inert, so the invariant holds today — but a row written outside the
+API could still hold both, and switching those readers is the honest completion
+of this ADR.
+
+---
+
 ## 4. Providers
 
 ```ts

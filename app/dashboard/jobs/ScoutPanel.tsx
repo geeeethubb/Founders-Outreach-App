@@ -13,6 +13,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
+import type { DirectionMode } from '@/lib/career/types'
 import { api } from '@/components/career/api'
 import InlineNotice from '@/components/career/InlineNotice'
 import { scoutingLine } from './direction'
@@ -31,10 +32,16 @@ import {
   runResultsHref,
   type RunDetail,
 } from './run-view'
-import { eventLine, partialReason, recentEvents, runDuration, runHeadline, runSummary, stalenessNote, statsLines, tabSafetyLine } from './run-copy'
+import { eventLine, partialReason, recentEvents, runContinuation, runDuration, runHeadline, runSummary, stalenessNote, statsLines, tabSafetyLine } from './run-copy'
+import { MODE_DESCRIPTIONS, type RunMode } from '@/lib/career/discovery/modes'
 
-// The route clamps to these; the sliders never offer more than it will honour.
-const CAPS = { strategies: 2, rounds: 2, companies: 20, extract: 30 }
+// How big a run is, is ONE choice. The four sliders that used to live here
+// (Strategies, Rounds, Companies, Extract) were implementation details of
+// stages nobody operates, and their numbers were the product's real ceiling —
+// twelve postings per strategy, twelve jobs ranked. The mode carries them now
+// (lib/career/discovery/modes.ts), and the only other thing worth deciding is
+// how much the run may spend.
+const MODE_ORDER: RunMode[] = ['QUICK', 'BROAD', 'EXHAUSTIVE']
 
 export interface ScoutEnvironment {
   /** The newest run the server itself calls queued or running, or null. */
@@ -61,16 +68,21 @@ export async function readScoutEnvironment(): Promise<ScoutEnvironment> {
   return { activeRunId: activeRunIdOf(body), durable: durableOf(body) }
 }
 
-function Slider({ label, value, max, min = 1, onChange, hint }: { label: string; value: number; max: number; min?: number; onChange: (n: number) => void; hint: string }) {
+function ModeCard({ mode, selected, onSelect }: { mode: RunMode; selected: boolean; onSelect: () => void }) {
+  const d = MODE_DESCRIPTIONS[mode]
   return (
-    <label className="block">
-      <span className="flex items-center justify-between text-xs text-slate-600">
-        <span>{label}</span>
-        <span className="font-medium text-slate-900">{value}</span>
+    <button
+      type="button"
+      onClick={onSelect}
+      aria-pressed={selected}
+      className={`text-left rounded-lg border p-3 transition ${selected ? 'border-indigo-500 bg-white ring-1 ring-indigo-200' : 'border-slate-200 bg-white/60 hover:border-slate-300'}`}
+    >
+      <span className="block text-sm font-medium text-slate-900">{d.label}</span>
+      <span className="block text-[11px] text-slate-600 mt-0.5">{d.blurb}</span>
+      <span className="block text-[11px] text-slate-400 mt-1">
+        {d.runtime} · {d.cost}
       </span>
-      <input type="range" min={min} max={max} value={value} onChange={(e) => onChange(Number(e.target.value))} className="w-full" />
-      <span className="text-[11px] text-slate-400">{hint}</span>
-    </label>
+    </button>
   )
 }
 
@@ -86,6 +98,7 @@ const STATUS_STYLE: Record<string, string> = {
 export default function ScoutPanel({
   missionId,
   direction,
+  directionMode,
   initialRunId,
   durable: durableProp,
   onFinished,
@@ -94,6 +107,13 @@ export default function ScoutPanel({
   missionId: string | null
   /** mission.preferences.direction as the page holds it — never fetched again here. */
   direction: string | null | undefined
+  /**
+   * What that direction DOES, resolved with `missionDirectionMode()`. REQUIRED:
+   * "only show me this" hides postings, and a person about to spend money on a
+   * run has to be told that before it starts, not after — so the panel cannot
+   * be mounted without saying which it is.
+   */
+  directionMode: DirectionMode | null
   /** A run to resume showing (from ?run= or the newest active run). */
   initialRunId?: string | null
   /**
@@ -105,10 +125,9 @@ export default function ScoutPanel({
   onFinished: () => void
   onClose: () => void
 }) {
-  const [strategies, setStrategies] = useState(1)
-  const [rounds, setRounds] = useState(1)
-  const [companies, setCompanies] = useState(10)
-  const [extract, setExtract] = useState(15)
+  const [mode, setMode] = useState<RunMode>('BROAD')
+  /** Empty means "the mode's own ceiling". A number overrides it. */
+  const [spend, setSpend] = useState('')
   const [verify, setVerify] = useState(true)
   const [starting, setStarting] = useState(false)
   const [runId, setRunId] = useState<string | null>(initialRunId ?? null)
@@ -181,7 +200,15 @@ export default function ScoutPanel({
     }
   }, [runId])
 
-  const start = useCallback(async () => {
+  /**
+   * Start a run, or CONTINUE one that stopped short.
+   *
+   * A continuation is the same work under a new row: the server reads the
+   * previous run's cursor and skips the plan, the sweep, the companies and the
+   * strategies it already paid for. The cursor is never taken from this
+   * request — the browser only names the run.
+   */
+  const startRun = useCallback(async (continueRun?: string) => {
     // A second click while the first POST is in flight would enqueue a second
     // paid run. One press, one run.
     if (starting) return
@@ -189,7 +216,10 @@ export default function ScoutPanel({
     setError(null)
     setRun(null)
     setRunId(null)
-    const r = await api<unknown>('/api/career/scout', { json: { missionId, strategies, rounds, companies, extract, verify } })
+    const maxSpendUsd = spend.trim() === '' ? undefined : Math.max(0, Number(spend))
+    const r = await api<unknown>('/api/career/scout', {
+      json: { missionId, mode, verify, ...(Number.isFinite(maxSpendUsd) ? { maxSpendUsd } : {}), ...(continueRun ? { continueRun } : {}) },
+    })
     setStarting(false)
     const body = r.data ?? r.body
     const outcome = parseStartResponse(body, r.status)
@@ -209,7 +239,9 @@ export default function ScoutPanel({
     if (legacy && legacy.jobs.total > 0) setRun(legacy)
     setError(r.error ?? 'The run could not be started.')
     finishedRef.current()
-  }, [missionId, strategies, rounds, companies, extract, verify])
+  }, [missionId, mode, spend, verify, starting])
+
+  const start = useCallback(() => startRun(), [startRun])
 
   function reset() {
     setRun(null)
@@ -225,10 +257,10 @@ export default function ScoutPanel({
       <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className="font-medium text-slate-900">Scout now</h2>
-          <p className={`text-xs mt-0.5 ${direction?.trim() ? 'text-slate-700 font-medium' : 'text-slate-500 italic'}`}>{scoutingLine(direction)}</p>
+          <p className={`text-xs mt-0.5 ${direction?.trim() ? 'text-slate-700 font-medium' : 'text-slate-500 italic'}`}>{scoutingLine(direction, directionMode)}</p>
           <p className="text-xs text-slate-500 mt-0.5">
-            Plans search strategies from what you&apos;re scouting for and the mission, checks the companies you chose, searches the web, extracts and
-            verifies postings.
+            Searches the market from what you&apos;re scouting for, checks the companies you chose, reads and verifies what it finds — and keeps going until
+            the searches stop producing anything new, the time runs out, or it reaches the spend limit you set.
           </p>
           <p className={`text-xs mt-0.5 ${durable === true ? 'text-slate-500' : 'text-amber-700'}`}>{tabSafetyLine(durable)}</p>
         </div>
@@ -239,23 +271,42 @@ export default function ScoutPanel({
 
       {!watching && !starting && (
         <>
-          <button type="button" onClick={start} className="mt-4 px-4 py-2 rounded-md bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700">
-            Run scout
-          </button>
+          <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-2">
+            {MODE_ORDER.map((m) => (
+              <ModeCard key={m} mode={m} selected={mode === m} onSelect={() => setMode(m)} />
+            ))}
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-4">
+            <button type="button" onClick={start} className="px-4 py-2 rounded-md bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700">
+              Run scout
+            </button>
+            <label className="flex items-center gap-2 text-xs text-slate-600">
+              Spend at most
+              <span className="flex items-center gap-1">
+                $
+                <input
+                  type="number"
+                  min={0}
+                  step={0.5}
+                  value={spend}
+                  onChange={(e) => setSpend(e.target.value)}
+                  placeholder={MODE_DESCRIPTIONS[mode].cost.replace(/^up to about \$|^about \$/, '').split('–').pop()}
+                  className="w-20 rounded border border-slate-300 px-2 py-1 text-xs"
+                />
+              </span>
+              <span className="text-[11px] text-slate-400">the run starts no further paid work once it reaches this</span>
+            </label>
+          </div>
           <details className="mt-3">
-            <summary className="text-xs text-slate-600 cursor-pointer">Run size</summary>
-            <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-4">
-              <Slider label="Strategies" value={strategies} max={CAPS.strategies} onChange={setStrategies} hint="planner strategies to execute" />
-              <Slider label="Rounds" value={rounds} max={CAPS.rounds} onChange={setRounds} hint="web-search rounds per strategy" />
-              <Slider label="Companies" value={companies} max={CAPS.companies} onChange={setCompanies} hint="companies to check on their boards" />
-              <Slider label="Extract" value={extract} max={CAPS.extract} onChange={setExtract} hint="postings to extract (each is a model call)" />
-            </div>
+            <summary className="text-xs text-slate-600 cursor-pointer">Options</summary>
             <label className="mt-3 flex items-center gap-2 text-xs text-slate-600">
               <input type="checkbox" checked={verify} onChange={(e) => setVerify(e.target.checked)} />
               Verify each posting is open (fetches the page; ambiguous pages cost a model call)
             </label>
             <p className="mt-2 text-[11px] text-slate-400">
-              A deeper run is available from the command line: <code>npm run career:scout</code>.
+              A Broad or Exhaustive run can outlive one pass. It saves where it got to, and if it stops at the time or the spend limit you can continue it
+              from there — the next pass skips the planning, the companies and the searches it already paid for. The same run is available from the command
+              line: <code>npm run career:scout</code>.
             </p>
           </details>
         </>
@@ -264,7 +315,7 @@ export default function ScoutPanel({
       {starting && <p className="mt-4 text-sm text-slate-600">Starting the run…</p>}
       {runId && !run && !starting && !error && <p className="mt-4 text-sm text-slate-600">Picking the run up…</p>}
 
-      {run && <RunState run={run} onRunAgain={reset} busy={busy} />}
+      {run && <RunState run={run} onRunAgain={reset} onContinue={(id) => startRun(id)} busy={busy} />}
 
       {error && (
         <div className="mt-4">
@@ -281,7 +332,7 @@ export default function ScoutPanel({
 }
 
 /** Everything the server said about one run, in the state it is in right now. */
-function RunState({ run, onRunAgain, busy }: { run: RunDetail; onRunAgain: () => void; busy: boolean }) {
+function RunState({ run, onRunAgain, onContinue, busy }: { run: RunDetail; onRunAgain: () => void; onContinue: (runId: string) => void; busy: boolean }) {
   const c = runSummary(run)
   const reason = partialReason(run)
   const stale = stalenessNote(run)
@@ -290,6 +341,10 @@ function RunState({ run, onRunAgain, busy }: { run: RunDetail; onRunAgain: () =>
   // A synchronous pre-016 run has no queryable id, so there is no per-run view to link to.
   const linkable = hasResults && isRunId(run.id)
   const stats = statsLines(run.stats)
+  // Offered only when the run's own report says it stopped short and its
+  // cursor has somewhere to resume from — never on a finished or a saturated
+  // run, where continuing would buy a second pass over an exhausted market.
+  const cont = runContinuation(run)
 
   return (
     <div className="mt-4 space-y-3">
@@ -344,6 +399,19 @@ function RunState({ run, onRunAgain, busy }: { run: RunDetail; onRunAgain: () =>
               {c.rejected} rejected
             </span>
           </div>
+          {cont.canContinue && isRunId(run.id) && (
+            <div className="flex items-center gap-3 flex-wrap">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => onContinue(run.id)}
+                className="px-3 py-1.5 rounded-md border border-indigo-300 text-indigo-700 text-sm font-medium hover:bg-white disabled:opacity-50"
+              >
+                Continue this run
+              </button>
+              {cont.note && <span className="text-xs text-slate-500">{cont.note}</span>}
+            </div>
+          )}
           {stats.length > 0 && (
             <details>
               <summary className="text-xs text-slate-600 cursor-pointer">What the run did, stage by stage</summary>

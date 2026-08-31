@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { isDynamicUsage } from '@/lib/http/dynamic'
-import { getMission, updateMission, type MissionPatch } from '@/lib/career/missions/store'
+import { getMission, missionPatchError, updateMission, type MissionPatch } from '@/lib/career/missions/store'
 
 export const dynamic = 'force-dynamic'
 
@@ -32,12 +32,8 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     const body = (await request.json().catch(() => null)) as MissionPatch | null
     if (!body || typeof body !== 'object' || Array.isArray(body)) return NextResponse.json({ error: 'Body must be a JSON object' }, { status: 400 })
-    if (body.preferences !== undefined && (body.preferences === null || typeof body.preferences !== 'object' || Array.isArray(body.preferences))) {
-      return NextResponse.json({ error: 'preferences must be an object' }, { status: 400 })
-    }
-    if (body.preferences?.direction != null && typeof body.preferences.direction !== 'string') {
-      return NextResponse.json({ error: 'preferences.direction must be a string or null' }, { status: 400 })
-    }
+    const invalid = missionPatchError(body)
+    if (invalid) return NextResponse.json({ error: invalid }, { status: 400 })
     const { mission, error } = await updateMission(user.id, params.id, body)
     if (error || !mission) return NextResponse.json({ error: error ?? 'Update failed' }, { status: 500 })
     return NextResponse.json({ mission })
