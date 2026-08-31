@@ -23,7 +23,7 @@ import type { AgentResult } from '../lib/agents/runtime/types'
 import type { DocumentQaReport, ResumeDocument } from '../lib/career/types'
 import { foreignProperNouns, pickInternship } from '../evals/career/cover-letter'
 import { issuesAreFactual, plantFabrications } from '../evals/career/factuality'
-import { alternateFromFacts } from '../evals/career/minimal-edit'
+import { alternateFromFacts } from '../evals/career/tailoring'
 import type { RawJobPosting } from '../lib/career/sources/types'
 
 let passed = 0

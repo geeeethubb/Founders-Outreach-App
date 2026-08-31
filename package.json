@@ -82,7 +82,7 @@
     "evidence:benchmark": "tsx scripts/evidence-benchmark.ts",
     "eval:career": "tsx scripts/career-eval-all.ts",
     "eval:career-factuality": "tsx scripts/career-eval-factuality.ts",
-    "eval:career-minimal-edit": "tsx scripts/career-eval-minimal-edit.ts",
+    "eval:career-tailoring": "tsx scripts/career-eval-tailoring.ts",
     "eval:career-cover-letter": "tsx scripts/career-eval-cover-letter.ts"
   },
   "dependencies": {

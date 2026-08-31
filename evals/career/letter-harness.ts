@@ -1,4 +1,4 @@
-// Shared no-DB helpers for the three writing suites — factuality, minimal-edit
+// Shared no-DB helpers for the three writing suites — factuality, tailoring
 // and cover-letter (docs/CAREER_OS.md §9). Builds on evals/career/harness.ts
 // (environment, cost meter, result files) and adds what those suites need:
 //

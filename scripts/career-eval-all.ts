@@ -24,7 +24,7 @@ const SUITES: Suite[] = [
   { name: 'discovery', script: 'scripts/career-eval-discovery.ts', results: '.career-out/eval/discovery/results.json' },
   { name: 'fit', script: 'scripts/career-eval-fit.ts', results: '.career-out/eval/fit/results.json' },
   { name: 'factuality', script: 'scripts/career-eval-factuality.ts', results: '.career-out/eval/factuality/results.json' },
-  { name: 'minimal-edit', script: 'scripts/career-eval-minimal-edit.ts', results: '.career-out/eval/minimal-edit/results.json' },
+  { name: 'tailoring', script: 'scripts/career-eval-tailoring.ts', results: '.career-out/eval/tailoring/results.json' },
   { name: 'cover-letter', script: 'scripts/career-eval-cover-letter.ts', results: '.career-out/eval/cover-letter/results.json' },
 ]
 

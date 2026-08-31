@@ -535,7 +535,7 @@ with their own remedy — and keeps the raw text in a disclosure and in the run 
 | `discovery` | P@20 on a benchmark of known companies/boards; duplicate rate; closed-shown-as-open; canonical URL accuracy; location and internship classification | P@20 ≥ 80% · stale shown open < 3% · dupes < 3% · canonical ≥ 95% |
 | `fit` | three Summer 2027 missions over a fixed JD set with planted negatives; rank order and eligibility verdicts; judge on top-k | negatives never in top-k; eligibility correct |
 | `factuality` | adversarial JDs asking for things the bank does not contain; plus fabricated bullets fed straight to the verifier | unsupported claims in output = **0**; verifier catches every planted fabrication |
-| `minimal-edit` | matched role → few/zero changes; mismatched → small targeted changes; edit distance | measured, thresholds recorded |
+| `tailoring` | matched role → no coverage regression; career-adjacent → ≥ 3 **meaningful** changes (emphasis-only excluded); adversarial → 0 meaningful changes | relevance up, factuality unmoved |
 | `documents` | long/short/odd company names, bullet lengths → valid DOCX/PDF, filenames, page count | 100% |
 | `cover-letter` | specificity, truthfulness, growth narrative, non-repetition, no filler; deterministic claim grounding | grounding 100%; judge means recorded |
 
@@ -552,7 +552,7 @@ numbers. Deterministic parts run without credentials on fixtures; judged parts n
 | discovery | duplicates 0% · canonical URL 100% · stale-shown-open 0% · tier at HQ 100% · P@20 85% / 70% / 70% across three runs, pooled 75% (pool-limited; P@10 90–100%) |
 | fit | rank violations 0 · eligibility 95.8% · judge P@10 100% |
 | factuality | unsupported claims in output 0 · planted fabrications caught 16/16 |
-| minimal-edit | distance 0 on matched, mismatched and adversarial JDs |
+| minimal-edit (pre-V2) | distance 0 on matched, mismatched and adversarial JDs — and 0 swaps, which is what prompted Tailoring V2 |
 | cover-letter | grounded 6/6 · one page 6/6 · banned phrases 0 |
 | documents | 40/40 valid, one page, correctly named |
 

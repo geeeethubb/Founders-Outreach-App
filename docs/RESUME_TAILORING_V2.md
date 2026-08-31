@@ -1,9 +1,49 @@
 # Résumé Tailoring V2 — queued workstream
 
-> **Status: QUEUED. Not started.** Begins only after Job Discovery V2 wave 2 is
-> finished, reviewed, committed, the recall and diversity benchmarks have run,
-> `tsc` and the production build are clean, and a checkpoint commit exists.
-> Discovery and tailoring changes must not share a commit.
+> **Status: IN PROGRESS.** Discovery V2 wave 2 is committed (`dabc7fa`), its
+> benchmarks pass, `tsc` and the production build are clean. Tailoring work
+> began after that checkpoint and is in its own commits.
+>
+> **Done:** Step 1 root cause (measured, below) · Step 2 hiring argument in the
+> prompt and the output schema · Step 3 role-theme coverage · budgets raised ·
+> migration 018 · the `minimal-edit` eval rewritten as `tailoring`.
+>
+> **Not done:** the end-to-end DOCX/PDF guarantee · the package UI · the
+> three-archetype acceptance test · the baseline run over 8–10 real jobs, which
+> costs money and has not been run.
+
+## Step 1 result — the root cause, measured
+
+Run over all 14 patches this database already held, for $0:
+
+```
+proposed              32          change types:  reorder 17 · reword 15
+fact-verified         32                         swap 0 · new 0 · remove 0
+reached the document  24          no-op patches: 4/14 (29%)
+                                  cosmetic rewrites: 15/15 (>80% word overlap)
+```
+
+Against the six candidates: **B is ruled out** — the verifier rejected nothing.
+**E is ruled out** — `resume_patch_changes.change_type` has accepted
+`keep/reorder/reword/swap/new/remove` since migration 014, and so does the agent
+schema. **C is not the leak** either: 24 of 32 reached the document; the other 8
+were `pending`, which is the review workflow, not a bug.
+
+It is **F, plus a budget that agreed with it.** The prompt opened *"with the
+smallest truthful set of changes"*, continued *"Often the answer is: nothing"*
+and *"a better one than six cosmetic rewrites"*, and ranked swap/new last as
+*"in a rare case"* — under caps of 6 non-reorder changes, 1 new bullet, and a
+reword fraction of 0.25 that made re-arguing a bullet structurally impossible.
+
+Every reword it did make was of this form:
+
+```
+- Screened 40+ configurations using 73k CPU-hours of ASE/VASP.
++ Screened 40+ configurations using **73k CPU-hours** of ASE/VASP.
+```
+
+which is why `classifyChange` now separates `emphasis` from `rewrite`, and why
+only reorder/rewrite/swap/new/remove count as meaningful.
 
 ## The objective, in the founder's words
 

@@ -1,18 +1,31 @@
-// The MINIMAL-EDIT EVAL (docs/CAREER_OS.md §9). The tailor is told to be
-// restrained; this MEASURES it. Three cases on the real résumé:
+// The TAILORING EVAL (docs/CAREER_OS.md §9). Formerly the minimal-edit eval,
+// which measured restraint — and passed a tailor that did almost nothing.
 //
-//   A  the strong process/manufacturing positive — the master already fits,
-//      so the patch should be small: distance ≤ 0.08, ≤ 3 non-reorder changes.
-//   B  a positive far from the master's ordering (R&D materials) — small,
-//      targeted changes: distance ≤ 0.30, changedFraction ≤ 0.35, and no
-//      bullet reworded past MAX_REWORD_FRACTION unless swapped. One approved
-//      alternate bullet (built verbatim from two facts of the research
-//      experience) is added to the bank so a Level-3 swap is possible; whether
-//      the tailor used it is reported.
+// It was renamed rather than retuned because the name had become a claim about
+// the wrong thing. Measured over 14 live patches, the old objective produced 0
+// swaps, 0 new bullets, 0 removals, and 15 of 15 rewords that only bolded a
+// number already in the bullet. A gate that called that a pass was not neutral;
+// it was holding the tailor there.
+//
+// What is measured now is the V2 objective: MAXIMISE ROLE RELEVANCE SUBJECT TO
+// 100 % EVIDENCE-BACKED FACTUALITY. Three cases on the real résumé:
+//
+//   A  the strong process/manufacturing positive — the master already fits, so
+//      a small patch is legitimately correct here. What must hold is that
+//      tailoring never makes it WORSE: role-theme coverage may not regress.
+//   B  a career-adjacent positive (R&D materials) where the bank holds relevant
+//      evidence the general résumé under-plays. This is the case the old eval
+//      capped at distance ≤ 0.30 and which produced no swaps at all in
+//      production. It must now MAKE AN ARGUMENT: meaningful changes, coverage
+//      that does not fall, and no bullet reworded past MAX_REWORD_FRACTION.
+//      An approved alternate bullet (verbatim from two facts of the research
+//      experience) is added so a Level-3 swap is possible.
 //   C  an adversarial JD — nothing in the evidence serves it, so the honest
-//      patch is (nearly) empty: distance ≈ 0.
+//      patch is (nearly) empty: distance ≈ 0. UNCHANGED, and deliberately so:
+//      C is the reason A and B can be loosened at all. If relevance ever starts
+//      winning here, factuality has stopped winning.
 //
-// Nothing is judged. A and C are scored; B reports.
+// Nothing is judged by a model. A, B and C are scored.
 
 import crypto from 'crypto'
 import type { ToolContext } from '@/lib/agents/runtime/types'
@@ -32,8 +45,15 @@ export const CASE_B_ID = 'jd-pos-04-rd-intern-chemicals'
 export const CASE_C_ID = 'atk-08-keyword-injection'
 
 export const TARGETS = {
-  A: { distance: 0.08, nonReorder: 3 },
-  B: { distance: 0.3, changedFraction: 0.35 },
+  /** The master already fits: do no harm. Coverage may not fall. */
+  A: { coverageDrop: 0 },
+  /**
+   * Career-adjacent: argue for it. Three meaningful changes is a low bar on
+   * purpose — it is the difference between a tailored résumé and a bolded one,
+   * not a target to optimise. `meaningful` excludes emphasis-only rewords.
+   */
+  B: { meaningful: 3, coverageDrop: 0 },
+  /** Nothing in the evidence serves this JD. Unchanged from the minimal-edit era. */
   C: { distance: 0.02 },
 }
 
@@ -55,13 +75,23 @@ export interface CaseReport {
   /** Reword changes whose word-level change exceeds MAX_REWORD_FRACTION. */
   over_reworded: { experience: string; fraction: number; final: string }[]
   alternate: { added: boolean; experience: string | null; used: boolean; status: string | null } | null
+  /** Meaningful vs cosmetic, from classifyChange — emphasis-only rewords are not tailoring. */
+  meaningful: number
+  cosmetic: number
+  by_kind: Record<string, number>
+  /** The case the tailor decided to make before writing anything. */
+  hiring_argument: string
+  /** Role-theme coverage over evidence-SUPPORTED themes only. */
+  themes: { total: number; supported: number; before: number; after: number }
+  coverage_before: number
+  coverage_after: number
   no_change_reason: string | null
   tailor_error: string | null
   changes: { change_type: string; edit_level: number; status: string; experience: string; original: string | null; final: string | null; fraction: number | null }[]
   costUsd: number
 }
 
-export interface MinimalEditResult {
+export interface TailoringEvalResult {
   cases: CaseReport[]
   metrics: MetricResult[]
   costUsd: number
@@ -103,7 +133,7 @@ async function runCase(label: CaseReport['case'], jd: JdLike, bank: EvidenceBank
   const tailorJob = tailorJobFromOpportunity(job)
   log(`case ${label} ${jd.id}: matcher ${map.status}`)
   const tailored = await runTailoringPipeline({ bank, job: tailorJob, evidenceMap: tailorMapFrom(map.map), ctx, jobTerms: jobTermsFor(tailorJob) })
-  for (const r of tailored.runs) await run.trace(r, { eval: 'minimal-edit', case: label })
+  for (const r of tailored.runs) await run.trace(r, { eval: 'tailoring', case: label })
 
   const changes = tailored.changes as VerifiedChange[]
   const live = changes.filter((c) => c.review_status === 'pending')
@@ -124,6 +154,14 @@ async function runCase(label: CaseReport['case'], jd: JdLike, bank: EvidenceBank
     distance: tailored.distance.distance, changedFraction: tailored.distance.changedFraction, reordered: tailored.distance.reordered,
     over_reworded: overReworded,
     alternate: alternate ? { added: true, experience: experienceLabelOf(bank, alternate.experience_id ?? ''), used: !!swap, status: swap?.review_status ?? null } : null,
+    meaningful: tailored.counts.meaningful, cosmetic: tailored.counts.cosmetic,
+    by_kind: { ...tailored.counts.byKind },
+    hiring_argument: tailored.hiring_argument,
+    themes: {
+      total: tailored.coverage.total, supported: tailored.coverage.supported,
+      before: tailored.coverage.before, after: tailored.coverage.after,
+    },
+    coverage_before: round4(tailored.coverage.beforeShare), coverage_after: round4(tailored.coverage.afterShare),
     no_change_reason: tailored.no_change_reason, tailor_error: tailored.error,
     changes: changes.map((c) => ({
       change_type: c.change_type, edit_level: c.edit_level, status: c.review_status, experience: experienceLabelOf(bank, c.experience_id),
@@ -135,7 +173,7 @@ async function runCase(label: CaseReport['case'], jd: JdLike, bank: EvidenceBank
 
 // ─── The suite ───────────────────────────────────────────────────────────────
 
-export async function runMinimalEditEval(params: { stable: StableBank; mission: CareerMission; ctx: ToolContext; run: CareerRun; log?: (l: string) => void }): Promise<MinimalEditResult> {
+export async function runTailoringEval(params: { stable: StableBank; mission: CareerMission; ctx: ToolContext; run: CareerRun; log?: (l: string) => void }): Promise<TailoringEvalResult> {
   const log = params.log ?? (() => {})
   const { bank } = params.stable
   const cases: CaseReport[] = []
@@ -170,18 +208,45 @@ export async function runMinimalEditEval(params: { stable: StableBank; mission: 
   const num = (metric: string, actual: number | null, target: string, pass: boolean, note?: string): MetricResult =>
     ({ metric, actual: actual ?? -1, display: actual === null ? 'n/a' : String(actual), target, pass, n: 1, ...(note ? { note } : {}) })
 
+  // A coverage delta is only meaningful when the tailor named a supported theme.
+  // With none named there is nothing to regress, so the do-no-harm targets pass
+  // and the absence is stated in the note rather than scored as a win.
+  const drop = (x: CaseReport | undefined) => (!x || x.themes.supported === 0 ? 0 : round4(x.coverage_before - x.coverage_after))
+  const covNote = (x: CaseReport | undefined) =>
+    !x ? 'did not run'
+      : x.themes.supported === 0 ? `no evidence-supported theme named (${x.themes.total} themes total) — nothing to cover`
+      : `${x.themes.before}/${x.themes.supported} supported themes before, ${x.themes.after}/${x.themes.supported} after`
+
   const metrics: MetricResult[] = [
-    num('A distance', A?.distance ?? null, `<= ${TARGETS.A.distance}`, !!A && A.distance <= TARGETS.A.distance, A ? `changed ${A.changedFraction}, reordered ${A.reordered}` : 'case A did not run'),
-    count('A non-reorder changes proposed', A?.non_reorder_proposed ?? 0, A?.proposed ?? 0, `<= ${TARGETS.A.nonReorder}`, !!A && A.non_reorder_proposed <= TARGETS.A.nonReorder, A ? `${A.non_reorder_supported} of them SUPPORTED` : ''),
-    num('B distance (reported)', B?.distance ?? null, `<= ${TARGETS.B.distance}`, !!B && B.distance <= TARGETS.B.distance, B ? `changedFraction ${B.changedFraction} (<= ${TARGETS.B.changedFraction}: ${B.changedFraction <= TARGETS.B.changedFraction})` : 'case B did not run'),
-    count('B bullets reworded past MAX_REWORD_FRACTION (reported)', B?.over_reworded.length ?? 0, B?.supported ?? 0, '0', !!B && B.over_reworded.length === 0, B?.alternate ? `alternate ${B.alternate.used ? `used (${B.alternate.status})` : 'not used'}` : 'no alternate'),
+    // ─── A: the master already fits. Do no harm. ───
+    num('A coverage regression', drop(A), `<= ${TARGETS.A.coverageDrop}`, !!A && drop(A) <= TARGETS.A.coverageDrop, covNote(A)),
+    count('A meaningful changes (reported)', A?.meaningful ?? 0, A?.proposed ?? 0, 'reported', true,
+      A ? `${A.cosmetic} cosmetic · ${JSON.stringify(A.by_kind)} · distance ${A.distance}` : 'case A did not run'),
+
+    // ─── B: career-adjacent. Make the argument. ───
+    count('B meaningful changes', B?.meaningful ?? 0, B?.proposed ?? 0, `>= ${TARGETS.B.meaningful}`, !!B && B.meaningful >= TARGETS.B.meaningful,
+      B ? `${B.cosmetic} cosmetic · ${JSON.stringify(B.by_kind)} · "${B.hiring_argument.slice(0, 80)}"` : 'case B did not run'),
+    num('B coverage regression', drop(B), `<= ${TARGETS.B.coverageDrop}`, !!B && drop(B) <= TARGETS.B.coverageDrop, covNote(B)),
+    count('B used the approved alternate (reported)', B?.alternate?.used ? 1 : 0, 1, 'reported', true,
+      B?.alternate ? `alternate ${B.alternate.used ? `used (${B.alternate.status})` : 'not used'}` : 'no alternate added'),
+
+    // ─── Factuality guards — these did not move. ───
+    count('B bullets reworded past MAX_REWORD_FRACTION', B?.over_reworded.length ?? 0, B?.supported ?? 0, '0', !!B && B.over_reworded.length === 0,
+      B?.over_reworded.length ? B.over_reworded.map((o) => `${o.experience} ${o.fraction}`).join(' | ') : 'none'),
     num('C distance', C?.distance ?? null, `<= ${TARGETS.C.distance} (≈ 0)`, !!C && C.distance <= TARGETS.C.distance, C ? `${C.proposed} proposed, ${C.supported} supported` : 'case C did not run'),
+    count('C meaningful changes', C?.meaningful ?? 0, C?.proposed ?? 0, '0', !!C && C.meaningful === 0,
+      C ? `nothing in the evidence serves this JD; no_change_reason: ${(C.no_change_reason ?? '(none)').slice(0, 90)}` : 'case C did not run'),
   ]
 
   return { cases, metrics, costUsd: round4(cases.reduce((s, x) => s + x.costUsd, 0)), errors }
 }
 
-/** A and C are scored; B is reported. */
-export function minimalEditPassed(r: MinimalEditResult): boolean {
+/**
+ * Everything not marked "(reported)" is scored. Case B's errors are tolerated
+ * the way they always were — B needs an alternate bullet built from the bank,
+ * and a bank without a two-fact research experience cannot supply one. That is
+ * a fixture gap, not a tailoring failure.
+ */
+export function tailoringPassed(r: TailoringEvalResult): boolean {
   return r.metrics.filter((m) => !/\(reported\)/.test(m.metric)).every((m) => m.pass) && r.errors.every((e) => e.startsWith('case B'))
 }

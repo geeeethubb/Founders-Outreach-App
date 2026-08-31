@@ -114,7 +114,7 @@ export function editDistance(a: string, b: string): number {
 /**
  * Mean edit distance across (original, proposed) pairs, normalized by the
  * longer string so a long bullet and a short one are comparable. This is the
- * minimal-edit measurement: a matched role should score near zero.
+ * tailoring measurement: a matched role should score near zero.
  */
 export function meanEditDistance(pairs: { original: string; proposed: string }[]): number {
   if (pairs.length === 0) return 0

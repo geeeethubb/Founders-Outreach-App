@@ -1,15 +1,15 @@
 // The MINIMAL-EDIT EVAL from the command line (docs/CAREER_OS.md §9).
 //
-//   npx tsx scripts/career-eval-minimal-edit.ts
+//   npx tsx scripts/career-eval-tailoring.ts
 //
 // No database. Needs ./Zuyu_Resume.docx (or CAREER_RESUME) and
 // ANTHROPIC_API_KEY. Three tailoring runs with their verifier calls; ≈ $2–4
 // on a first run, free on a re-run of unchanged inputs (case C shares the
-// factuality suite's cache). Results: .career-out/eval/minimal-edit/results.json.
+// factuality suite's cache). Results: .career-out/eval/tailoring/results.json.
 // Exit 1 when case A or C misses its target; case B only reports.
 
 import { costMeter, evalMission, evalToolContext, memoryRun, metricsTable, money, requireLiveEnv, short, writeResult } from '../evals/career/harness'
-import { minimalEditPassed, runMinimalEditEval } from '../evals/career/minimal-edit'
+import { tailoringPassed, runTailoringEval } from '../evals/career/tailoring'
 import { loadStableBank } from '../evals/career/letter-harness'
 import { printTable } from '../evals/career/metrics'
 
@@ -25,7 +25,7 @@ async function main(): Promise<void> {
   const stable = await loadStableBank(resume, ctx)
   console.log(`bank: ${stable.bank.experiences.length} experiences · ${stable.bank.bullets.length} bullets · ${stable.fromCache ? 'stable ids from cache' : 'fresh ids'} · ${money(meter.lap('bank').costUsd)}\n`)
 
-  const r = await runMinimalEditEval({ stable, mission, ctx, run, log: (l) => console.log(`  ${l}`) })
+  const r = await runTailoringEval({ stable, mission, ctx, run, log: (l) => console.log(`  ${l}`) })
   const pipeline = meter.lap('extract + match + tailor + verify')
 
   console.log('\n── per case ──')
@@ -51,9 +51,9 @@ async function main(): Promise<void> {
   const elapsed = Math.round((Date.now() - started) / 1000)
   console.log(`\ncost: ${money(meter.total())} this process (${pipeline.calls} live calls, ${pipeline.cached} cached) · agents ${money(r.costUsd)} · ${elapsed}s`)
 
-  const file = writeResult('minimal-edit', 'results.json', { ran_at: new Date().toISOString(), metrics: r.metrics, cases: r.cases, errors: r.errors, cost: { process: meter.total(), laps: meter.laps(), agents: r.costUsd }, elapsed_s: elapsed })
+  const file = writeResult('tailoring', 'results.json', { ran_at: new Date().toISOString(), metrics: r.metrics, cases: r.cases, errors: r.errors, cost: { process: meter.total(), laps: meter.laps(), agents: r.costUsd }, elapsed_s: elapsed })
   console.log(`wrote ${file}`)
-  process.exitCode = minimalEditPassed(r) ? 0 : 1
+  process.exitCode = tailoringPassed(r) ? 0 : 1
 }
 
 main().catch((e) => {

@@ -842,7 +842,12 @@ Plants: appended tools, replaced numbers, "Led a team of 12 to build", swapped t
 bullets across experiences, an invented funding event. The two verifier-only catches are the
 invented event and the merged project — structure the deterministic gate cannot see.
 
-### 13.5 Minimal edit — `eval:career-minimal-edit`
+### 13.5 Tailoring — `eval:career-tailoring`
+
+> Renamed from `minimal-edit` in Tailoring V2. The old name described the old objective, and a
+> gate that scored restraint was holding the tailor still rather than measuring it.
+
+**The pre-V2 result, kept because it is the evidence for the rewrite:**
 
 | Case | Distance | Non-reorder changes | Levels |
 |---|---|---|---|
@@ -850,8 +855,25 @@ invented event and the merged project — structure the deterministic gate canno
 | B · mismatched (computational chemistry) | 0 (≤ 0.30), changedFraction 0 | 1 | L1, L2 |
 | C · adversarial | **0** (≤ 0.02) | 0 | L1 ×5 |
 
-The approved alternate bullet planted for case B was not used — the tailor is conservative to
-the point of never swapping on this résumé (see the gap in [BUILD_LOG.md](BUILD_LOG.md)).
+The approved alternate bullet planted for case B was not used — the tailor was conservative to
+the point of never swapping on this résumé. Every one of case A's three changes was
+emphasis-only. The eval passed. That is the failure the V2 targets exist to catch, and it was
+confirmed in production: across 14 live patches, 0 swaps, 0 new bullets, 0 removals, and 15 of
+15 rewords bolding a number the bullet already had.
+
+**What is scored now:**
+
+| Case | What it asserts | Target |
+|---|---|---|
+| A · matched | the master already fits, so do no harm | role-theme coverage regression ≤ 0 |
+| B · career-adjacent | make an argument | **≥ 3 meaningful changes**, coverage regression ≤ 0 |
+| B · factuality guard | no bullet reworded past `MAX_REWORD_FRACTION` | 0 |
+| C · adversarial | nothing in the evidence serves it | distance ≤ 0.02 · **0 meaningful changes** |
+
+`meaningful` excludes emphasis-only rewords (`classifyChange`), so the pre-V2 behaviour scores
+zero on case B by construction. Coverage counts **evidence-supported themes only** — counting
+the rest would make coverage a number the résumé could raise only by claiming things. Case C is
+unchanged from the minimal-edit era on purpose: it is the reason A and B could be loosened.
 
 ### 13.6 Cover letter — `eval:career-cover-letter` · 4 real companies with live postings + 2 fictional
 

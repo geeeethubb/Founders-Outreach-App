@@ -2,7 +2,7 @@
 //
 // The minimum-edit objective is enforced by MEASURING, not by asking the
 // tailor to be restrained. Every patch records how far the final bullets are
-// from the master, and the minimal-edit eval fails a run that rewrote more
+// from the master, and the tailoring eval fails a run that rewrote more
 // than it needed to. Token-level, so "$4M+" is one token and a reworded verb
 // is one edit rather than five characters.
 
