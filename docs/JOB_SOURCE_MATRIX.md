@@ -142,6 +142,71 @@ Whether each exposes an unauthenticated listing endpoint is verification debt,
 to be settled before an adapter is written.
 
 
+
+## The unit economics that decide it
+
+Google Jobs SERP providers return **10 results per request**, so cost per
+*request* understates cost per *job* by 100x. Normalised to **$ per 1,000 jobs**:
+
+| Provider | $ / 1,000 jobs | Internship filter | Notes |
+|---|---|---|---|
+| **DataForSEO** | **~$0.06** | **`employment_type: intern`** | 200 results/task, 30-day retention |
+| Scrapingdog | ~$4.50 | none | no `description` or `job_id` in docs — disqualifying |
+| Bright Data SERP | ~$15 | unverified | **5,000 requests/month free**; won *Meta* and *X Corp* |
+| SearchApi.io | ~$25 | none | Bearer header; 100 free |
+| SerpApi | ~$100 | `chips` deprecated | the only $2M indemnity, from $150/mo |
+| **TheirStack** (aggregator, not SERP) | $6–$32 | **`employment_statuses_or: internship`** | billed **per job returned**; storage explicitly permitted |
+| **ATS public APIs** | **$0** | Lever `commitment`; else title | canonical URL by construction |
+
+DataForSEO is ~75x cheaper per job than the next usable SERP option and is the
+only one with a real internship filter. That settles the paid slot.
+
+## Two more providers worth knowing about
+
+### TheirStack — the best filters, and a purpose clause to settle first
+236M postings from 356k sources (job boards, ATS platforms, career pages);
+`employment_statuses_or: "internship"`, regex title/description filters,
+`property_exists_or: ["final_url"]` to require a resolved apply URL, and
+**storage is explicitly permitted** — *"perpetual license to retain and continue
+to use internally, after termination, all TheirStack data lawfully obtained"*.
+$49/mo for 1,500 jobs down to $1.10/1,000 at volume, **billed per job returned**,
+4 requests/second. Two cautions: their terms scope permitted use to
+*"business-to-business sales, marketing, recruiting, or business development"* —
+a consumer job-search app is none of those four, and that needs written
+clarification before building on it — and their privacy policy says they source
+by *"scanning the web… company LinkedIn site"*, so their rows inherit LinkedIn's
+objections. Filterable away with `url_domain_or`.
+
+### PredictLeads — the best legal posture, with an unverified middle
+Crawls **company career pages and ATS integrations only** — no LinkedIn, no
+Indeed, no Glassdoor. ~9.8M active openings, 1M+ found weekly, refreshed every
+36 hours, and **up to 1,000 records per credit** ($40 minimum, $0.04/credit
+falling to $0.002) — an order of magnitude cheaper per job than anything else
+here. The apply URL is canonical by construction because the crawl target *is*
+the employer's page. **But their docs would not render the query-parameter
+tables, so whether an internship or date filter exists at all is unverified**,
+and their public terms are a website ToS that bars "redistribute" rather than a
+data licence. Worth a sales conversation; not a commitment.
+
+## The LinkedIn question is settled: take none of it
+
+- **Proxycurl is dead.** Sued by LinkedIn January 2025, settled, **shut down
+  4 July 2025** at ~$10M ARR. Its founder's retrospective is the clearest
+  statement of the risk: *"Legal does not mean safe"*, *"buying from vendors —
+  the chain of custody doesn't cleanse exposure"*, and *"Do not build your
+  company on LinkedIn data."*
+- **LinkedIn v. ProAPIs** (filed October 2025) reportedly settled February 2026.
+- LinkedIn's User Agreement §8.2 (effective 2025-11-03) reaches **downstream
+  possession**, not just collection, and **survives account termination**.
+
+Two suits in twelve months, both ending with the scraper gone. So: no LinkedIn
+data, from any vendor, at any price — and where a broad aggregator mixes
+LinkedIn-derived rows in, filter them out by source domain.
+
+**Handshake** is closed to us: its EDU API is *"only allowed to Career Services
+partners"*. **Built In** and **ZipRecruiter** publish no job-search API;
+ZipRecruiter reaches us indirectly through Google Jobs.
+
 ## Cross-cutting facts that constrain every SERP provider
 
 - **Google removed `&num=100` in September 2025.** Ten results per page is now
@@ -190,7 +255,7 @@ bypassing authentication, CAPTCHAs, robots.txt or platform protections.
 | 1 | Simplify Summer 2027 feed | free, daily, 775 active S2027 postings, canonical URLs that seed ATS tenants | $0 |
 | 1 | Company-first sweep (Targets/Watching) | early sight of postings before they are indexed | $0 |
 | 1 | Recruitee + Personio adapters | two more free, no-auth ATS families | $0 |
-| 2 | **DataForSEO Google Jobs** | `intern` filter, 200 results/task, ~$0.012 per 200 results — the LinkedIn/Indeed market at cents per run | $50 min, pennies per run |
+| 2 | **DataForSEO Google Jobs** | `intern` filter, 200 results/task, **~$0.06 per 1,000 jobs** — ~75x cheaper than the next usable SERP option | $50 min, pennies per run |
 | 3 | Oracle Fusion + iCIMS adapters | the ATS families large industrial employers actually run | $0 |
 | 4 | SerpApi (optional second provider) | independent of DataForSEO, and the only $2M indemnity — but 17x the cost and live litigation | $150/mo if adopted |
 
