@@ -10,7 +10,7 @@ import type { RawJobPosting } from '../sources/types'
 import type { NormalizedJob } from './normalize'
 
 const SOURCE_RANK: Record<JobSourceType, number> = {
-  greenhouse: 0, lever: 0, ashby: 0, smartrecruiters: 0, workable: 0,
+  greenhouse: 0, lever: 0, ashby: 0, smartrecruiters: 0, workable: 0, workday: 0,
   careers_page: 1, manual: 2, web_search: 3, aggregator: 4,
 }
 

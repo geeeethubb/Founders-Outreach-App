@@ -307,10 +307,19 @@ export interface CompanyCareersExtension {
 
 // ─── Jobs ────────────────────────────────────────────────────────────────────
 
-export type AtsType = 'greenhouse' | 'lever' | 'ashby' | 'smartrecruiters' | 'workable' | 'other'
+/**
+ * Applicant tracking systems we can LIST postings from.
+ *
+ * `workday` is the one that matters for supply: nearly every large industrial,
+ * energy, semiconductor and pharma employer runs it (Illumina, 3M, ExxonMobil,
+ * Intel, Amgen, Marathon…), and without an adapter every one of them answers
+ * "no public board detected". Its identifier carries three parts —
+ * `tenant/wdN/site` — because a Workday board needs all three to address.
+ */
+export type AtsType = 'greenhouse' | 'lever' | 'ashby' | 'smartrecruiters' | 'workable' | 'workday' | 'other'
 
 export type JobSourceType =
-  | 'greenhouse' | 'lever' | 'ashby' | 'smartrecruiters' | 'workable'
+  | 'greenhouse' | 'lever' | 'ashby' | 'smartrecruiters' | 'workable' | 'workday'
   | 'careers_page' | 'web_search' | 'manual' | 'aggregator'
 
 export type WorkMode = 'remote' | 'hybrid' | 'onsite' | 'unknown'
