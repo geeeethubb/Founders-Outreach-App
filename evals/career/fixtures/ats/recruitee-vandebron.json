@@ -1,0 +1,448 @@
+{
+ "offers": [
+  {
+   "position": 504,
+   "careers_apply_url": "https://werkenbij.vandebron.nl/o/sourcing-pricing-analyst/c/new",
+   "close_at": null,
+   "state_code": "NH",
+   "sharing_image": null,
+   "max_hours": null,
+   "sharing_description": "Who we areAt Vandebron, we're transforming the energy landscape, steering away from the conventional to champion sustainability. Born in 2014, our journey began with Chapter 1, disrupting the market w",
+   "locations": [
+    {
+     "id": 62501,
+     "name": "Amsterdam",
+     "state": "Noord-Holland",
+     "country": "Netherlands",
+     "city": "Amsterdam",
+     "translations": {
+      "en": {
+       "name": "Amsterdam",
+       "city": "Amsterdam",
+       "postal_code": "1013KS",
+       "street": "Grote Bickersstraat 2",
+       "note": null
+      }
+     },
+     "country_code": "NL",
+     "state_code": "NH",
+     "postal_code": "1013KS",
+     "street": "Grote Bickersstraat 2",
+     "note": null
+    }
+   ],
+   "min_hours_per_week": null,
+   "options_photo": "off",
+   "salary": {
+    "max": null,
+    "min": null,
+    "period": null,
+    "currency": null
+   },
+   "title": "Sourcing & Pricing Analyst",
+   "mailbox_email": "job.onosp@vandebron.recruitee.com",
+   "sharing_title": "Sourcing & Pricing Analyst",
+   "options_title": "off",
+   "options_cover_letter": "optional",
+   "country_code": "NL",
+   "highlight": null,
+   "location": "Amsterdam, Noord-Holland, Nederland",
+   "locations_question_type": "multiple_choice",
+   "options_phone": "required",
+   "education_code": "bachelor_degree",
+   "options_cv": "required",
+   "max_hours_per_week": null,
+   "category_code": "finance",
+   "translations": {
+    "en": {
+     "description": "<h3><strong>Who we are</strong></h3><p>At Vandebron, we're transforming the energy landscape, steering away from the conventional to champion sustainability. Born in 2014, our journey began with Chapter 1, disrupting the market with a transparent platform connecting consumers directly to local, green energy producers. Now, in Chapter 2, we are dedicated to ensuring 100% green energy availability, 100% of the time. Think smart solutions: flexible use of wind and solar farms, Smart EV Charging, and efficient energy storage.</p><p style=\"min-height: 1.7em;\"></p><p>No waiting around, we actively shape a sustainable future. Good energy, smart solutions: that's Vandebron.</p><p style=\"min-height: 1.7em;\"></p><h3><strong>Your impact</strong></h3><p>As our Sourcing &amp; Pricing Analyst, internally called Gross Margin Analyst, you <strong>play a pivotal role in Vandebron’s commercial success and green mission by analyzing and optimizing our pricing and sourcing strategies</strong>. Positioned within our newly established Pricing &amp; Sourcing Team, you will bridge the gap between energy market dynamics, procurement costs, data engineering, and consumer needs.</p><p style=\"min-height: 1.7em;\"></p><p>In this role, you won't just generate static reports, you will <strong>actively build and scale the data warehouse infrastructure in dbt and Snowflake</strong> that powers our commercial decisions from energy sourcing all the way to end-consumer pricing. Working closely with the Portfolio Management, Commerce, Finance, and Strategy teams, you will turn complex energy market dynamics into actionable data models, ensuring our offerings remain highly competitive while maximizing our gross margins.<br></p><p>In this job, you will be reporting directly to Jeroen van Rooij, Manager Sourcing &amp; Pricing.</p><p style=\"min-height: 1.7em;\"></p><p>Note: You may notice a similar job listing on our careers page titled \"Gross Margin Analyst\" We are testing two job titles to see which resonates best with applicants, but they represent the exact same role. The official internal title for this position will be Gross Margin Analyst.</p><p style=\"min-height: 1.7em;\"></p><h3><strong>What you’ll do</strong></h3><ul><li><p><strong>Optimize gross margin &amp; pricing:</strong> Conduct in-depth analytical modeling to optimize commercial pricing for energy contracts and flexibility solutions, balancing purchase costs, margin targets, risk premiums, and market competitiveness.</p></li><li><p><strong>Build &amp; scale data models:</strong> Design, build, and maintain production-grade data models and architecture in <strong>dbt and Snowflake</strong> to enable scalable, automated reporting from sourcing to pricing.</p></li><li><p><strong>Sourcing &amp; customer value analysis:</strong> Evaluate sourcing strategies and procurement efficiencies alongside Portfolio Management. Build customer value models and analyze specific customer segments to identify commercial opportunities.</p></li><li><p><strong>Drive strategic projects:</strong> Take the lead on modeling new regulatory frameworks (e.g., ETS2, “green gas” mandates) and build processes where none currently exist, establishing robust data pipelines and completeness controls.</p></li><li><p><strong>Monitor market &amp; competitor dynamics:</strong> Track energy market developments, tariff structures, price volatility, and competitive offerings using custom scrapers and dashboards.</p></li><li><p><strong>Enable smart decision-making:</strong> Develop real-time tools, automated dashboards (e.g., Lightdash/PowerBI), and commercial business cases to evaluate the financial and P&amp;L impact of new pricing strategies.</p></li></ul><p style=\"min-height: 1.7em;\"></p><h3><strong>What you bring</strong></h3><ul><li><p><strong>Technical &amp; data modeling expertise:</strong> Proven experience building and scaling data models using <strong>dbt</strong> and <strong>Snowflake</strong> (or similar tools like Databricks, PostgreSQL) alongside advanced <strong>SQL</strong> skills.</p></li><li><p><strong>Margin &amp; pricing acumen:</strong> Strong background in gross margin analysis, commercial pricing optimization, and financial metrics (Customer Lifetime Value, cost-to-acquire, P&amp;L impact). Python and BI tool proficiency (Lightdash, PowerBI) is a plus.</p></li><li><p><strong>Energy market affinity:</strong> Solid understanding of (or strong affinity for) energy procurement, tariff structures, risk premiums, and market dynamics.</p></li><li><p><strong>Commercial &amp; tactical mindset:</strong> Curiosity for where customer value lies, combined with a tactical mindset (6–12 month outlook) to align pricing strategy with broader business goals.</p></li><li><p><strong>Communication &amp; stakeholder skills:</strong> Proactive, self-driven, and adept at translating complex pricing and data topics into clear insights for non-expert stakeholders across Commerce, Finance, and Strategy.</p></li><li><p><strong>Language:</strong> Fluency in <strong>English</strong> is required. Dutch is a nice-to-have, but not essential.</p></li></ul><p style=\"min-height: 1.7em;\"></p><h3><strong>Why join Vandebron?</strong></h3><ul><li><p>High impact on Chapter 2: You will directly shape the commercial core of our business as we push toward 100% green energy availability 100% of the time.</p></li><li><p>Build from the ground up: As a foundational member of the new Pricing &amp; Sourcing team, you’ll have significant autonomy to build data structures, scrapers, and sourcing workflows from scratch.</p></li><li><p>More than number crunching: This position offers a rare hybrid focus across data engineering, sourcing strategy, financial modeling, and commercial execution, giving you far more ownership than traditional analyst roles.</p></li></ul><p style=\"min-height: 1.7em;\"></p><h3><strong>A career move that matters</strong></h3><ul><li><p>Master advanced energy data: Deepen your expertise in energy procurement, customer value modeling, and gross margin strategy while mastering production-grade data modeling in dbt and Snowflake.</p></li><li><p>Set up new sourcing processes: Within your first 6–12 months, you will establish end-to-end, semi-automated sourcing workflows and controls for new regulatory changes (e.g., ETS2 and green gas) and new energy products.</p></li><li><p>Deliver real-time pricing agility: Build a data-driven pricing framework and automated dashboards that make Vandebron significantly faster and smarter in responding to market changes.</p></li></ul><p style=\"min-height: 1.7em;\"></p><h3><strong>What’s in it for you</strong></h3><ul><li><p>A nice salary.</p></li><li><p>An annual bonus based on company performance.</p></li><li><p>30 days of paid leave per year.</p></li><li><p>Additional paid time off for life events (moving, wedding celebrations, enhanced parental leave), Liberation Day off every year, and on top of that 2 extra days off per year: one for volunteering, one for choosing sustainable travel.</p></li><li><p>Work abroad for up to 6 weeks per year (max. 4 consecutive, including up to 4 weeks outside the EU).</p></li><li><p>A possibility to take a sabbatical after 3 years.</p></li><li><p>€1,200 annual learning budget + unlimited access to L&amp;D programs.</p></li><li><p>Strong focus on your well-being, with unlimited access to the mental health platform OpenUp.</p></li><li><p>A solid pension scheme.</p></li><li><p>€50 net allowance per month for phone &amp; WiFi.</p></li><li><p>A one-time €200 home office setup budget.</p></li><li><p>Discount on your Vandebron invoice.</p></li><li><p>A flexible hybrid setup between home and our carbon-neutral Amsterdam office.</p></li><li><p>Daily free, healthy, vegetarian lunches cooked in-house.</p></li><li><p>An NS Business Card if you live 10km+ from the office.</p></li></ul><p style=\"min-height: 1.7em;\"></p><h3><strong>Interested?</strong></h3><p>If this role excites you, apply via this page.</p><p style=\"min-height: 1.7em;\"></p><p>Still have questions? Feel free to ask via <a rel=\"noopener\" target=\"_blank\" href=\"mailto:tommythomassen@vandebron.nl\">tommythomassen@vandebron.nl</a>.<br></p><p><em>At Vandebron, we believe in diversity, inclusiveness, and equal career opportunities. Be your authentic self: and it’s totally okay with us if you don’t mention your gender or date of birth on your resume. We also care about your privacy and handle your data carefully. Under the GDPR, you are not required to provide us with any information about your health, race/nationality, or religion, and you may also omit your social security number (BSN) and passport photo from your job application documentation.</em></p>",
+     "title": "Sourcing & Pricing Analyst",
+     "highlight": null,
+     "requirements": null,
+     "sharing_image": null,
+     "locations_question": "What is your preferred work location?",
+     "sharing_description": "Who we areAt Vandebron, we're transforming the energy landscape, steering away from the conventional to champion sustainability. Born in 2014, our journey began with Chapter 1, disrupting the market w",
+     "sharing_title": "Sourcing & Pricing Analyst"
+    }
+   },
+   "open_questions": [
+    {
+     "id": 4305987,
+     "position": 1,
+     "options": {},
+     "required": false,
+     "body": "Describe a time you built a model to optimize commercial pricing or gross margin.",
+     "kind": "text",
+     "translations": {
+      "en": {
+       "body": "Describe a time you built a model to optimize commercial pricing or gross margin."
+      }
+     },
+     "open_question_options": []
+    }
+   ],
+   "locations_question": "What is your preferred work location?",
+   "cover_image": null,
+   "city": "Amsterdam",
+   "options_salutation": "off",
+   "description": "<h3><strong>Who we are</strong></h3><p>At Vandebron, we're transforming the energy landscape, steering away from the conventional to champion sustainability. Born in 2014, our journey began with Chapter 1, disrupting the market with a transparent platform connecting consumers directly to local, green energy producers. Now, in Chapter 2, we are dedicated to ensuring 100% green energy availability, 100% of the time. Think smart solutions: flexible use of wind and solar farms, Smart EV Charging, and efficient energy storage.</p><p style=\"min-height: 1.7em;\"></p><p>No waiting around, we actively shape a sustainable future. Good energy, smart solutions: that's Vandebron.</p><p style=\"min-height: 1.7em;\"></p><h3><strong>Your impact</strong></h3><p>As our Sourcing &amp; Pricing Analyst, internally called Gross Margin Analyst, you <strong>play a pivotal role in Vandebron’s commercial success and green mission by analyzing and optimizing our pricing and sourcing strategies</strong>. Positioned within our newly established Pricing &amp; Sourcing Team, you will bridge the gap between energy market dynamics, procurement costs, data engineering, and consumer needs.</p><p style=\"min-height: 1.7em;\"></p><p>In this role, you won't just generate static reports, you will <strong>actively build and scale the data warehouse infrastructure in dbt and Snowflake</strong> that powers our commercial decisions from energy sourcing all the way to end-consumer pricing. Working closely with the Portfolio Management, Commerce, Finance, and Strategy teams, you will turn complex energy market dynamics into actionable data models, ensuring our offerings remain highly competitive while maximizing our gross margins.<br></p><p>In this job, you will be reporting directly to Jeroen van Rooij, Manager Sourcing &amp; Pricing.</p><p style=\"min-height: 1.7em;\"></p><p>Note: You may notice a similar job listing on our careers page titled \"Gross Margin Analyst\" We are testing two job titles to see which resonates best with applicants, but they represent the exact same role. The official internal title for this position will be Gross Margin Analyst.</p><p style=\"min-height: 1.7em;\"></p><h3><strong>What you’ll do</strong></h3><ul><li><p><strong>Optimize gross margin &amp; pricing:</strong> Conduct in-depth analytical modeling to optimize commercial pricing for energy contracts and flexibility solutions, balancing purchase costs, margin targets, risk premiums, and market competitiveness.</p></li><li><p><strong>Build &amp; scale data models:</strong> Design, build, and maintain production-grade data models and architecture in <strong>dbt and Snowflake</strong> to enable scalable, automated reporting from sourcing to pricing.</p></li><li><p><strong>Sourcing &amp; customer value analysis:</strong> Evaluate sourcing strategies and procurement efficiencies alongside Portfolio Management. Build customer value models and analyze specific customer segments to identify commercial opportunities.</p></li><li><p><strong>Drive strategic projects:</strong> Take the lead on modeling new regulatory frameworks (e.g., ETS2, “green gas” mandates) and build processes where none currently exist, establishing robust data pipelines and completeness controls.</p></li><li><p><strong>Monitor market &amp; competitor dynamics:</strong> Track energy market developments, tariff structures, price volatility, and competitive offerings using custom scrapers and dashboards.</p></li><li><p><strong>Enable smart decision-making:</strong> Develop real-time tools, automated dashboards (e.g., Lightdash/PowerBI), and commercial business cases to evaluate the financial and P&amp;L impact of new pricing strategies.</p></li></ul><p style=\"min-height: 1.7em;\"></p><h3><strong>What you bring</strong></h3><ul><li><p><strong>Technical &amp; data modeling expertise:</strong> Proven experience building and scaling data models using <strong>dbt</strong> and <strong>Snowflake</strong> (or similar tools like Databricks, PostgreSQL) alongside advanced <strong>SQL</strong> skills.</p></li><li><p><strong>Margin &amp; pricing acumen:</strong> Strong background in gross margin analysis, commercial pricing optimization, and financial metrics (Customer Lifetime Value, cost-to-acquire, P&amp;L impact). Python and BI tool proficiency (Lightdash, PowerBI) is a plus.</p></li><li><p><strong>Energy market affinity:</strong> Solid understanding of (or strong affinity for) energy procurement, tariff structures, risk premiums, and market dynamics.</p></li><li><p><strong>Commercial &amp; tactical mindset:</strong> Curiosity for where customer value lies, combined with a tactical mindset (6–12 month outlook) to align pricing strategy with broader business goals.</p></li><li><p><strong>Communication &amp; stakeholder skills:</strong> Proactive, self-driven, and adept at translating complex pricing and data topics into clear insights for non-expert stakeholders across Commerce, Finance, and Strategy.</p></li><li><p><strong>Language:</strong> Fluency in <strong>English</strong> is required. Dutch is a nice-to-have, but not essential.</p></li></ul><p style=\"min-height: 1.7em;\"></p><h3><strong>Why join Vandebron?</strong></h3><ul><li><p>High impact on Chapter 2: You will directly shape the commercial core of our business as we push toward 100% green energy availability 100% of the time.</p></li><li><p>Build from the ground up: As a foundational member of the new Pricing &amp; Sourcing team, you’ll have significant autonomy to build data structures, scrapers, and sourcing workflows from scratch.</p></li><li><p>More than number crunching: This position offers a rare hybrid focus across data engineering, sourcing strategy, financial modeling, and commercial execution, giving you far more ownership than traditional analyst roles.</p></li></ul><p style=\"min-height: 1.7em;\"></p><h3><strong>A career move that matters</strong></h3><ul><li><p>Master advanced energy data: Deepen your expertise in energy procurement, customer value modeling, and gross margin strategy while mastering production-grade data modeling in dbt and Snowflake.</p></li><li><p>Set up new sourcing processes: Within your first 6–12 months, you will establish end-to-end, semi-automated sourcing workflows and controls for new regulatory changes (e.g., ETS2 and green gas) and new energy products.</p></li><li><p>Deliver real-time pricing agility: Build a data-driven pricing framework and automated dashboards that make Vandebron significantly faster and smarter in responding to market changes.</p></li></ul><p style=\"min-height: 1.7em;\"></p><h3><strong>What’s in it for you</strong></h3><ul><li><p>A nice salary.</p></li><li><p>An annual bonus based on company performance.</p></li><li><p>30 days of paid leave per year.</p></li><li><p>Additional paid time off for life events (moving, wedding celebrations, enhanced parental leave), Liberation Day off every year, and on top of that 2 extra days off per year: one for volunteering, one for choosing sustainable travel.</p></li><li><p>Work abroad for up to 6 weeks per year (max. 4 consecutive, including up to 4 weeks outside the EU).</p></li><li><p>A possibility to take a sabbatical after 3 years.</p></li><li><p>€1,200 annual learning budget + unlimited access to L&amp;D programs.</p></li><li><p>Strong focus on your well-being, with unlimited access to the mental health platform OpenUp.</p></li><li><p>A solid pension scheme.</p></li><li><p>€50 net allowance per month for phone &amp; WiFi.</p></li><li><p>A one-time €200 home office setup budget.</p></li><li><p>Discount on your Vandebron invoice.</p></li><li><p>A flexible hybrid setup between home and our carbon-neutral Amsterdam office.</p></li><li><p>Daily free, healthy, vegetarian lunches cooked in-house.</p></li><li><p>An NS Business Card if you live 10km+ from the office.</p></li></ul><p style=\"min-height: 1.7em;\"></p><h3><strong>Interested?</strong></h3><p>If this role excites you, apply via this page.</p><p style=\"min-height: 1.7em;\"></p><p>Still have questions? Feel free to ask via <a rel=\"noopener\" target=\"_blank\" href=\"mailto:tommythomassen@vandebron.nl\">tommythomassen@vandebron.nl</a>.<br></p><p><em>At Vandebron, we believe in diversity, inclusiveness, and equal career opportunities. Be your authentic self: and it’s totally okay with us if you don’t mention your gender or date of birth on your resume. We also care about your privacy and handle your data carefully. Under the GDPR, you are not required to provide us with any information about your health, race/nationality, or religion, and you may also omit your social security number (BSN) and passport photo from your job application documentation.</em></p>",
+   "experience_code": "experienced",
+   "postal_code": "1013KS",
+   "company_name": "Vandebron",
+   "published_at": "2026-08-14 08:23:10 UTC",
+   "slug": "sourcing-pricing-analyst",
+   "tags": [],
+   "locations_question_required": true,
+   "remote": false,
+   "state_name": "Noord-Holland",
+   "updated_at": "2026-08-14 08:26:51 UTC",
+   "created_at": "2026-08-14 08:22:34 UTC",
+   "id": 2710502,
+   "employment_type_code": "fulltime_permanent",
+   "dynamic_fields": [],
+   "department": "Finance & Control",
+   "hybrid": true,
+   "careers_url": "https://werkenbij.vandebron.nl/o/sourcing-pricing-analyst",
+   "requirements": null,
+   "min_hours": null,
+   "location_question_visible": false,
+   "status": "published",
+   "guid": "onosp",
+   "on_site": false,
+   "country": "Nederland"
+  },
+  {
+   "position": 502,
+   "careers_apply_url": "https://werkenbij.vandebron.nl/o/senior-cx-specialist/c/new",
+   "close_at": null,
+   "state_code": "NH",
+   "sharing_image": null,
+   "max_hours": null,
+   "sharing_description": "Wie wij zijnOnze reis begon in 2014 met Hoofdstuk 1 van de energietransitie, waarin we de markt transparanter wilden maken door consumenten rechtstreeks te verbinden met lokale, groene energieproducen",
+   "locations": [
+    {
+     "id": 62501,
+     "name": "Amsterdam",
+     "state": "Noord-Holland",
+     "country": "Nederland",
+     "city": "Amsterdam",
+     "translations": {
+      "nl": {
+       "name": "Amsterdam",
+       "city": "Amsterdam",
+       "postal_code": "1013KS",
+       "street": "Grote Bickersstraat 2",
+       "note": null
+      }
+     },
+     "country_code": "NL",
+     "state_code": "NH",
+     "postal_code": "1013KS",
+     "street": "Grote Bickersstraat 2",
+     "note": null
+    }
+   ],
+   "min_hours_per_week": null,
+   "options_photo": "off",
+   "salary": {
+    "max": null,
+    "min": null,
+    "period": null,
+    "currency": null
+   },
+   "title": "Senior CX Specialist",
+   "mailbox_email": "job.bw9no@vandebron.recruitee.com",
+   "sharing_title": "Senior CX Specialist",
+   "options_title": "off",
+   "options_cover_letter": "optional",
+   "country_code": "NL",
+   "highlight": null,
+   "location": "Amsterdam, Noord-Holland, Nederland",
+   "locations_question_type": "multiple_choice",
+   "options_phone": "required",
+   "education_code": "bachelor_degree",
+   "options_cv": "required",
+   "max_hours_per_week": null,
+   "category_code": "marketing_pr",
+   "translations": {
+    "nl": {
+     "description": "<h3><strong>Wie wij zijn</strong></h3><p>Onze reis begon in 2014 met Hoofdstuk 1 van de energietransitie, waarin we de markt transparanter wilden maken door consumenten rechtstreeks te verbinden met lokale, groene energieproducenten.</p><p style=\"min-height: 1.7em;\"></p><p>Nu, in Hoofdstuk 2, zetten wij ons in om 100% groene energie, 100% van de tijd beschikbaar te maken. Denk aan slimme oplossingen - flexibel gebruik van wind- en zonneparken, slim opladen van elektrische voertuigen en efficiënte energieopslag.</p><p style=\"min-height: 1.7em;\"></p><p>We wachten niet af en leveren een actieve bijdrage aan een duurzame toekomst met zo nu en dan een vleugje rebellie.</p><p style=\"min-height: 1.7em;\"></p><p>Groene energie, slimme oplossingen - dat is Vandebron.</p><p style=\"min-height: 1.7em;\"></p><h3><strong>Jouw impact</strong></h3><p>In de dynamische wereld van de energietransitie help jij onze klanten om hun energie op een steeds slimmere manier te gebruiken. Als CX Specialist speel je een sleutelrol in de fase waarin Vandebron zich transformeert om zich nóg sterker rondom de klant te organiseren. Jij zorgt ervoor dat elke klantinteractie simpel, transparant en relevant is.</p><p style=\"min-height: 1.7em;\"></p><p>Je ontwerpt en optimaliseert klantreizen die maximale waarde creëren voor zowel onze klanten als Vandebron. Je helpt bijvoorbeeld klanten hun energieverbruik slim te optimaliseren, met als doel een duurzame toekomst waarin we 100% van de tijd groene energie gebruiken tegen de laagst mogelijke energierekening. Binnen ons compacte Customer Experience team van 2 Customer Experience Specialists en 2 Customer Journey Experts krijg je alle vrijheid om jouw ideeën tot leven te brengen en is jouw individuele bijdrage direct zichtbaar.</p><p style=\"min-height: 1.7em;\"></p><p>Intern noemen wij deze functie Customer Experience Specialist. En ja, deze vacature staat twee keer met andere vacaturetitels op onze website. We onderzoeken welke titel het beste resoneert.</p><p style=\"min-height: 1.7em;\"></p><h3><strong>Wat je gaat doen</strong></h3><ul><li><p><strong>Voer de regie over end-to-end klantreizen:</strong> Je stopt energie in het continu optimaliseren van onze klantreizen. Je leidt deze journeys en streeft, met behulp van data en een klantgerichte mindset, naar een consistente en frictieloze klantervaring.</p></li><li><p><strong>Analyseer klantdata en de <em>Voice of the Customer</em>:</strong> Je analyseert klantdata en feedback en vertaalt deze naar concrete aanbevelingen en structurele verbeteringen. Ontbreekt er cruciale data? Dan neem jij het initiatief voor aanvullend kwantitatief of kwalitatief onderzoek om de echte klantbehoefte boven tafel te krijgen.</p></li><li><p><strong>Zet AI-tools praktisch in:</strong> Je maakt slim gebruik van AI-tools binnen het CX-domein om klantdata sneller te analyseren, workshops efficiënter te faciliteren en geautomatiseerde rapportages op te stellen.</p></li><li><p><strong>Faciliteer workshops en design sprints:</strong> Je leidt workshops voor het opstellen van customer journeys en begeleidt design sprints om vanuit data-inzichten klantproblemen en kansen te concretiseren. Zo neem je collega’s mee in de ‘customer first’-werkwijze en versnel je innovatie.</p></li><li><p><strong>Verbind de organisatie rondom de klant:</strong> Je bent een sterke gesprekspartner die moeiteloos schakelt tussen technische specialisten, business owners en de operatie, en weet verschillende belangen te verenigen met de klant als uitgangspunt.</p></li></ul><p style=\"min-height: 1.7em;\"></p><h3><strong>Wat je meebrengt</strong></h3><ul><li><p>Minimaal 5 jaar werkervaring in het CX-domein, bijvoorbeeld met het opzetten, uitvoeren, analyseren van en adviseren vanuit kwantitatief en kwalitatief klantonderzoek.</p></li><li><p>Ruime ervaring met het opstellen van customer journeys en het faciliteren van workshops/design sprints.</p></li><li><p>Praktische ervaring met AI-tools binnen CX voor versnelde analyses, efficiëntere facilitatie en geautomatiseerde rapportages.</p></li><li><p>Vloeiend in de Nederlandse taal, zowel in woord als geschrift. Ook jouw beheersing van de Engelse taal en geschrift is goed.</p></li><li><p>Je volgt de ontwikkelingen in de energiemarkt op de voet (of hebt hier al ervaring in) en bent intrinsiek gemotiveerd om duurzame innovaties (zoals slimme aansturing) succesvol te maken voor de consument.</p></li><li><p>Je bent sterk in het versimpelen van complexe energievraagstukken en vertaalt deze naar een simpele en transparante klantervaring.</p></li><li><p>Je begrijpt de emotionele kant van energie (van de voldoening van verduurzamen tot zorgen over de rekening) én kunt soepel schakelen tussen verschillende interne belangen.</p></li></ul><p style=\"min-height: 1.7em;\"></p><h3><strong>Waarom deze rol een slimme vervolgstap is voor jouw carrière</strong></h3><p>Deze rol bevindt zich midden in de strategische beweging waarin Vandebron zich steeds sterker rondom de klant organiseert. Omdat je in een klein team werkt, is je individuele bijdrage direct zichtbaar. Er is ontzettend veel te doen en te bouwen, wat jou maximale vrijheid en eigenaarschap geeft om je eigen ideeën daadwerkelijk tot uitvoering te brengen en échte impact te maken op de energietransitie.</p><p style=\"min-height: 1.7em;\"></p><h3><strong>Wat je gaat leren</strong></h3><ul><li><p>Hoe je de klant vertegenwoordigt in alles wat je doet, op een manier die naadloos aansluit bij waar Vandebron als merk voor staat.</p></li><li><p>Hoe je jouw stakeholder management vaardigheden naar een hoger niveau tilt om samen met diverse cross-functionele teams tot maximale resultaten te komen.</p></li><li><p>Hoe je met geavanceerde methodieken en AI-tools klantervaringen continu blijft vernieuwen en schalen.</p></li></ul><p style=\"min-height: 1.7em;\"></p><h3><strong>Hoe succes eruit ziet na je eerste 6–12 maanden</strong></h3><ul><li><p>Je neemt vol overtuiging het voortouw in verschillende journey teams (zoals de 'I Join'-reis voor nieuwe klanten of de reis voor verhuizers).</p></li><li><p>Op basis van grondige data-analyses en klantonderzoek heb je de belangrijkste pijnpunten en kansen van klantreizen scherp in kaart gebracht.</p></li><li><p>Je hebt samen met de teams alle klantinzichten gebundeld tot een holistisch beeld van de klantervaring, zodat Vandebron energie steekt in de initiatieven met de meeste impact.</p></li><li><p>Je hebt de effecten van de geïmplementeerde initiatieven op de klantervaring meetbaar gemaakt en geborgd binnen de organisatie.</p></li></ul><p style=\"min-height: 1.7em;\"></p><h3><strong>Wat wij jou bieden</strong></h3><ul><li><p>Een mooi salaris.</p></li><li><p>Een jaarlijkse bonus gebaseerd op de bedrijfsprestaties.</p></li><li><p>30 betaalde vakantiedagen per jaar om op te laden en inspiratie op te doen.</p></li><li><p>Mogelijkheid om tot 6 weken per jaar vanuit het buitenland te werken.</p></li><li><p>Sabbatical-mogelijkheden.</p></li><li><p>Buitengewoon verlof voor belangrijke persoonlijke gebeurtenissen, vrijwilligerswerk en een extra vrije dag voor religieuze of persoonlijke feestdagen.</p></li><li><p>Een jaarlijks opleidingsbudget van € 1200,- plus toegang tot Learning &amp; Development-workshops en -programma's.</p></li><li><p>Een pensioenregeling om te bouwen aan je toekomst.</p></li><li><p>Een maandelijkse netto vergoeding van € 50,- voor je telefoon en wifi.</p></li><li><p>Een eenmalige netto vergoeding van € 200,- voor het inrichten van een comfortabele thuiswerkplek.</p></li><li><p>Een flexibele hybride werkopzet, verdeel je tijd tussen ons klimaatneutrale kantoor in Amsterdam en thuis.</p></li><li><p>Dagelijks een gezonde, warme en vegetarische lunch, vers bereid door onze eigen koks.</p></li><li><p>Een NS-Business Card als je op 10 km of meer van kantoor woont.</p></li></ul><p style=\"min-height: 1.7em;\"></p><h2><strong>Interesse?</strong></h2><p>Enthousiast geworden over deze rol? Solliciteer direct via deze pagina.</p><p style=\"min-height: 1.7em;\"></p><p>Nog niet helemaal overtuigd of heb je vragen? Neem gerust contact op via <strong>tommythomassen@vandebron.nl</strong>.</p><p style=\"min-height: 1.7em;\"></p><p><em>Bij Vandebron geloven we in diversiteit, inclusie en gelijke kansen. We nodigen je uit om helemaal jezelf te zijn — het is voor ons geen enkel probleem als je jouw geslacht of geboortedatum niet op je cv vermeldt. We gaan zorgvuldig om met je privacy. Volgens de AVG/GDPR ben je niet verplicht om informatie te delen over je gezondheid, ras/nationaliteit of religie, en mag je jouw BSN en pasfoto gerust weglaten uit je sollicitatiebescheiden.</em></p>",
+     "title": "Senior CX Specialist",
+     "highlight": null,
+     "requirements": null,
+     "sharing_image": null,
+     "locations_question": "Welke werklocatie heeft je voorkeur?",
+     "sharing_description": "Wie wij zijnOnze reis begon in 2014 met Hoofdstuk 1 van de energietransitie, waarin we de markt transparanter wilden maken door consumenten rechtstreeks te verbinden met lokale, groene energieproducen",
+     "sharing_title": "Senior CX Specialist"
+    }
+   },
+   "open_questions": [
+    {
+     "id": 4288643,
+     "position": 1,
+     "options": {},
+     "required": false,
+     "body": "Waar krijg jij binnen het CX-vak de meeste energie van, en kun je een voorbeeld geven van een moment waarop jouw werk écht het verschil maakte voor een klant?",
+     "kind": "text",
+     "translations": {
+      "nl": {
+       "body": "Waar krijg jij binnen het CX-vak de meeste energie van, en kun je een voorbeeld geven van een moment waarop jouw werk écht het verschil maakte voor een klant?"
+      }
+     },
+     "open_question_options": []
+    }
+   ],
+   "locations_question": "Welke werklocatie heeft je voorkeur?",
+   "cover_image": null,
+   "city": "Amsterdam",
+   "options_salutation": "off",
+   "description": "<h3><strong>Wie wij zijn</strong></h3><p>Onze reis begon in 2014 met Hoofdstuk 1 van de energietransitie, waarin we de markt transparanter wilden maken door consumenten rechtstreeks te verbinden met lokale, groene energieproducenten.</p><p style=\"min-height: 1.7em;\"></p><p>Nu, in Hoofdstuk 2, zetten wij ons in om 100% groene energie, 100% van de tijd beschikbaar te maken. Denk aan slimme oplossingen - flexibel gebruik van wind- en zonneparken, slim opladen van elektrische voertuigen en efficiënte energieopslag.</p><p style=\"min-height: 1.7em;\"></p><p>We wachten niet af en leveren een actieve bijdrage aan een duurzame toekomst met zo nu en dan een vleugje rebellie.</p><p style=\"min-height: 1.7em;\"></p><p>Groene energie, slimme oplossingen - dat is Vandebron.</p><p style=\"min-height: 1.7em;\"></p><h3><strong>Jouw impact</strong></h3><p>In de dynamische wereld van de energietransitie help jij onze klanten om hun energie op een steeds slimmere manier te gebruiken. Als CX Specialist speel je een sleutelrol in de fase waarin Vandebron zich transformeert om zich nóg sterker rondom de klant te organiseren. Jij zorgt ervoor dat elke klantinteractie simpel, transparant en relevant is.</p><p style=\"min-height: 1.7em;\"></p><p>Je ontwerpt en optimaliseert klantreizen die maximale waarde creëren voor zowel onze klanten als Vandebron. Je helpt bijvoorbeeld klanten hun energieverbruik slim te optimaliseren, met als doel een duurzame toekomst waarin we 100% van de tijd groene energie gebruiken tegen de laagst mogelijke energierekening. Binnen ons compacte Customer Experience team van 2 Customer Experience Specialists en 2 Customer Journey Experts krijg je alle vrijheid om jouw ideeën tot leven te brengen en is jouw individuele bijdrage direct zichtbaar.</p><p style=\"min-height: 1.7em;\"></p><p>Intern noemen wij deze functie Customer Experience Specialist. En ja, deze vacature staat twee keer met andere vacaturetitels op onze website. We onderzoeken welke titel het beste resoneert.</p><p style=\"min-height: 1.7em;\"></p><h3><strong>Wat je gaat doen</strong></h3><ul><li><p><strong>Voer de regie over end-to-end klantreizen:</strong> Je stopt energie in het continu optimaliseren van onze klantreizen. Je leidt deze journeys en streeft, met behulp van data en een klantgerichte mindset, naar een consistente en frictieloze klantervaring.</p></li><li><p><strong>Analyseer klantdata en de <em>Voice of the Customer</em>:</strong> Je analyseert klantdata en feedback en vertaalt deze naar concrete aanbevelingen en structurele verbeteringen. Ontbreekt er cruciale data? Dan neem jij het initiatief voor aanvullend kwantitatief of kwalitatief onderzoek om de echte klantbehoefte boven tafel te krijgen.</p></li><li><p><strong>Zet AI-tools praktisch in:</strong> Je maakt slim gebruik van AI-tools binnen het CX-domein om klantdata sneller te analyseren, workshops efficiënter te faciliteren en geautomatiseerde rapportages op te stellen.</p></li><li><p><strong>Faciliteer workshops en design sprints:</strong> Je leidt workshops voor het opstellen van customer journeys en begeleidt design sprints om vanuit data-inzichten klantproblemen en kansen te concretiseren. Zo neem je collega’s mee in de ‘customer first’-werkwijze en versnel je innovatie.</p></li><li><p><strong>Verbind de organisatie rondom de klant:</strong> Je bent een sterke gesprekspartner die moeiteloos schakelt tussen technische specialisten, business owners en de operatie, en weet verschillende belangen te verenigen met de klant als uitgangspunt.</p></li></ul><p style=\"min-height: 1.7em;\"></p><h3><strong>Wat je meebrengt</strong></h3><ul><li><p>Minimaal 5 jaar werkervaring in het CX-domein, bijvoorbeeld met het opzetten, uitvoeren, analyseren van en adviseren vanuit kwantitatief en kwalitatief klantonderzoek.</p></li><li><p>Ruime ervaring met het opstellen van customer journeys en het faciliteren van workshops/design sprints.</p></li><li><p>Praktische ervaring met AI-tools binnen CX voor versnelde analyses, efficiëntere facilitatie en geautomatiseerde rapportages.</p></li><li><p>Vloeiend in de Nederlandse taal, zowel in woord als geschrift. Ook jouw beheersing van de Engelse taal en geschrift is goed.</p></li><li><p>Je volgt de ontwikkelingen in de energiemarkt op de voet (of hebt hier al ervaring in) en bent intrinsiek gemotiveerd om duurzame innovaties (zoals slimme aansturing) succesvol te maken voor de consument.</p></li><li><p>Je bent sterk in het versimpelen van complexe energievraagstukken en vertaalt deze naar een simpele en transparante klantervaring.</p></li><li><p>Je begrijpt de emotionele kant van energie (van de voldoening van verduurzamen tot zorgen over de rekening) én kunt soepel schakelen tussen verschillende interne belangen.</p></li></ul><p style=\"min-height: 1.7em;\"></p><h3><strong>Waarom deze rol een slimme vervolgstap is voor jouw carrière</strong></h3><p>Deze rol bevindt zich midden in de strategische beweging waarin Vandebron zich steeds sterker rondom de klant organiseert. Omdat je in een klein team werkt, is je individuele bijdrage direct zichtbaar. Er is ontzettend veel te doen en te bouwen, wat jou maximale vrijheid en eigenaarschap geeft om je eigen ideeën daadwerkelijk tot uitvoering te brengen en échte impact te maken op de energietransitie.</p><p style=\"min-height: 1.7em;\"></p><h3><strong>Wat je gaat leren</strong></h3><ul><li><p>Hoe je de klant vertegenwoordigt in alles wat je doet, op een manier die naadloos aansluit bij waar Vandebron als merk voor staat.</p></li><li><p>Hoe je jouw stakeholder management vaardigheden naar een hoger niveau tilt om samen met diverse cross-functionele teams tot maximale resultaten te komen.</p></li><li><p>Hoe je met geavanceerde methodieken en AI-tools klantervaringen continu blijft vernieuwen en schalen.</p></li></ul><p style=\"min-height: 1.7em;\"></p><h3><strong>Hoe succes eruit ziet na je eerste 6–12 maanden</strong></h3><ul><li><p>Je neemt vol overtuiging het voortouw in verschillende journey teams (zoals de 'I Join'-reis voor nieuwe klanten of de reis voor verhuizers).</p></li><li><p>Op basis van grondige data-analyses en klantonderzoek heb je de belangrijkste pijnpunten en kansen van klantreizen scherp in kaart gebracht.</p></li><li><p>Je hebt samen met de teams alle klantinzichten gebundeld tot een holistisch beeld van de klantervaring, zodat Vandebron energie steekt in de initiatieven met de meeste impact.</p></li><li><p>Je hebt de effecten van de geïmplementeerde initiatieven op de klantervaring meetbaar gemaakt en geborgd binnen de organisatie.</p></li></ul><p style=\"min-height: 1.7em;\"></p><h3><strong>Wat wij jou bieden</strong></h3><ul><li><p>Een mooi salaris.</p></li><li><p>Een jaarlijkse bonus gebaseerd op de bedrijfsprestaties.</p></li><li><p>30 betaalde vakantiedagen per jaar om op te laden en inspiratie op te doen.</p></li><li><p>Mogelijkheid om tot 6 weken per jaar vanuit het buitenland te werken.</p></li><li><p>Sabbatical-mogelijkheden.</p></li><li><p>Buitengewoon verlof voor belangrijke persoonlijke gebeurtenissen, vrijwilligerswerk en een extra vrije dag voor religieuze of persoonlijke feestdagen.</p></li><li><p>Een jaarlijks opleidingsbudget van € 1200,- plus toegang tot Learning &amp; Development-workshops en -programma's.</p></li><li><p>Een pensioenregeling om te bouwen aan je toekomst.</p></li><li><p>Een maandelijkse netto vergoeding van € 50,- voor je telefoon en wifi.</p></li><li><p>Een eenmalige netto vergoeding van € 200,- voor het inrichten van een comfortabele thuiswerkplek.</p></li><li><p>Een flexibele hybride werkopzet, verdeel je tijd tussen ons klimaatneutrale kantoor in Amsterdam en thuis.</p></li><li><p>Dagelijks een gezonde, warme en vegetarische lunch, vers bereid door onze eigen koks.</p></li><li><p>Een NS-Business Card als je op 10 km of meer van kantoor woont.</p></li></ul><p style=\"min-height: 1.7em;\"></p><h2><strong>Interesse?</strong></h2><p>Enthousiast geworden over deze rol? Solliciteer direct via deze pagina.</p><p style=\"min-height: 1.7em;\"></p><p>Nog niet helemaal overtuigd of heb je vragen? Neem gerust contact op via <strong>tommythomassen@vandebron.nl</strong>.</p><p style=\"min-height: 1.7em;\"></p><p><em>Bij Vandebron geloven we in diversiteit, inclusie en gelijke kansen. We nodigen je uit om helemaal jezelf te zijn — het is voor ons geen enkel probleem als je jouw geslacht of geboortedatum niet op je cv vermeldt. We gaan zorgvuldig om met je privacy. Volgens de AVG/GDPR ben je niet verplicht om informatie te delen over je gezondheid, ras/nationaliteit of religie, en mag je jouw BSN en pasfoto gerust weglaten uit je sollicitatiebescheiden.</em></p>",
+   "experience_code": "mid_level",
+   "postal_code": "1013KS",
+   "company_name": "Vandebron",
+   "published_at": "2026-08-05 12:08:08 UTC",
+   "slug": "senior-cx-specialist",
+   "tags": [],
+   "locations_question_required": true,
+   "remote": false,
+   "state_name": "Noord-Holland",
+   "updated_at": "2026-08-05 12:08:08 UTC",
+   "created_at": "2026-08-05 12:07:03 UTC",
+   "id": 2701124,
+   "employment_type_code": "fulltime_permanent",
+   "dynamic_fields": [],
+   "department": "Marketing",
+   "hybrid": true,
+   "careers_url": "https://werkenbij.vandebron.nl/o/senior-cx-specialist",
+   "requirements": null,
+   "min_hours": null,
+   "location_question_visible": false,
+   "status": "published",
+   "guid": "bw9no",
+   "on_site": false,
+   "country": "Nederland"
+  },
+  {
+   "position": 485,
+   "careers_apply_url": "https://werkenbij.vandebron.nl/o/gross-margin-analyst/c/new",
+   "close_at": null,
+   "state_code": "NH",
+   "sharing_image": null,
+   "max_hours": null,
+   "sharing_description": "Who we areAt Vandebron, we're transforming the energy landscape, steering away from the conventional to champion sustainability. Born in 2014, our journey began with Chapter 1, disrupting the market w",
+   "locations": [
+    {
+     "id": 62501,
+     "name": "Amsterdam",
+     "state": "Noord-Holland",
+     "country": "Netherlands",
+     "city": "Amsterdam",
+     "translations": {
+      "en": {
+       "name": "Amsterdam",
+       "city": "Amsterdam",
+       "postal_code": "1013KS",
+       "street": "Grote Bickersstraat 2",
+       "note": null
+      }
+     },
+     "country_code": "NL",
+     "state_code": "NH",
+     "postal_code": "1013KS",
+     "street": "Grote Bickersstraat 2",
+     "note": null
+    }
+   ],
+   "min_hours_per_week": null,
+   "options_photo": "off",
+   "salary": {
+    "max": null,
+    "min": null,
+    "period": null,
+    "currency": null
+   },
+   "title": "Gross Margin Analyst",
+   "mailbox_email": "job.4t36b@vandebron.recruitee.com",
+   "sharing_title": "Gross Margin Analyst",
+   "options_title": "off",
+   "options_cover_letter": "optional",
+   "country_code": "NL",
+   "highlight": null,
+   "location": "Amsterdam, Noord-Holland, Nederland",
+   "locations_question_type": "multiple_choice",
+   "options_phone": "required",
+   "education_code": "bachelor_degree",
+   "options_cv": "required",
+   "max_hours_per_week": null,
+   "category_code": "finance",
+   "translations": {
+    "en": {
+     "description": "<h3><strong>Who we are</strong></h3><p>At Vandebron, we're transforming the energy landscape, steering away from the conventional to champion sustainability. Born in 2014, our journey began with Chapter 1, disrupting the market with a transparent platform connecting consumers directly to local, green energy producers. Now, in Chapter 2, we are dedicated to ensuring 100% green energy availability, 100% of the time. Think smart solutions: flexible use of wind and solar farms, Smart EV Charging, and efficient energy storage.</p><p style=\"min-height: 1.7em;\"></p><p>No waiting around, we actively shape a sustainable future. Good energy, smart solutions: that's Vandebron.</p><p style=\"min-height: 1.7em;\"></p><h3><strong>Your impact</strong></h3><p>As our Gross Margin Analyst, you <strong>play a pivotal role in Vandebron’s commercial success and green mission by analyzing and optimizing our pricing and sourcing strategies</strong>. Positioned within our newly established Pricing &amp; Sourcing Team, you will bridge the gap between energy market dynamics, procurement costs, data engineering, and consumer needs.</p><p style=\"min-height: 1.7em;\"></p><p>In this role, you won't just generate static reports, you will <strong>actively build and scale the data warehouse infrastructure in dbt and Snowflake</strong> that powers our commercial decisions from energy sourcing all the way to end-consumer pricing. Working closely with the Portfolio Management, Commerce, Finance, and Strategy teams, you will turn complex energy market dynamics into actionable data models, ensuring our offerings remain highly competitive while maximizing our gross margins.<br></p><p>In this job, you will be reporting directly to Jeroen van Rooij, Manager Sourcing &amp; Pricing.</p><p style=\"min-height: 1.7em;\"></p><p>Note: You may notice a similar job listing on our careers page titled \"Sourcing &amp; Pricing Analyst.\" We are testing two job titles to see which resonates best with applicants, but they represent the exact same role. The official internal title for this position will be Gross Margin Analyst.</p><p style=\"min-height: 1.7em;\"></p><h3><strong>What you’ll do</strong></h3><ul><li><p><strong>Optimize gross margin &amp; pricing:</strong> Conduct in-depth analytical modeling to optimize commercial pricing for energy contracts and flexibility solutions, balancing purchase costs, margin targets, risk premiums, and market competitiveness.</p></li><li><p><strong>Build &amp; scale data models:</strong> Design, build, and maintain production-grade data models and architecture in <strong>dbt and Snowflake</strong> to enable scalable, automated reporting from sourcing to pricing.</p></li><li><p><strong>Sourcing &amp; customer value analysis:</strong> Evaluate sourcing strategies and procurement efficiencies alongside Portfolio Management. Build customer value models and analyze specific customer segments to identify commercial opportunities.</p></li><li><p><strong>Drive strategic projects:</strong> Take the lead on modeling new regulatory frameworks (e.g., ETS2, “green gas” mandates) and build processes where none currently exist, establishing robust data pipelines and completeness controls.</p></li><li><p><strong>Monitor market &amp; competitor dynamics:</strong> Track energy market developments, tariff structures, price volatility, and competitive offerings using custom scrapers and dashboards.</p></li><li><p><strong>Enable smart decision-making:</strong> Develop real-time tools, automated dashboards (e.g., Lightdash/PowerBI), and commercial business cases to evaluate the financial and P&amp;L impact of new pricing strategies.</p></li></ul><p style=\"min-height: 1.7em;\"></p><h3><strong>What you bring</strong></h3><ul><li><p><strong>Technical &amp; data modeling expertise:</strong> Proven experience building and scaling data models using <strong>dbt</strong> and <strong>Snowflake</strong> (or similar tools like Databricks, PostgreSQL) alongside advanced <strong>SQL</strong> skills.</p></li><li><p><strong>Margin &amp; pricing acumen:</strong> Strong background in gross margin analysis, commercial pricing optimization, and financial metrics (Customer Lifetime Value, cost-to-acquire, P&amp;L impact). Python and BI tool proficiency (Lightdash, PowerBI) is a plus.</p></li><li><p><strong>Energy market affinity:</strong> Solid understanding of (or strong affinity for) energy procurement, tariff structures, risk premiums, and market dynamics.</p></li><li><p><strong>Commercial &amp; tactical mindset:</strong> Curiosity for where customer value lies, combined with a tactical mindset (6–12 month outlook) to align pricing strategy with broader business goals.</p></li><li><p><strong>Communication &amp; stakeholder skills:</strong> Proactive, self-driven, and adept at translating complex pricing and data topics into clear insights for non-expert stakeholders across Commerce, Finance, and Strategy.</p></li><li><p><strong>Language:</strong> Fluency in <strong>English</strong> is required. Dutch is a nice-to-have, but not essential.</p></li></ul><p style=\"min-height: 1.7em;\"></p><h3><strong>Why join Vandebron?</strong></h3><ul><li><p>High impact on Chapter 2: You will directly shape the commercial core of our business as we push toward 100% green energy availability 100% of the time.</p></li><li><p>Build from the ground up: As a foundational member of the new Pricing &amp; Sourcing team, you’ll have significant autonomy to build data structures, scrapers, and sourcing workflows from scratch.</p></li><li><p>More than number crunching: This position offers a rare hybrid focus across data engineering, sourcing strategy, financial modeling, and commercial execution, giving you far more ownership than traditional analyst roles.</p></li></ul><p style=\"min-height: 1.7em;\"></p><h3><strong>A career move that matters</strong></h3><ul><li><p>Master advanced energy data: Deepen your expertise in energy procurement, customer value modeling, and gross margin strategy while mastering production-grade data modeling in dbt and Snowflake.</p></li><li><p>Set up new sourcing processes: Within your first 6–12 months, you will establish end-to-end, semi-automated sourcing workflows and controls for new regulatory changes (e.g., ETS2 and green gas) and new energy products.</p></li><li><p>Deliver real-time pricing agility: Build a data-driven pricing framework and automated dashboards that make Vandebron significantly faster and smarter in responding to market changes.</p></li></ul><p style=\"min-height: 1.7em;\"></p><h3><strong>What’s in it for you</strong></h3><ul><li><p>A nice salary.</p></li><li><p>An annual bonus based on company performance.</p></li><li><p>30 days of paid leave per year.</p></li><li><p>Additional paid time off for life events (moving, wedding celebrations, enhanced parental leave), Liberation Day off every year, and on top of that 2 extra days off per year: one for volunteering, one for choosing sustainable travel.</p></li><li><p>Work abroad for up to 6 weeks per year (max. 4 consecutive, including up to 4 weeks outside the EU).</p></li><li><p>A possibility to take a sabbatical after 3 years.</p></li><li><p>€1,200 annual learning budget + unlimited access to L&amp;D programs.</p></li><li><p>Strong focus on your well-being, with unlimited access to the mental health platform OpenUp.</p></li><li><p>A solid pension scheme.</p></li><li><p>€50 net allowance per month for phone &amp; WiFi.</p></li><li><p>A one-time €200 home office setup budget.</p></li><li><p>Discount on your Vandebron invoice.</p></li><li><p>A flexible hybrid setup between home and our carbon-neutral Amsterdam office.</p></li><li><p>Daily free, healthy, vegetarian lunches cooked in-house.</p></li><li><p>An NS Business Card if you live 10km+ from the office.</p></li></ul><p style=\"min-height: 1.7em;\"></p><h3><strong>Interested?</strong></h3><p>If this role excites you, apply via this page.</p><p style=\"min-height: 1.7em;\"></p><p>Still have questions? Feel free to ask via <a rel=\"noopener\" target=\"_blank\" href=\"mailto:tommythomassen@vandebron.nl\">tommythomassen@vandebron.nl</a>.<br></p><p><em>At Vandebron, we believe in diversity, inclusiveness, and equal career opportunities. Be your authentic self: and it’s totally okay with us if you don’t mention your gender or date of birth on your resume. We also care about your privacy and handle your data carefully. Under the GDPR, you are not required to provide us with any information about your health, race/nationality, or religion, and you may also omit your social security number (BSN) and passport photo from your job application documentation.</em></p>",
+     "title": "Gross Margin Analyst",
+     "highlight": null,
+     "requirements": null,
+     "sharing_image": null,
+     "locations_question": "What is your preferred work location?",
+     "sharing_description": "Who we areAt Vandebron, we're transforming the energy landscape, steering away from the conventional to champion sustainability. Born in 2014, our journey began with Chapter 1, disrupting the market w",
+     "sharing_title": "Gross Margin Analyst"
+    }
+   },
+   "open_questions": [
+    {
+     "id": 4305890,
+     "position": 1,
+     "options": {},
+     "required": false,
+     "body": "Describe a time you built a model to optimize commercial pricing or gross margin.",
+     "kind": "text",
+     "translations": {
+      "en": {
+       "body": "Describe a time you built a model to optimize commercial pricing or gross margin."
+      }
+     },
+     "open_question_options": []
+    }
+   ],
+   "locations_question": "What is your preferred work location?",
+   "cover_image": null,
+   "city": "Amsterdam",
+   "options_salutation": "off",
+   "description": "<h3><strong>Who we are</strong></h3><p>At Vandebron, we're transforming the energy landscape, steering away from the conventional to champion sustainability. Born in 2014, our journey began with Chapter 1, disrupting the market with a transparent platform connecting consumers directly to local, green energy producers. Now, in Chapter 2, we are dedicated to ensuring 100% green energy availability, 100% of the time. Think smart solutions: flexible use of wind and solar farms, Smart EV Charging, and efficient energy storage.</p><p style=\"min-height: 1.7em;\"></p><p>No waiting around, we actively shape a sustainable future. Good energy, smart solutions: that's Vandebron.</p><p style=\"min-height: 1.7em;\"></p><h3><strong>Your impact</strong></h3><p>As our Gross Margin Analyst, you <strong>play a pivotal role in Vandebron’s commercial success and green mission by analyzing and optimizing our pricing and sourcing strategies</strong>. Positioned within our newly established Pricing &amp; Sourcing Team, you will bridge the gap between energy market dynamics, procurement costs, data engineering, and consumer needs.</p><p style=\"min-height: 1.7em;\"></p><p>In this role, you won't just generate static reports, you will <strong>actively build and scale the data warehouse infrastructure in dbt and Snowflake</strong> that powers our commercial decisions from energy sourcing all the way to end-consumer pricing. Working closely with the Portfolio Management, Commerce, Finance, and Strategy teams, you will turn complex energy market dynamics into actionable data models, ensuring our offerings remain highly competitive while maximizing our gross margins.<br></p><p>In this job, you will be reporting directly to Jeroen van Rooij, Manager Sourcing &amp; Pricing.</p><p style=\"min-height: 1.7em;\"></p><p>Note: You may notice a similar job listing on our careers page titled \"Sourcing &amp; Pricing Analyst.\" We are testing two job titles to see which resonates best with applicants, but they represent the exact same role. The official internal title for this position will be Gross Margin Analyst.</p><p style=\"min-height: 1.7em;\"></p><h3><strong>What you’ll do</strong></h3><ul><li><p><strong>Optimize gross margin &amp; pricing:</strong> Conduct in-depth analytical modeling to optimize commercial pricing for energy contracts and flexibility solutions, balancing purchase costs, margin targets, risk premiums, and market competitiveness.</p></li><li><p><strong>Build &amp; scale data models:</strong> Design, build, and maintain production-grade data models and architecture in <strong>dbt and Snowflake</strong> to enable scalable, automated reporting from sourcing to pricing.</p></li><li><p><strong>Sourcing &amp; customer value analysis:</strong> Evaluate sourcing strategies and procurement efficiencies alongside Portfolio Management. Build customer value models and analyze specific customer segments to identify commercial opportunities.</p></li><li><p><strong>Drive strategic projects:</strong> Take the lead on modeling new regulatory frameworks (e.g., ETS2, “green gas” mandates) and build processes where none currently exist, establishing robust data pipelines and completeness controls.</p></li><li><p><strong>Monitor market &amp; competitor dynamics:</strong> Track energy market developments, tariff structures, price volatility, and competitive offerings using custom scrapers and dashboards.</p></li><li><p><strong>Enable smart decision-making:</strong> Develop real-time tools, automated dashboards (e.g., Lightdash/PowerBI), and commercial business cases to evaluate the financial and P&amp;L impact of new pricing strategies.</p></li></ul><p style=\"min-height: 1.7em;\"></p><h3><strong>What you bring</strong></h3><ul><li><p><strong>Technical &amp; data modeling expertise:</strong> Proven experience building and scaling data models using <strong>dbt</strong> and <strong>Snowflake</strong> (or similar tools like Databricks, PostgreSQL) alongside advanced <strong>SQL</strong> skills.</p></li><li><p><strong>Margin &amp; pricing acumen:</strong> Strong background in gross margin analysis, commercial pricing optimization, and financial metrics (Customer Lifetime Value, cost-to-acquire, P&amp;L impact). Python and BI tool proficiency (Lightdash, PowerBI) is a plus.</p></li><li><p><strong>Energy market affinity:</strong> Solid understanding of (or strong affinity for) energy procurement, tariff structures, risk premiums, and market dynamics.</p></li><li><p><strong>Commercial &amp; tactical mindset:</strong> Curiosity for where customer value lies, combined with a tactical mindset (6–12 month outlook) to align pricing strategy with broader business goals.</p></li><li><p><strong>Communication &amp; stakeholder skills:</strong> Proactive, self-driven, and adept at translating complex pricing and data topics into clear insights for non-expert stakeholders across Commerce, Finance, and Strategy.</p></li><li><p><strong>Language:</strong> Fluency in <strong>English</strong> is required. Dutch is a nice-to-have, but not essential.</p></li></ul><p style=\"min-height: 1.7em;\"></p><h3><strong>Why join Vandebron?</strong></h3><ul><li><p>High impact on Chapter 2: You will directly shape the commercial core of our business as we push toward 100% green energy availability 100% of the time.</p></li><li><p>Build from the ground up: As a foundational member of the new Pricing &amp; Sourcing team, you’ll have significant autonomy to build data structures, scrapers, and sourcing workflows from scratch.</p></li><li><p>More than number crunching: This position offers a rare hybrid focus across data engineering, sourcing strategy, financial modeling, and commercial execution, giving you far more ownership than traditional analyst roles.</p></li></ul><p style=\"min-height: 1.7em;\"></p><h3><strong>A career move that matters</strong></h3><ul><li><p>Master advanced energy data: Deepen your expertise in energy procurement, customer value modeling, and gross margin strategy while mastering production-grade data modeling in dbt and Snowflake.</p></li><li><p>Set up new sourcing processes: Within your first 6–12 months, you will establish end-to-end, semi-automated sourcing workflows and controls for new regulatory changes (e.g., ETS2 and green gas) and new energy products.</p></li><li><p>Deliver real-time pricing agility: Build a data-driven pricing framework and automated dashboards that make Vandebron significantly faster and smarter in responding to market changes.</p></li></ul><p style=\"min-height: 1.7em;\"></p><h3><strong>What’s in it for you</strong></h3><ul><li><p>A nice salary.</p></li><li><p>An annual bonus based on company performance.</p></li><li><p>30 days of paid leave per year.</p></li><li><p>Additional paid time off for life events (moving, wedding celebrations, enhanced parental leave), Liberation Day off every year, and on top of that 2 extra days off per year: one for volunteering, one for choosing sustainable travel.</p></li><li><p>Work abroad for up to 6 weeks per year (max. 4 consecutive, including up to 4 weeks outside the EU).</p></li><li><p>A possibility to take a sabbatical after 3 years.</p></li><li><p>€1,200 annual learning budget + unlimited access to L&amp;D programs.</p></li><li><p>Strong focus on your well-being, with unlimited access to the mental health platform OpenUp.</p></li><li><p>A solid pension scheme.</p></li><li><p>€50 net allowance per month for phone &amp; WiFi.</p></li><li><p>A one-time €200 home office setup budget.</p></li><li><p>Discount on your Vandebron invoice.</p></li><li><p>A flexible hybrid setup between home and our carbon-neutral Amsterdam office.</p></li><li><p>Daily free, healthy, vegetarian lunches cooked in-house.</p></li><li><p>An NS Business Card if you live 10km+ from the office.</p></li></ul><p style=\"min-height: 1.7em;\"></p><h3><strong>Interested?</strong></h3><p>If this role excites you, apply via this page.</p><p style=\"min-height: 1.7em;\"></p><p>Still have questions? Feel free to ask via <a rel=\"noopener\" target=\"_blank\" href=\"mailto:tommythomassen@vandebron.nl\">tommythomassen@vandebron.nl</a>.<br></p><p><em>At Vandebron, we believe in diversity, inclusiveness, and equal career opportunities. Be your authentic self: and it’s totally okay with us if you don’t mention your gender or date of birth on your resume. We also care about your privacy and handle your data carefully. Under the GDPR, you are not required to provide us with any information about your health, race/nationality, or religion, and you may also omit your social security number (BSN) and passport photo from your job application documentation.</em></p>",
+   "experience_code": "experienced",
+   "postal_code": "1013KS",
+   "company_name": "Vandebron",
+   "published_at": "2026-08-14 07:56:36 UTC",
+   "slug": "gross-margin-analyst",
+   "tags": [],
+   "locations_question_required": true,
+   "remote": false,
+   "state_name": "Noord-Holland",
+   "updated_at": "2026-08-14 08:23:49 UTC",
+   "created_at": "2026-08-14 07:50:39 UTC",
+   "id": 2710378,
+   "employment_type_code": "fulltime_permanent",
+   "dynamic_fields": [],
+   "department": "Finance & Control",
+   "hybrid": true,
+   "careers_url": "https://werkenbij.vandebron.nl/o/gross-margin-analyst",
+   "requirements": null,
+   "min_hours": null,
+   "location_question_visible": false,
+   "status": "published",
+   "guid": "4t36b",
+   "on_site": false,
+   "country": "Nederland"
+  },
+  {
+   "position": 483,
+   "careers_apply_url": "https://werkenbij.vandebron.nl/o/customer-experience-manager/c/new",
+   "close_at": null,
+   "state_code": "NH",
+   "sharing_image": null,
+   "max_hours": null,
+   "sharing_description": "Wie wij zijnOnze reis begon in 2014 met Hoofdstuk 1 van de energietransitie, waarin we de markt transparanter wilden maken door consumenten rechtstreeks te verbinden met lokale, groene energieproducen",
+   "locations": [
+    {
+     "id": 62501,
+     "name": "Amsterdam",
+     "state": "Noord-Holland",
+     "country": "Nederland",
+     "city": "Amsterdam",
+     "translations": {
+      "nl": {
+       "name": "Amsterdam",
+       "city": "Amsterdam",
+       "postal_code": "1013KS",
+       "street": "Grote Bickersstraat 2",
+       "note": null
+      }
+     },
+     "country_code": "NL",
+     "state_code": "NH",
+     "postal_code": "1013KS",
+     "street": "Grote Bickersstraat 2",
+     "note": null
+    }
+   ],
+   "min_hours_per_week": null,
+   "options_photo": "off",
+   "salary": {
+    "max": null,
+    "min": null,
+    "period": null,
+    "currency": null
+   },
+   "title": "Customer Experience Manager",
+   "mailbox_email": "job.mf173@vandebron.recruitee.com",
+   "sharing_title": "Customer Experience Manager",
+   "options_title": "off",
+   "options_cover_letter": "optional",
+   "country_code": "NL",
+   "highlight": null,
+   "location": "Amsterdam, Noord-Holland, Nederland",
+   "locations_question_type": "multiple_choice",
+   "options_phone": "required",
+   "education_code": "bachelor_degree",
+   "options_cv": "required",
+   "max_hours_per_week": null,
+   "category_code": "marketing_pr",
+   "translations": {
+    "nl": {
+     "description": "<h3><strong>Wie wij zijn</strong></h3><p>Onze reis begon in 2014 met Hoofdstuk 1 van de energietransitie, waarin we de markt transparanter wilden maken door consumenten rechtstreeks te verbinden met lokale, groene energieproducenten.</p><p style=\"min-height: 1.7em;\"></p><p>Nu, in Hoofdstuk 2, zetten wij ons in om 100% groene energie, 100% van de tijd beschikbaar te maken. Denk aan slimme oplossingen - flexibel gebruik van wind- en zonneparken, slim opladen van elektrische voertuigen en efficiënte energieopslag.</p><p style=\"min-height: 1.7em;\"></p><p>We wachten niet af en leveren een actieve bijdrage aan een duurzame toekomst met zo nu en dan een vleugje rebellie.</p><p style=\"min-height: 1.7em;\"></p><p>Groene energie, slimme oplossingen - dat is Vandebron.</p><p style=\"min-height: 1.7em;\"></p><h3><strong>Jouw impact</strong></h3><p>In de dynamische wereld van de energietransitie help jij onze klanten om hun energie op een steeds slimmere manier te gebruiken. Als CX Specialist speel je een sleutelrol in de fase waarin Vandebron zich transformeert om zich nóg sterker rondom de klant te organiseren. Jij zorgt ervoor dat elke klantinteractie simpel, transparant en relevant is.</p><p style=\"min-height: 1.7em;\"></p><p>Je ontwerpt en optimaliseert klantreizen die maximale waarde creëren voor zowel onze klanten als Vandebron. Je helpt bijvoorbeeld klanten hun energieverbruik slim te optimaliseren, met als doel een duurzame toekomst waarin we 100% van de tijd groene energie gebruiken tegen de laagst mogelijke energierekening. Binnen ons compacte Customer Experience team van 2 Customer Experience Specialists en 2 Customer Journey Experts krijg je alle vrijheid om jouw ideeën tot leven te brengen en is jouw individuele bijdrage direct zichtbaar.</p><p style=\"min-height: 1.7em;\"></p><p>Intern noemen wij deze functie Customer Experience Specialist. En ja, deze vacature staat twee keer met andere vacaturetitels op onze website. We onderzoeken welke titel het beste resoneert.</p><p style=\"min-height: 1.7em;\"></p><h3><strong>Wat je gaat doen</strong></h3><ul><li><p><strong>Voer de regie over end-to-end klantreizen:</strong> Je stopt energie in het continu optimaliseren van onze klantreizen. Je leidt deze journeys en streeft, met behulp van data en een klantgerichte mindset, naar een consistente en frictieloze klantervaring.</p></li><li><p><strong>Analyseer klantdata en de <em>Voice of the Customer</em>:</strong> Je analyseert klantdata en feedback en vertaalt deze naar concrete aanbevelingen en structurele verbeteringen. Ontbreekt er cruciale data? Dan neem jij het initiatief voor aanvullend kwantitatief of kwalitatief onderzoek om de echte klantbehoefte boven tafel te krijgen.</p></li><li><p><strong>Zet AI-tools praktisch in:</strong> Je maakt slim gebruik van AI-tools binnen het CX-domein om klantdata sneller te analyseren, workshops efficiënter te faciliteren en geautomatiseerde rapportages op te stellen.</p></li><li><p><strong>Faciliteer workshops en design sprints:</strong> Je leidt workshops voor het opstellen van customer journeys en begeleidt design sprints om vanuit data-inzichten klantproblemen en kansen te concretiseren. Zo neem je collega’s mee in de ‘customer first’-werkwijze en versnel je innovatie.</p></li><li><p><strong>Verbind de organisatie rondom de klant:</strong> Je bent een sterke gesprekspartner die moeiteloos schakelt tussen technische specialisten, business owners en de operatie, en weet verschillende belangen te verenigen met de klant als uitgangspunt.</p></li></ul><p style=\"min-height: 1.7em;\"></p><h3><strong>Wat je meebrengt</strong></h3><ul><li><p>Minimaal 5 jaar werkervaring in het CX-domein, bijvoorbeeld met het opzetten, uitvoeren, analyseren van en adviseren vanuit kwantitatief en kwalitatief klantonderzoek.</p></li><li><p>Ruime ervaring met het opstellen van customer journeys en het faciliteren van workshops/design sprints.</p></li><li><p>Praktische ervaring met AI-tools binnen CX voor versnelde analyses, efficiëntere facilitatie en geautomatiseerde rapportages.</p></li><li><p>Vloeiend in de Nederlandse taal, zowel in woord als geschrift. Ook jouw beheersing van de Engelse taal en geschrift is goed.</p></li><li><p>Je volgt de ontwikkelingen in de energiemarkt op de voet (of hebt hier al ervaring in) en bent intrinsiek gemotiveerd om duurzame innovaties (zoals slimme aansturing) succesvol te maken voor de consument.</p></li><li><p>Je bent sterk in het versimpelen van complexe energievraagstukken en vertaalt deze naar een simpele en transparante klantervaring.</p></li><li><p>Je begrijpt de emotionele kant van energie (van de voldoening van verduurzamen tot zorgen over de rekening) én kunt soepel schakelen tussen verschillende interne belangen.</p></li></ul><p style=\"min-height: 1.7em;\"></p><h3><strong>Waarom deze rol een slimme vervolgstap is voor jouw carrière</strong></h3><p>Deze rol bevindt zich midden in de strategische beweging waarin Vandebron zich steeds sterker rondom de klant organiseert. Omdat je in een klein team werkt, is je individuele bijdrage direct zichtbaar. Er is ontzettend veel te doen en te bouwen, wat jou maximale vrijheid en eigenaarschap geeft om je eigen ideeën daadwerkelijk tot uitvoering te brengen en échte impact te maken op de energietransitie.</p><p style=\"min-height: 1.7em;\"></p><h3><strong>Wat je gaat leren</strong></h3><ul><li><p>Hoe je de klant vertegenwoordigt in alles wat je doet, op een manier die naadloos aansluit bij waar Vandebron als merk voor staat.</p></li><li><p>Hoe je jouw stakeholder management vaardigheden naar een hoger niveau tilt om samen met diverse cross-functionele teams tot maximale resultaten te komen.</p></li><li><p>Hoe je met geavanceerde methodieken en AI-tools klantervaringen continu blijft vernieuwen en schalen.</p></li></ul><p style=\"min-height: 1.7em;\"></p><h3><strong>Hoe succes eruit ziet na je eerste 6–12 maanden</strong></h3><ul><li><p>Je neemt vol overtuiging het voortouw in verschillende journey teams (zoals de 'I Join'-reis voor nieuwe klanten of de reis voor verhuizers).</p></li><li><p>Op basis van grondige data-analyses en klantonderzoek heb je de belangrijkste pijnpunten en kansen van klantreizen scherp in kaart gebracht.</p></li><li><p>Je hebt samen met de teams alle klantinzichten gebundeld tot een holistisch beeld van de klantervaring, zodat Vandebron energie steekt in de initiatieven met de meeste impact.</p></li><li><p>Je hebt de effecten van de geïmplementeerde initiatieven op de klantervaring meetbaar gemaakt en geborgd binnen de organisatie.</p></li></ul><p style=\"min-height: 1.7em;\"></p><h3><strong>Wat wij jou bieden</strong></h3><ul><li><p>Een mooi salaris.</p></li><li><p>Een jaarlijkse bonus gebaseerd op de bedrijfsprestaties.</p></li><li><p>30 betaalde vakantiedagen per jaar om op te laden en inspiratie op te doen.</p></li><li><p>Mogelijkheid om tot 6 weken per jaar vanuit het buitenland te werken.</p></li><li><p>Sabbatical-mogelijkheden.</p></li><li><p>Buitengewoon verlof voor belangrijke persoonlijke gebeurtenissen, vrijwilligerswerk en een extra vrije dag voor religieuze of persoonlijke feestdagen.</p></li><li><p>Een jaarlijks opleidingsbudget van € 1200,- plus toegang tot Learning &amp; Development-workshops en -programma's.</p></li><li><p>Een pensioenregeling om te bouwen aan je toekomst.</p></li><li><p>Een maandelijkse netto vergoeding van € 50,- voor je telefoon en wifi.</p></li><li><p>Een eenmalige netto vergoeding van € 200,- voor het inrichten van een comfortabele thuiswerkplek.</p></li><li><p>Een flexibele hybride werkopzet, verdeel je tijd tussen ons klimaatneutrale kantoor in Amsterdam en thuis.</p></li><li><p>Dagelijks een gezonde, warme en vegetarische lunch, vers bereid door onze eigen koks.</p></li><li><p>Een NS-Business Card als je op 10 km of meer van kantoor woont.</p></li></ul><p style=\"min-height: 1.7em;\"></p><h2><strong>Interesse?</strong></h2><p>Enthousiast geworden over deze rol? Solliciteer direct via deze pagina.</p><p style=\"min-height: 1.7em;\"></p><p>Nog niet helemaal overtuigd of heb je vragen? Neem gerust contact op via <strong>tommythomassen@vandebron.nl</strong>.</p><p style=\"min-height: 1.7em;\"></p><p><em>Bij Vandebron geloven we in diversiteit, inclusie en gelijke kansen. We nodigen je uit om helemaal jezelf te zijn — het is voor ons geen enkel probleem als je jouw geslacht of geboortedatum niet op je cv vermeldt. We gaan zorgvuldig om met je privacy. Volgens de AVG/GDPR ben je niet verplicht om informatie te delen over je gezondheid, ras/nationaliteit of religie, en mag je jouw BSN en pasfoto gerust weglaten uit je sollicitatiebescheiden.</em></p>",
+     "title": "Customer Experience Manager",
+     "highlight": null,
+     "requirements": null,
+     "sharing_image": null,
+     "locations_question": "Welke werklocatie heeft je voorkeur?",
+     "sharing_description": "Wie wij zijnOnze reis begon in 2014 met Hoofdstuk 1 van de energietransitie, waarin we de markt transparanter wilden maken door consumenten rechtstreeks te verbinden met lokale, groene energieproducen",
+     "sharing_title": "Customer Experience Manager"
+    }
+   },
+   "open_questions": [
+    {
+     "id": 4280086,
+     "position": 1,
+     "options": {},
+     "required": false,
+     "body": "Waar krijg jij binnen het CX-vak de meeste energie van, en kun je een voorbeeld geven van een moment waarop jouw werk écht het verschil maakte voor een klant?",
+     "kind": "text",
+     "translations": {
+      "nl": {
+       "body": "Waar krijg jij binnen het CX-vak de meeste energie van, en kun je een voorbeeld geven van een moment waarop jouw werk écht het verschil maakte voor een klant?"
+      }
+     },
+     "open_question_options": []
+    }
+   ],
+   "locations_question": "Welke werklocatie heeft je voorkeur?",
+   "cover_image": null,
+   "city": "Amsterdam",
+   "options_salutation": "off",
+   "description": "<h3><strong>Wie wij zijn</strong></h3><p>Onze reis begon in 2014 met Hoofdstuk 1 van de energietransitie, waarin we de markt transparanter wilden maken door consumenten rechtstreeks te verbinden met lokale, groene energieproducenten.</p><p style=\"min-height: 1.7em;\"></p><p>Nu, in Hoofdstuk 2, zetten wij ons in om 100% groene energie, 100% van de tijd beschikbaar te maken. Denk aan slimme oplossingen - flexibel gebruik van wind- en zonneparken, slim opladen van elektrische voertuigen en efficiënte energieopslag.</p><p style=\"min-height: 1.7em;\"></p><p>We wachten niet af en leveren een actieve bijdrage aan een duurzame toekomst met zo nu en dan een vleugje rebellie.</p><p style=\"min-height: 1.7em;\"></p><p>Groene energie, slimme oplossingen - dat is Vandebron.</p><p style=\"min-height: 1.7em;\"></p><h3><strong>Jouw impact</strong></h3><p>In de dynamische wereld van de energietransitie help jij onze klanten om hun energie op een steeds slimmere manier te gebruiken. Als CX Specialist speel je een sleutelrol in de fase waarin Vandebron zich transformeert om zich nóg sterker rondom de klant te organiseren. Jij zorgt ervoor dat elke klantinteractie simpel, transparant en relevant is.</p><p style=\"min-height: 1.7em;\"></p><p>Je ontwerpt en optimaliseert klantreizen die maximale waarde creëren voor zowel onze klanten als Vandebron. Je helpt bijvoorbeeld klanten hun energieverbruik slim te optimaliseren, met als doel een duurzame toekomst waarin we 100% van de tijd groene energie gebruiken tegen de laagst mogelijke energierekening. Binnen ons compacte Customer Experience team van 2 Customer Experience Specialists en 2 Customer Journey Experts krijg je alle vrijheid om jouw ideeën tot leven te brengen en is jouw individuele bijdrage direct zichtbaar.</p><p style=\"min-height: 1.7em;\"></p><p>Intern noemen wij deze functie Customer Experience Specialist. En ja, deze vacature staat twee keer met andere vacaturetitels op onze website. We onderzoeken welke titel het beste resoneert.</p><p style=\"min-height: 1.7em;\"></p><h3><strong>Wat je gaat doen</strong></h3><ul><li><p><strong>Voer de regie over end-to-end klantreizen:</strong> Je stopt energie in het continu optimaliseren van onze klantreizen. Je leidt deze journeys en streeft, met behulp van data en een klantgerichte mindset, naar een consistente en frictieloze klantervaring.</p></li><li><p><strong>Analyseer klantdata en de <em>Voice of the Customer</em>:</strong> Je analyseert klantdata en feedback en vertaalt deze naar concrete aanbevelingen en structurele verbeteringen. Ontbreekt er cruciale data? Dan neem jij het initiatief voor aanvullend kwantitatief of kwalitatief onderzoek om de echte klantbehoefte boven tafel te krijgen.</p></li><li><p><strong>Zet AI-tools praktisch in:</strong> Je maakt slim gebruik van AI-tools binnen het CX-domein om klantdata sneller te analyseren, workshops efficiënter te faciliteren en geautomatiseerde rapportages op te stellen.</p></li><li><p><strong>Faciliteer workshops en design sprints:</strong> Je leidt workshops voor het opstellen van customer journeys en begeleidt design sprints om vanuit data-inzichten klantproblemen en kansen te concretiseren. Zo neem je collega’s mee in de ‘customer first’-werkwijze en versnel je innovatie.</p></li><li><p><strong>Verbind de organisatie rondom de klant:</strong> Je bent een sterke gesprekspartner die moeiteloos schakelt tussen technische specialisten, business owners en de operatie, en weet verschillende belangen te verenigen met de klant als uitgangspunt.</p></li></ul><p style=\"min-height: 1.7em;\"></p><h3><strong>Wat je meebrengt</strong></h3><ul><li><p>Minimaal 5 jaar werkervaring in het CX-domein, bijvoorbeeld met het opzetten, uitvoeren, analyseren van en adviseren vanuit kwantitatief en kwalitatief klantonderzoek.</p></li><li><p>Ruime ervaring met het opstellen van customer journeys en het faciliteren van workshops/design sprints.</p></li><li><p>Praktische ervaring met AI-tools binnen CX voor versnelde analyses, efficiëntere facilitatie en geautomatiseerde rapportages.</p></li><li><p>Vloeiend in de Nederlandse taal, zowel in woord als geschrift. Ook jouw beheersing van de Engelse taal en geschrift is goed.</p></li><li><p>Je volgt de ontwikkelingen in de energiemarkt op de voet (of hebt hier al ervaring in) en bent intrinsiek gemotiveerd om duurzame innovaties (zoals slimme aansturing) succesvol te maken voor de consument.</p></li><li><p>Je bent sterk in het versimpelen van complexe energievraagstukken en vertaalt deze naar een simpele en transparante klantervaring.</p></li><li><p>Je begrijpt de emotionele kant van energie (van de voldoening van verduurzamen tot zorgen over de rekening) én kunt soepel schakelen tussen verschillende interne belangen.</p></li></ul><p style=\"min-height: 1.7em;\"></p><h3><strong>Waarom deze rol een slimme vervolgstap is voor jouw carrière</strong></h3><p>Deze rol bevindt zich midden in de strategische beweging waarin Vandebron zich steeds sterker rondom de klant organiseert. Omdat je in een klein team werkt, is je individuele bijdrage direct zichtbaar. Er is ontzettend veel te doen en te bouwen, wat jou maximale vrijheid en eigenaarschap geeft om je eigen ideeën daadwerkelijk tot uitvoering te brengen en échte impact te maken op de energietransitie.</p><p style=\"min-height: 1.7em;\"></p><h3><strong>Wat je gaat leren</strong></h3><ul><li><p>Hoe je de klant vertegenwoordigt in alles wat je doet, op een manier die naadloos aansluit bij waar Vandebron als merk voor staat.</p></li><li><p>Hoe je jouw stakeholder management vaardigheden naar een hoger niveau tilt om samen met diverse cross-functionele teams tot maximale resultaten te komen.</p></li><li><p>Hoe je met geavanceerde methodieken en AI-tools klantervaringen continu blijft vernieuwen en schalen.</p></li></ul><p style=\"min-height: 1.7em;\"></p><h3><strong>Hoe succes eruit ziet na je eerste 6–12 maanden</strong></h3><ul><li><p>Je neemt vol overtuiging het voortouw in verschillende journey teams (zoals de 'I Join'-reis voor nieuwe klanten of de reis voor verhuizers).</p></li><li><p>Op basis van grondige data-analyses en klantonderzoek heb je de belangrijkste pijnpunten en kansen van klantreizen scherp in kaart gebracht.</p></li><li><p>Je hebt samen met de teams alle klantinzichten gebundeld tot een holistisch beeld van de klantervaring, zodat Vandebron energie steekt in de initiatieven met de meeste impact.</p></li><li><p>Je hebt de effecten van de geïmplementeerde initiatieven op de klantervaring meetbaar gemaakt en geborgd binnen de organisatie.</p></li></ul><p style=\"min-height: 1.7em;\"></p><h3><strong>Wat wij jou bieden</strong></h3><ul><li><p>Een mooi salaris.</p></li><li><p>Een jaarlijkse bonus gebaseerd op de bedrijfsprestaties.</p></li><li><p>30 betaalde vakantiedagen per jaar om op te laden en inspiratie op te doen.</p></li><li><p>Mogelijkheid om tot 6 weken per jaar vanuit het buitenland te werken.</p></li><li><p>Sabbatical-mogelijkheden.</p></li><li><p>Buitengewoon verlof voor belangrijke persoonlijke gebeurtenissen, vrijwilligerswerk en een extra vrije dag voor religieuze of persoonlijke feestdagen.</p></li><li><p>Een jaarlijks opleidingsbudget van € 1200,- plus toegang tot Learning &amp; Development-workshops en -programma's.</p></li><li><p>Een pensioenregeling om te bouwen aan je toekomst.</p></li><li><p>Een maandelijkse netto vergoeding van € 50,- voor je telefoon en wifi.</p></li><li><p>Een eenmalige netto vergoeding van € 200,- voor het inrichten van een comfortabele thuiswerkplek.</p></li><li><p>Een flexibele hybride werkopzet, verdeel je tijd tussen ons klimaatneutrale kantoor in Amsterdam en thuis.</p></li><li><p>Dagelijks een gezonde, warme en vegetarische lunch, vers bereid door onze eigen koks.</p></li><li><p>Een NS-Business Card als je op 10 km of meer van kantoor woont.</p></li></ul><p style=\"min-height: 1.7em;\"></p><h2><strong>Interesse?</strong></h2><p>Enthousiast geworden over deze rol? Solliciteer direct via deze pagina.</p><p style=\"min-height: 1.7em;\"></p><p>Nog niet helemaal overtuigd of heb je vragen? Neem gerust contact op via <strong>tommythomassen@vandebron.nl</strong>.</p><p style=\"min-height: 1.7em;\"></p><p><em>Bij Vandebron geloven we in diversiteit, inclusie en gelijke kansen. We nodigen je uit om helemaal jezelf te zijn — het is voor ons geen enkel probleem als je jouw geslacht of geboortedatum niet op je cv vermeldt. We gaan zorgvuldig om met je privacy. Volgens de AVG/GDPR ben je niet verplicht om informatie te delen over je gezondheid, ras/nationaliteit of religie, en mag je jouw BSN en pasfoto gerust weglaten uit je sollicitatiebescheiden.</em></p>",
+   "experience_code": "mid_level",
+   "postal_code": "1013KS",
+   "company_name": "Vandebron",
+   "published_at": "2026-07-31 08:59:50 UTC",
+   "slug": "customer-experience-manager",
+   "tags": [],
+   "locations_question_required": true,
+   "remote": false,
+   "state_name": "Noord-Holland",
+   "updated_at": "2026-08-05 12:08:24 UTC",
+   "created_at": "2026-07-31 08:52:40 UTC",
+   "id": 2696453,
+   "employment_type_code": "fulltime_permanent",
+   "dynamic_fields": [],
+   "department": "Marketing",
+   "hybrid": true,
+   "careers_url": "https://werkenbij.vandebron.nl/o/customer-experience-manager",
+   "requirements": null,
+   "min_hours": null,
+   "location_question_visible": false,
+   "status": "published",
+   "guid": "mf173",
+   "on_site": false,
+   "country": "Nederland"
+  }
+ ]
+}
