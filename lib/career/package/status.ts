@@ -67,6 +67,18 @@ export function explainPackageError(raw: string | null | undefined): PackageErro
       retryDocuments: true,
     }
   }
+  // A renderer that is INSTALLED but slow is a different fact from one that is
+  // absent, and only the second is worth telling someone to go install
+  // something about. Word's first render after a cold start was measured at
+  // 106s on the founder's own machine.
+  if (/did not finish in time|timed out|too slow/.test(low)) {
+    return {
+      kind: 'renderer',
+      headline: 'The PDF converter did not finish in time.',
+      reassurance: `${SAFE} The DOCX was produced; retrying the documents usually gets the PDF, because the converter is warm the second time.`,
+      retryDocuments: true,
+    }
+  }
   if (/no pdf renderer|pdf render|word could not be started|libreoffice/.test(low)) {
     return {
       kind: 'renderer',

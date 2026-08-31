@@ -23,7 +23,7 @@ import type { CareerRun } from '../runs'
 import type { CoverLetter, DocumentQaReport, EvidenceBank, ResumeParagraphMapEntry } from '../types'
 import { withTempDir } from '../documents/tmp'
 import { insertCoverLetter, nextLetterVersion, updateCoverLetter, type LetterSigner } from './persist'
-import { PDF_UNAVAILABLE_WARNING, writeOutput, type DocumentOutput } from './resume'
+import { PDF_UNAVAILABLE_WARNING, pdfRenderFailedWarning, writeOutput, type DocumentOutput } from './resume'
 
 export interface LetterJob {
   title: string
@@ -101,12 +101,15 @@ async function buildLetterDocumentsIn(params: LetterDocumentsParams, tmp: string
   let renderer: string | null = render.renderer
   let pdfUnavailable = false
   if (!render.ok) {
-    if (render.error === NO_RENDERER_ERROR) {
+    if (render.outcome === 'no_renderer' || render.error === NO_RENDERER_ERROR) {
+      // Nothing on this machine can render a DOCX. The remedy is to install one.
       renderer = null
       pdfUnavailable = true
       warnings.push(PDF_UNAVAILABLE_WARNING)
     } else {
-      warnings.push(`pdf render failed: ${render.error ?? 'unknown'}`)
+      // A renderer IS installed and did not finish. The letter DOCX stands and
+      // the PDF is retryable; never tell the founder to install what is running.
+      warnings.push(pdfRenderFailedWarning(render.outcome === 'timeout' ? 'timeout' : 'failed', render.error ?? 'no reason given'))
     }
   }
   let info: PdfInfo | undefined

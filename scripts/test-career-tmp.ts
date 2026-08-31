@@ -15,6 +15,8 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import { isTempPath, makeTempDir, removeTempDir, tmpRoot, withTempDir, TMP_NAMESPACE } from '../lib/career/documents/tmp'
+import { PDF_UNAVAILABLE_WARNING, pdfRenderFailedWarning } from '../lib/career/package/resume'
+import { explainPackageError } from '../lib/career/package/status'
 
 let passed = 0
 let failed = 0
@@ -32,6 +34,7 @@ function check(name: string, ok: boolean, detail = ''): void {
 const CAREER_OUT = path.join('.career-out', 'tmp')
 
 async function main(): Promise<void> {
+  pdfOutcomeChecks()
   const originalOverride = process.env.CAREER_TMP_DIR
   delete process.env.CAREER_TMP_DIR
 
@@ -217,3 +220,22 @@ main().catch((e) => {
   console.error(e)
   process.exit(1)
 })
+
+// ─── PDF outcomes: "not installed" and "too slow" are different facts ─────────
+// Telling a founder to install Microsoft Word on the machine where Word is
+// running is the bug this section exists to prevent. A cold Word render of the
+// real master résumé measured 106s against a 90s budget.
+function pdfOutcomeChecks(): void {
+  const timeout = pdfRenderFailedWarning('timeout', 'Word render timed out after 90000ms')
+  const failed = pdfRenderFailedWarning('failed', 'Word refused the document')
+  check('a timeout never tells the founder to install a renderer', !/install (?:microsoft word|libreoffice|one|a )/i.test(timeout) && /nothing needs installing/i.test(timeout), timeout)
+  check('a timeout says the DOCX survived and a retry is the remedy', /DOCX was produced/.test(timeout) && /retry/i.test(timeout))
+  check('a refusal is its own message', /refused the document/.test(failed) && !/install/i.test(failed))
+  check('only an absent renderer names the software to install', /no PDF renderer is installed \(Microsoft Word or LibreOffice\)/.test(PDF_UNAVAILABLE_WARNING), PDF_UNAVAILABLE_WARNING)
+
+  const slow = explainPackageError('PDF not rendered: the converter did not finish in time (Word render timed out after 90000ms).')
+  check('the UI headline for a slow converter does not claim it is missing', slow.kind === 'renderer' && /did not finish in time/.test(slow.headline) && !/install/i.test(slow.headline), slow.headline)
+  check('a slow converter is retryable and says the DOCX is safe', slow.retryDocuments === true && /DOCX was produced/.test(slow.reassurance))
+  const absent = explainPackageError('no PDF renderer available (install Microsoft Word or LibreOffice)')
+  check('an absent renderer still reads as a renderer problem', absent.kind === 'renderer', absent.kind)
+}
