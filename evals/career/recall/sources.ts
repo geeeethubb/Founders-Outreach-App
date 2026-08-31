@@ -67,6 +67,16 @@ export const RECALL_CONFIGURED_PLATFORMS = [
   'smartrecruiters',
   'workable',
   'workday',
+  // Wave 2. Oracle ORC is the one that moved the benchmark: the three boards
+  // recorded below as coverage gaps (Honeywell 697, Vertiv 1041, CSX 13) all
+  // answered the shipped adapter on 2026-08-31, so those gaps are closed and
+  // their entries are in the denominator rather than in a footnote.
+  'oracle-orc',
+  'taleo',
+  'recruitee',
+  'gem',
+  'teamtailor',
+  'personio',
 ] as const
 
 /**
@@ -132,9 +142,6 @@ export function configuredPlatformDrift(claimed: readonly string[] = RECALL_CONF
 export const UNADAPTED_REASONS: Record<string, string> = {
   phenom:
     'no Phenom adapter exists — docs/ATS_ENDPOINTS.md lists it under "Build second" (POST /widgets, ddoKey in the body)',
-  oracle:
-    'no Oracle Recruiting adapter exists — docs/ATS_ENDPOINTS.md ranks it first for this founder (limit/offset go inside the finder string)',
-  taleo: 'no Taleo adapter exists — needs the tz: GMT-04:00 header, and ~50 % of tenants fail',
   icims: 'no iCIMS adapter exists — sitemap.xml plus JSON-LD, but tenant subdomains are unguessable',
 }
 

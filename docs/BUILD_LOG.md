@@ -6,6 +6,99 @@ architecturally and why.
 
 ---
 
+## 2026-08-31 — Wave 2 sources go live, and the benchmark stops crediting itself
+
+**Type:** discovery coverage + eval integrity · **Behavior change:** the registry ships
+**14 sources (13 configured)** instead of 6, and the recall benchmark measures Oracle boards
+it previously listed as unreadable.
+
+### The six adapters were built but not wired
+
+`oracleOrcSource`, `taleoSource`, `recruiteeSource`, `gemSource`, `teamtailorSource` and
+`personioSource` existed, had passing suites, and were reachable from nothing —
+`discoveryRegistry()` still returned the wave-1 six plus Simplify. They are now in
+`v2DiscoverySources()`, and the registry reports:
+
+```
+ats (12, all free, no key)  greenhouse lever ashby smartrecruiters workable workday
+                            oracle-orc taleo recruitee gem teamtailor personio
+feed (1)                    simplify
+search (1)                  dataforseo — unconfigured, needs DATAFORSEO_LOGIN
+```
+
+### The eval caught the wiring, which is what it was for
+
+`configuredPlatformDrift()` failed the moment the registry changed —
+*"shipped-but-unscored: gem, oracle-orc, personio, recruitee, taleo, teamtailor"* — and named
+its own fix. Rather than widen the constant and move on, the six platforms were registered
+**and** the corpus was extended with live evidence.
+
+### The Oracle coverage gap was real, and is now closed
+
+The benchmark recorded three Oracle boards as unreadable (Honeywell 697 postings, Vertiv
+1041, CSX 13) because the probe could not get a requisition list out of them. The shipped
+adapter can: **limit and offset go inside the finder string.** All three answered on
+2026-08-31. Sweeping the Oracle tenants named by the Simplify file — free tenant discovery —
+returned **40 live internships across 46 employers**, including DNV's *Process Safety Risk
+Intern*, Howmet, Cummins, Emerson and onsemi. None of them were visible to any wave-1 source.
+
+Eight of those postings are now benchmark entries (corpus **44 → 52**, 29 companies), and CSX
+— previously a gap — turned out to hold nine paid Summer 2027 internships.
+
+### Two truths that had rotted
+
+- The report's closing caveat named *"3 Oracle boards"* in prose with only the count
+  interpolated, so once the gap closed it printed **"3 Oracle boards reported 0 postings that
+  no configured source can read"**. It is now computed from `coverage_gaps`, with a different
+  sentence when the list is empty.
+- `UNADAPTED_REASONS` still said *"no Oracle Recruiting adapter exists"* and *"no Taleo
+  adapter exists"*. Both were deleted; Phenom and iCIMS remain, because both are still true.
+
+### A test that had frozen the registry's shape
+
+`test-career-coverage.ts` asserted *"the live registry wraps all six ATS adapters"* and
+*"every ATS is configured with no key"* via `unconfigured().length === 0`. Both failed
+correctly. The count assertion was the wrong invariant — registry drift is already the recall
+eval's job — so they were replaced with the two properties the product actually depends on:
+**every ATS adapter is free and needs no key** (a board that starts demanding one silently
+narrows discovery to whoever paid), and **every unconfigured source names its env var**
+(ADR-008 skips it, so the founder must be able to act on it).
+
+### Results
+
+```
+recall (reachable corpus)      100.0%   50/50          >= 90%     PASS
+reachable share                96.2%    50/52          >= 90%     PASS
+platform drift                 12 adapters, in sync               PASS
+corpus size                    52 entries, 29 companies           PASS
+unique companies in top 50     25                     >= 20       PASS
+largest single company         AMD 6/50 (12%)         <= 25%      PASS
+areas in top 50                8 of 8                 >= 5        PASS
+surfaces in top 50             3                      >= 2        PASS
+closed shown as open           0                      == 0        PASS
+```
+
+`npm run test:career` 32/32 · `npx tsc --noEmit` clean · `npx next build` exit 0.
+
+### New: `npm run career:stats`
+
+Read-only inventory — totals, verification status, source surface, ATS, company
+concentration, freshness, recent runs. Written because "how many jobs do I have?" was being
+answered by scrolling the Jobs page, which counts what the page chose to show. It reads a
+live database honestly, and the first thing it reported is below.
+
+### What the live database still says
+
+**284 jobs, 276 open, 34 companies** — the >200 target is met. But **GE Vernova is 107 of 284
+(38%)**, the exact concentration the audit flagged, and the source breakdown is
+workday/greenhouse/lever/ashby only. Every wave-2 source has contributed **zero live rows**,
+because wiring them changes what the *next* run can reach, not what past runs stored. The
+benchmark's 12% is what a run over the new sources looks like; 38% is what the stored
+inventory looks like. Closing that gap needs a fresh scout, which costs money and is the
+founder's call.
+
+---
+
 ## 2026-08-31 — Geography stops being a built-in preference; direction becomes a dial
 
 **Type:** architecture (ADR-042) + migration 017 · **Behavior change:** the product ships no

@@ -1,6 +1,6 @@
 {
  "generated_at": "2026-08-31",
- "method": "Recorded live from public, unauthenticated endpoints on 2026-08-31: Workday cxs POST /jobs (searchText 'intern'), Greenhouse boards-api, Lever v0/postings, Ashby posting-api, Phenom POST /widgets. No login, no CAPTCHA, robots.txt respected. Exactly as returned; nothing invented.",
+ "method": "Recorded live from public, unauthenticated endpoints on 2026-08-31: Workday cxs POST /jobs (searchText 'intern'), Greenhouse boards-api, Lever v0/postings, Ashby posting-api, Phenom POST /widgets. No login, no CAPTCHA, robots.txt respected. Exactly as returned; nothing invented. Oracle ORC boards were added on 2026-08-31 by sweeping the tenants named in the Simplify listings file through the shipped oracle-orc adapter (public recruitingCEJobRequisitions finder, no auth); 40 live internships were returned across 46 tenants and the ones recorded here are the subset used by the benchmark.",
  "boards": [
   {
    "platform": "workday",
@@ -2690,6 +2690,147 @@
      "url": "https://msd.wd5.myworkdayjobs.com/en-US/SearchJobs/job/USA---Pennsylvania---West-Point/XMLNAME-2026-Future-Talent-Program---Vaccine-Manufacturing-Co-op_R395900/apply",
      "posted_raw": "2026-08-04T00:00:00.000+0000",
      "posted_at": null
+    }
+   ]
+  },
+  {
+   "platform": "oracle-orc",
+   "company": "DNV",
+   "company_domain": null,
+   "board_key": "CX",
+   "board_url": "https://ecyq.fa.em2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX",
+   "board_total_reported": null,
+   "tenant": "ecyq.fa.em2.oraclecloud.com",
+   "postings": [
+    {
+     "external_id": "7354",
+     "title": "Process Safety Risk Intern",
+     "location_raw": "Rio de Janeiro, Brazil",
+     "url": "https://ecyq.fa.em2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1/job/7354",
+     "posted_raw": null,
+     "posted_at": "2026-08-21T00:00:00.000Z"
+    },
+    {
+     "external_id": "7286",
+     "title": "Intern - Data and SW development, Energy Market Analytics",
+     "location_raw": "Bologna, Emilia Romagna, Italy · Madrid, Spain",
+     "url": "https://ecyq.fa.em2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1/job/7286",
+     "posted_raw": null,
+     "posted_at": "2026-08-13T00:00:00.000Z"
+    }
+   ]
+  },
+  {
+   "platform": "oracle-orc",
+   "company": "Hologic",
+   "company_domain": null,
+   "board_key": "CX",
+   "board_url": "https://ebwb.fa.us2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX",
+   "board_total_reported": null,
+   "tenant": "ebwb.fa.us2.oraclecloud.com",
+   "postings": [
+    {
+     "external_id": "12118",
+     "title": "Internship in Manufacturing Engineer CR (12 months)",
+     "location_raw": "Alajuela, Costa Rica",
+     "url": "https://ebwb.fa.us2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX/job/12118",
+     "posted_raw": null,
+     "posted_at": "2026-08-03T00:00:00.000Z"
+    }
+   ]
+  },
+  {
+   "platform": "oracle-orc",
+   "company": "Garrett Motion",
+   "company_domain": null,
+   "board_key": "CX",
+   "board_url": "https://ehth.fa.em2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX",
+   "board_total_reported": null,
+   "tenant": "ehth.fa.em2.oraclecloud.com",
+   "postings": [
+    {
+     "external_id": "14630",
+     "title": "Garrett Engineering Internship - Material Lab",
+     "location_raw": "BRNO, BRNO MĚSTO, Czech Republic",
+     "url": "https://ehth.fa.em2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_2001/job/14630",
+     "posted_raw": null,
+     "posted_at": "2026-06-19T00:00:00.000Z"
+    }
+   ]
+  },
+  {
+   "platform": "oracle-orc",
+   "company": "CSX",
+   "company_domain": null,
+   "board_key": "CX",
+   "board_url": "https://fa-eowa-saasfaprod1.fa.ocs.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX",
+   "board_total_reported": null,
+   "tenant": "fa-eowa-saasfaprod1.fa.ocs.oraclecloud.com",
+   "postings": [
+    {
+     "external_id": "54811",
+     "title": "Mechanical Engineering Internship - Summer 2027 (Paid)",
+     "location_raw": "Jacksonville, FL, United States",
+     "url": "https://fa-eowa-saasfaprod1.fa.ocs.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_4001/job/54811",
+     "posted_raw": null,
+     "posted_at": "2026-08-28T00:00:00.000Z"
+    }
+   ]
+  },
+  {
+   "platform": "oracle-orc",
+   "company": "GHD",
+   "company_domain": null,
+   "board_key": "CX",
+   "board_url": "https://ejov.fa.ca2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX",
+   "board_total_reported": null,
+   "tenant": "ejov.fa.ca2.oraclecloud.com",
+   "postings": [
+    {
+     "external_id": "28128",
+     "title": "Environmental Engineering Intern",
+     "location_raw": "TAMPA, FL, United States",
+     "url": "https://ejov.fa.ca2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX/job/28128",
+     "posted_raw": null,
+     "posted_at": "2026-08-31T00:00:00.000Z"
+    }
+   ]
+  },
+  {
+   "platform": "oracle-orc",
+   "company": "Fortive",
+   "company_domain": null,
+   "board_key": "CX",
+   "board_url": "https://ejta.fa.us6.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX",
+   "board_total_reported": null,
+   "tenant": "ejta.fa.us6.oraclecloud.com",
+   "postings": [
+    {
+     "external_id": "10562",
+     "title": "Test Engineer Co-Op",
+     "location_raw": "Everett, WA, United States",
+     "url": "https://ejta.fa.us6.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_2001/job/10562",
+     "posted_raw": null,
+     "posted_at": "2026-08-28T00:00:00.000Z"
+    }
+   ]
+  },
+  {
+   "platform": "oracle-orc",
+   "company": "onsemi",
+   "company_domain": null,
+   "board_key": "CX",
+   "board_url": "https://hctz.fa.us2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX",
+   "board_total_reported": null,
+   "tenant": "hctz.fa.us2.oraclecloud.com",
+   "postings": [
+    {
+     "external_id": "2506475",
+     "title": "Fall 2026 - Image Sensor Development Intern",
+     "location_raw": "Hopewell Junction, NY, United States",
+     "url": "https://hctz.fa.us2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1001/job/2506475",
+     "posted_raw": null,
+     "posted_at": "2026-08-31T00:00:00.000Z"
     }
    ]
   }

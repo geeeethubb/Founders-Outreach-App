@@ -117,8 +117,24 @@ async function testWrapper() {
   check('a disabled adapter is skipped with a reason', disabledRes.postings.length === 0 && /disabled/.test(disabledRes.error ?? ''), disabledRes.error)
 
   const live = discoveryRegistry()
-  check('the live registry wraps all six ATS adapters', live.byType('ats').length === 6, live.all().map((s) => s.id).join(','))
-  check('every ATS is configured with no key', live.configured().length >= 6 && live.unconfigured().length === 0)
+  const ats = live.byType('ats')
+  // These two used to read "all six ATS adapters" and "nothing is unconfigured",
+  // which froze the registry at its wave-1 shape: six free boards and no paid
+  // source. Wave 2 shipped six more boards and one credentialed search source,
+  // and both assertions failed for the good reason. What is worth pinning is not
+  // the COUNT — the recall eval already fails on registry drift — but the two
+  // properties the product depends on.
+  check('the ATS layer still ships every free board adapter', ats.length >= 6, `${ats.length}: ${ats.map((s) => s.id).join(',')}`)
+
+  // 1. An ATS board is public. If one ever starts demanding a key, discovery
+  //    silently narrows to whoever has paid, and free-tier runs quietly get worse.
+  const gated = ats.filter((s) => !s.isConfigured() || s.costModel.kind !== 'free')
+  check('every ATS adapter is free and needs no key', gated.length === 0, gated.map((s) => `${s.id}=${s.costModel.kind}`).join(',') || 'none gated')
+
+  // 2. An unconfigured source is allowed — it is skipped, not fatal (ADR-008) —
+  //    but it must name the variable it wants, or the founder cannot act on it.
+  const nameless = live.unconfigured().filter((u) => !u.envVar)
+  check('every unconfigured source names the env var it needs', nameless.length === 0, live.unconfigured().map((u) => `${u.id}:${u.envVar ?? 'UNNAMED'}`).join(',') || 'all configured')
 
   // givesDescription is a PROMISE the extractor acts on: a posting under
   // MIN_EXTRACT_CHARS of description is dropped, so an adapter that claims a

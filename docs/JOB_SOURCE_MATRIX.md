@@ -7,6 +7,27 @@
 > each optional behind an env var, so the app runs with none and improves with
 > each one added.
 
+## Shipped status — 2026-08-31
+
+This document is the research record: what was probed, and what the probe found. What is
+now **wired into `discoveryRegistry()`** is narrower and is listed here so the two are never
+confused.
+
+| | Sources |
+|---|---|
+| **ATS, free, no key (12)** | greenhouse · lever · ashby · smartrecruiters · workable · workday · **oracle-orc** · **taleo** · **recruitee** · **gem** · **teamtailor** · **personio** |
+| **Feed, free (1)** | simplify |
+| **Search, paid (1)** | dataforseo — *unconfigured*, needs `DATAFORSEO_LOGIN` |
+
+The six in bold shipped in wave 2. **Oracle ORC was the biggest single unlock**, exactly as
+this document predicted: the three boards the recall benchmark had recorded as unreadable
+(Honeywell, Vertiv, CSX) all answered, and a free sweep of the Oracle tenants named by the
+Simplify file returned 40 live internships across 46 employers.
+
+Still unimplemented, and still honestly described below: **iCIMS** (sitemap + JSON-LD; tenant
+subdomains unguessable), **Phenom**, **ADP**, **Eightfold**, **SuccessFactors**. Endpoint
+detail for all of them is in [ATS_ENDPOINTS.md](ATS_ENDPOINTS.md).
+
 ## The finding that should shape the portfolio
 
 The obvious free source — the SimplifyJobs / Pitt CSC Summer 2027 list — is a

@@ -27,6 +27,14 @@ import { ashbyAdapter } from './ashby'
 import { smartRecruitersAdapter } from './smartrecruiters'
 import { workableAdapter } from './workable'
 import { workdayAdapter } from './workday'
+import { oracleOrcSource } from './oracle-orc'
+import { taleoSource } from './taleo'
+import { recruiteeSource } from './recruitee'
+import { gemSource } from './gem'
+import { teamtailorSource } from './teamtailor'
+import { personioSource } from './personio'
+import { simplifySource } from './simplify'
+import { dataForSeoSource } from './dataforseo'
 
 const ALL: JobSourceAdapter[] = [greenhouseAdapter, leverAdapter, ashbyAdapter, smartRecruitersAdapter, workableAdapter, workdayAdapter]
 
@@ -385,10 +393,40 @@ export function createDiscoveryRegistry(input: JobDiscoverySource[]): DiscoveryR
 }
 
 /**
- * Every discovery surface this build knows: the six ATS adapters wrapped, plus
- * anything registered at runtime. A missing credential is REPORTED, never
- * thrown — `unconfigured()` names the env var each skipped source needs.
+ * The V2 sources — the ones written against `JobDiscoverySource` directly
+ * rather than wrapped from a `JobSourceAdapter`.
+ *
+ * Order is deliberate: Oracle and Taleo first because they are what the
+ * founder's own field runs on (Merck, DuPont, Corning, ExxonMobil), and they
+ * are the reason 126 watchlist companies used to answer "no public board
+ * detected". Simplify last of the free ones because it is a software list
+ * whose real value is the ATS tenants it reveals, not its own postings.
+ * DataForSEO is the only paid source and reports `isConfigured: false`
+ * without its credentials, so a build with no key simply runs without it.
+ */
+export function v2DiscoverySources(): JobDiscoverySource[] {
+  return [
+    oracleOrcSource(),
+    taleoSource(),
+    recruiteeSource(),
+    gemSource(),
+    teamtailorSource(),
+    personioSource(),
+    simplifySource(),
+    dataForSeoSource(),
+  ]
+}
+
+/**
+ * Every discovery surface this build knows: the six ATS adapters wrapped, the
+ * V2 sources above, plus anything registered at runtime. A missing credential
+ * is REPORTED, never thrown — `unconfigured()` names the env var each skipped
+ * source needs.
  */
 export function discoveryRegistry(): DiscoveryRegistry {
-  return createDiscoveryRegistry([...ALL.map((a) => wrapAtsAdapter(a)), ...EXTRA_DISCOVERY_SOURCES])
+  return createDiscoveryRegistry([
+    ...ALL.map((a) => wrapAtsAdapter(a)),
+    ...v2DiscoverySources(),
+    ...EXTRA_DISCOVERY_SOURCES,
+  ])
 }

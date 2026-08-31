@@ -342,10 +342,21 @@ async function main(): Promise<void> {
 
   log('\n── targets ──')
   log(formatTable(['target', 'observed', 'required', 'result', 'note'], targets.map((x) => [x.name, x.observed, x.target, x.pass ? 'PASS' : 'FAIL', x.note])))
+  // The caveat is COMPUTED, never asserted. This sentence used to name "3 Oracle
+  // boards" in prose with only the number interpolated, so when the oracle-orc
+  // adapter shipped and read all three, the report kept citing them as
+  // unreachable while printing a total of 0. A caveat that cannot go out of date
+  // is worth more than a vivid one.
+  const gaps = corpus.benchmark.coverage_gaps
+  const gapPostings = gaps.reduce((n, g) => n + (g.board_total_reported ?? 0), 0)
+  const gapLine =
+    gaps.length === 0
+      ? '  detector. Every board this corpus once recorded as unreadable is now read by a shipped adapter.'
+      : `  detector — ${gaps.length} ${gaps.length === 1 ? 'board' : 'boards'} (${[...new Set(gaps.map((g) => g.platform))].join(', ')}) reported ${gapPostings} postings that no configured source can read.`
   log(
     '\n  What this number is and is not: recall here is measured against a corpus one person assembled\n' +
       '  from public endpoints on 2026-08-31. It is a FLOOR on what discovery finds and a regression\n' +
-      `  detector — 3 Oracle boards alone reported ${corpus.benchmark.coverage_gaps.reduce((n, g) => n + (g.board_total_reported ?? 0), 0)} postings that no configured source can read.\n` +
+      `${gapLine}\n` +
       '  Coverage cannot be proven complete; it can only be measured against something written down.'
   )
 

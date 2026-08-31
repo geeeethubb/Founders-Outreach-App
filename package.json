@@ -50,6 +50,7 @@
     "eval:career-documents": "tsx scripts/career-eval-documents.ts",
     "career:scout": "tsx scripts/career-scout.ts",
     "career:verify": "tsx scripts/career-verify.ts",
+    "career:stats": "tsx scripts/career-discovery-stats.ts",
     "career:package": "tsx scripts/career-package.ts",
     "test:career-scout": "tsx scripts/test-career-scout.ts",
     "test:career-package": "tsx scripts/test-career-package.ts",

@@ -1,7 +1,7 @@
 {
  "version": "recall-benchmark-1",
  "generated_at": "2026-08-31",
- "method": "Assembled by hand from postings observed live on 2026-08-31 through public, unauthenticated endpoints only: Workday cxs, Greenhouse boards-api, Lever v0, Ashby posting-api, Phenom /widgets, and the SimplifyJobs/Pitt CSC Summer 2027 listings file. Every entry cites the URL it was seen at. Nothing was invented, and nothing behind a login or a CAPTCHA was touched.",
+ "method": "Assembled by hand from postings observed live on 2026-08-31 through public, unauthenticated endpoints only: Workday cxs, Greenhouse boards-api, Lever v0, Ashby posting-api, Phenom /widgets, and the SimplifyJobs/Pitt CSC Summer 2027 listings file. Every entry cites the URL it was seen at. Nothing was invented, and nothing behind a login or a CAPTCHA was touched. Wave 2 added Oracle ORC entries, swept live on 2026-08-31 through the shipped adapter against tenants named by the Simplify file. Same rule as the rest of the corpus: every entry cites the URL it was seen at, and nothing was invented.",
  "role_areas": [
   "process_chemical",
   "manufacturing",
@@ -16,28 +16,12 @@
   "Greenhouse/Lever/Ashby: 19 climate, materials and chemicals startups answered; only Kairos Power, Ginkgo Bioworks, Lucid Motors and Sila Nanotechnologies had any internship posted on 2026-08-31. Early-stage boards are not where this founder's recall is.",
   "Workday: DuPont, Illumina, Albemarle and Chevron all answered, and none of them returned a single internship-titled posting in the first page of an 'intern' search — their boards are real but their internships were not open on this date.",
   "Merck's careers site is Phenom; its apply links point at the Workday tenant msd.wd5/SearchJobs. The two Future Talent co-ops were visible through Phenom search but not in the first 40 Workday results for 'intern' — the same employer, two surfaces, two different answers.",
-  "Oracle Recruiting (Honeywell 697 postings, Vertiv 1041, CSX 13) answered the public recruitingCEJobRequisitions finder with search metadata but no requisition list in this shape; no Oracle postings are in the corpus, and the totals are recorded as a coverage gap instead."
+  "Oracle Recruiting (Honeywell 697 postings, Vertiv 1041, CSX 13) answered the public recruitingCEJobRequisitions finder with search metadata but no requisition list in this shape; no Oracle postings are in the corpus, and the totals are recorded as a coverage gap instead.",
+  "GAP CLOSED 2026-08-31: the three Oracle boards recorded above as unreadable (Honeywell, Vertiv, CSX) all answered the shipped oracle-orc adapter. The correction was that limit and offset go INSIDE the finder string, not beside it. CSX, previously a gap, turned out to hold nine paid Summer 2027 internships; its Mechanical Engineering one is now entry ats-049. Oracle postings are in the recall denominator instead of a footnote.",
+  "Oracle tenant discovery cost nothing: the Simplify listings file names the tenants, and a sweep of 46 of them returned 40 live internships at 46 employers - among them DNV Process Safety Risk, Howmet, Cummins, Emerson and onsemi, none of which any pre-wave-2 source could see.",
+  "Taleo, Recruitee, Gem, Teamtailor and Personio adapters shipped in wave 2 and are listed in RECALL_CONFIGURED_PLATFORMS, but no entry in this corpus is recorded against them: the live probes found no posting in the founder role areas on those platforms on this date. They widen the product, not this benchmark, and claiming otherwise would need invented fixtures."
  ],
- "coverage_gaps": [
-  {
-   "platform": "oracle",
-   "company": "Honeywell",
-   "board_total_reported": 697,
-   "endpoint": "https://ibqbjb.fa.ocs.oraclecloud.com/hcmRestApi/resources/latest/recruitingCEJobRequisitions"
-  },
-  {
-   "platform": "oracle",
-   "company": "Vertiv",
-   "board_total_reported": 1041,
-   "endpoint": "https://egup.fa.us2.oraclecloud.com/hcmRestApi/resources/latest/recruitingCEJobRequisitions"
-  },
-  {
-   "platform": "oracle",
-   "company": "CSX",
-   "board_total_reported": 13,
-   "endpoint": "https://fa-eowa-saasfaprod1.fa.ocs.oraclecloud.com/hcmRestApi/resources/latest/recruitingCEJobRequisitions"
-  }
- ],
+ "coverage_gaps": [],
  "entries": [
   {
    "id": "ats-001",
@@ -740,6 +724,134 @@
    "why_relevant": "Software applied to energy optimisation at a power-equipment maker.",
    "reachable_by": [
     "simplify"
+   ],
+   "observed_at": "2026-08-31"
+  },
+  {
+   "id": "ats-045",
+   "company": "DNV",
+   "title": "Process Safety Risk Intern",
+   "url": "https://ecyq.fa.em2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1/job/7354",
+   "canonical_url": "https://ecyq.fa.em2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1/job/7354",
+   "source": "oracle-orc:ecyq.fa.em2.oraclecloud.com",
+   "platform": "oracle-orc",
+   "active": true,
+   "role_area": "process_chemical",
+   "why_relevant": "A named process-safety internship - the closest match in the corpus to the founder's process/chemical direction, and invisible to every pre-wave-2 source.",
+   "reachable_by": [
+    "oracle-orc"
+   ],
+   "observed_at": "2026-08-31"
+  },
+  {
+   "id": "ats-046",
+   "company": "DNV",
+   "title": "Intern - Data and SW development, Energy Market Analytics",
+   "url": "https://ecyq.fa.em2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1/job/7286",
+   "canonical_url": "https://ecyq.fa.em2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1/job/7286",
+   "source": "oracle-orc:ecyq.fa.em2.oraclecloud.com",
+   "platform": "oracle-orc",
+   "active": true,
+   "role_area": "energy",
+   "why_relevant": "Energy analytics at a certification body: the energy and data overlap the founder's stated direction names.",
+   "reachable_by": [
+    "oracle-orc"
+   ],
+   "observed_at": "2026-08-31"
+  },
+  {
+   "id": "ats-047",
+   "company": "Hologic",
+   "title": "Internship in Manufacturing Engineer CR (12 months)",
+   "url": "https://ebwb.fa.us2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX/job/12118",
+   "canonical_url": "https://ebwb.fa.us2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX/job/12118",
+   "source": "oracle-orc:ebwb.fa.us2.oraclecloud.com",
+   "platform": "oracle-orc",
+   "active": true,
+   "role_area": "manufacturing",
+   "why_relevant": "Manufacturing engineering at a medical-device maker - regulated-industry process work.",
+   "reachable_by": [
+    "oracle-orc"
+   ],
+   "observed_at": "2026-08-31"
+  },
+  {
+   "id": "ats-048",
+   "company": "Garrett Motion",
+   "title": "Garrett Engineering Internship - Material Lab",
+   "url": "https://ehth.fa.em2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_2001/job/14630",
+   "canonical_url": "https://ehth.fa.em2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_2001/job/14630",
+   "source": "oracle-orc:ehth.fa.em2.oraclecloud.com",
+   "platform": "oracle-orc",
+   "active": true,
+   "role_area": "materials",
+   "why_relevant": "A materials-laboratory internship; materials characterisation is squarely in the founder's evidence bank.",
+   "reachable_by": [
+    "oracle-orc"
+   ],
+   "observed_at": "2026-08-31"
+  },
+  {
+   "id": "ats-049",
+   "company": "CSX",
+   "title": "Mechanical Engineering Internship - Summer 2027 (Paid)",
+   "url": "https://fa-eowa-saasfaprod1.fa.ocs.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_4001/job/54811",
+   "canonical_url": "https://fa-eowa-saasfaprod1.fa.ocs.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_4001/job/54811",
+   "source": "oracle-orc:fa-eowa-saasfaprod1.fa.ocs.oraclecloud.com",
+   "platform": "oracle-orc",
+   "active": true,
+   "role_area": "industrial_tech",
+   "why_relevant": "On the exact CSX board this benchmark previously recorded as an unreachable coverage gap.",
+   "reachable_by": [
+    "oracle-orc"
+   ],
+   "observed_at": "2026-08-31"
+  },
+  {
+   "id": "ats-050",
+   "company": "GHD",
+   "title": "Environmental Engineering Intern",
+   "url": "https://ejov.fa.ca2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX/job/28128",
+   "canonical_url": "https://ejov.fa.ca2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX/job/28128",
+   "source": "oracle-orc:ejov.fa.ca2.oraclecloud.com",
+   "platform": "oracle-orc",
+   "active": true,
+   "role_area": "process_chemical",
+   "why_relevant": "Environmental engineering is a chemical-engineering-adjacent discipline and a stated pivot target.",
+   "reachable_by": [
+    "oracle-orc"
+   ],
+   "observed_at": "2026-08-31"
+  },
+  {
+   "id": "ats-051",
+   "company": "Fortive",
+   "title": "Test Engineer Co-Op",
+   "url": "https://ejta.fa.us6.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_2001/job/10562",
+   "canonical_url": "https://ejta.fa.us6.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_2001/job/10562",
+   "source": "oracle-orc:ejta.fa.us6.oraclecloud.com",
+   "platform": "oracle-orc",
+   "active": true,
+   "role_area": "manufacturing",
+   "why_relevant": "A co-op in test and manufacturing engineering at an industrial conglomerate.",
+   "reachable_by": [
+    "oracle-orc"
+   ],
+   "observed_at": "2026-08-31"
+  },
+  {
+   "id": "ats-052",
+   "company": "onsemi",
+   "title": "Fall 2026 - Image Sensor Development Intern",
+   "url": "https://hctz.fa.us2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1001/job/2506475",
+   "canonical_url": "https://hctz.fa.us2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1001/job/2506475",
+   "source": "oracle-orc:hctz.fa.us2.oraclecloud.com",
+   "platform": "oracle-orc",
+   "active": true,
+   "role_area": "materials",
+   "why_relevant": "Semiconductor device development - the materials and process end of industrial tech.",
+   "reachable_by": [
+    "oracle-orc"
    ],
    "observed_at": "2026-08-31"
   }
