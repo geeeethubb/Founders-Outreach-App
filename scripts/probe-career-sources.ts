@@ -14,7 +14,8 @@ config({ path: path.join(process.cwd(), '.env.local') })
 import { getSourceRegistry } from '../lib/career/sources/registry'
 import { detectAtsForCompany } from '../lib/career/sources/detect'
 import { scanCareersPage } from '../lib/career/sources/careers'
-import { createPageFetcher } from '../lib/career/sources/fetch'
+import { createPageFetcher, slugCandidates } from '../lib/career/sources/fetch'
+import { WORKDAY_PODS, preferredWorkdaySite, workdaySites } from '../lib/career/sources/workday'
 import { cacheStats } from '../lib/providers/cache'
 import type { AtsBoardRef } from '../lib/career/sources/types'
 
@@ -26,8 +27,21 @@ const BOARDS: AtsBoardRef[] = [
   { ats: 'ashby', identifier: 'ramp', company_name: 'Ramp' },
   { ats: 'smartrecruiters', identifier: 'BoschGroup', company_name: 'Bosch Group' },
   { ats: 'workable', identifier: 'blueground', company_name: 'Blueground' },
+  // Workday: the founder's own watchlist companies that used to yield zero.
+  { ats: 'workday', identifier: 'intel/wd1/External', company_name: 'Intel Corporation' },
+  { ats: 'workday', identifier: 'micron/wd1/External', company_name: 'Micron Technology' },
+  { ats: 'workday', identifier: 'amat/wd1/External', company_name: 'Applied Materials' },
+  { ats: 'workday', identifier: 'amgen/wd1/Careers', company_name: 'Amgen' },
+  { ats: 'workday', identifier: '3m/wd1/Search', company_name: '3M Company' },
+  { ats: 'workday', identifier: 'globalfoundries/wd1/External', company_name: 'GlobalFoundries' },
+  { ats: 'workday', identifier: 'illumina/wd1/illumina-careers', company_name: 'Illumina' },
+  { ats: 'workday', identifier: 'chevron/wd5/University', company_name: 'Chevron' },
+  { ats: 'workday', identifier: 'argonne/wd1/Argonne_Careers', company_name: 'Argonne National Laboratory' },
   // A board that does not exist — exercises the not-found path.
   { ats: 'greenhouse', identifier: 'anduril', company_name: 'Anduril (wrong slug)' },
+  // Wrong site on a real tenant (404) and a tenant that does not exist (422).
+  { ats: 'workday', identifier: 'micron/wd1/NoSuchSite', company_name: 'Micron (wrong site)' },
+  { ats: 'workday', identifier: 'zzznotarealtenant/wd1/External', company_name: 'Nobody (wrong tenant)' },
 ]
 
 const DETECT = [
@@ -49,7 +63,89 @@ async function timed<T>(fn: () => Promise<T>): Promise<{ value: T; ms: number }>
   return { value, ms: Date.now() - t0 }
 }
 
+// ─── Watchlist coverage ──────────────────────────────────────────────────────
+//
+//   npx tsx scripts/probe-career-sources.ts --watchlist
+//
+// Read-only. Answers the one number that matters for discovery supply: how many
+// watchlist companies resolve to a board something can actually LIST. It reuses
+// the same robots.txt read the adapter uses, so a hit here is a hit in product.
+
+const WATCHLIST_CONCURRENCY = 4
+
+async function resolveWorkdayByName(name: string, domain: string | null): Promise<AtsBoardRef | null> {
+  // Two slugs, two pods — a measurement sweep, not the product path. Detection
+  // proper (detect.ts) only probes once a careers page has named Workday.
+  const slugs = slugCandidates(name, domain).slice(0, 2)
+  for (const slug of slugs) {
+    for (const pod of WORKDAY_PODS.slice(0, 2)) {
+      const sites = await workdaySites(slug, pod)
+      const site = preferredWorkdaySite(sites)
+      if (site) return { ats: 'workday', identifier: `${slug}/${pod}/${site}`, company_name: name }
+    }
+  }
+  return null
+}
+
+async function watchlistCoverage(): Promise<void> {
+  const { createServiceClient } = await import('../lib/supabase/server')
+  const supabase = createServiceClient()
+  const { data, error } = await supabase
+    .from('companies')
+    .select('id, name, domain, careers_url, ats_type, ats_identifier, watch_status')
+    .not('watch_status', 'is', null)
+    .limit(1000)
+  if (error) {
+    console.log(`watchlist read failed: ${error.message}`)
+    return
+  }
+  const rows = data ?? []
+  const registry = getSourceRegistry()
+  const already = rows.filter((c) => c.ats_type && c.ats_type !== 'other' && registry.byId(c.ats_type))
+  const fromUrl: typeof rows = []
+  const candidates: typeof rows = []
+  for (const c of rows) {
+    if (already.includes(c)) continue
+    const m = c.careers_url ? registry.matchUrl(c.careers_url) : null
+    if (m) fromUrl.push(c)
+    else candidates.push(c)
+  }
+
+  console.log(`\n=== watchlist coverage (${rows.length} companies) ===`)
+  console.log(`  already stored on a listable ATS: ${already.length}`)
+  console.log(`  stored careers_url is a listable board: ${fromUrl.length}`)
+  console.log(`  probing ${candidates.length} unresolved for a Workday tenant…`)
+
+  const found: { name: string; identifier: string }[] = []
+  let done = 0
+  const queue = [...candidates]
+  await Promise.all(
+    Array.from({ length: WATCHLIST_CONCURRENCY }, async () => {
+      for (;;) {
+        const c = queue.shift()
+        if (!c) return
+        try {
+          const board = await resolveWorkdayByName(c.name, c.domain)
+          if (board) found.push({ name: c.name, identifier: board.identifier })
+        } catch {
+          // A probe failure is a miss, not a crash.
+        }
+        if (++done % 25 === 0) console.log(`    …${done}/${candidates.length} probed, ${found.length} tenants found`)
+      }
+    })
+  )
+
+  const listable = already.length + fromUrl.length + found.length
+  console.log(`\n  NEW Workday tenants resolved: ${found.length}`)
+  for (const f of found.sort((a, b) => a.name.localeCompare(b.name))) console.log(`    • ${f.name} → ${f.identifier}`)
+  console.log(`\n  LISTABLE BOARDS: ${listable} of ${rows.length} (was ${already.length + fromUrl.length})`)
+}
+
 async function main() {
+  if (process.argv.includes('--watchlist')) {
+    await watchlistCoverage()
+    return
+  }
   const registry = getSourceRegistry()
   const summary: Record<string, unknown>[] = []
 

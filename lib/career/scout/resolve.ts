@@ -120,14 +120,20 @@ async function resolveAtsUrl(p: ScoutedPosting, url: string, deps: ResolveDeps):
     return { posting: null, outcome: 'failed', note: `${m.adapter.id}: ${res.status} — ${res.note}` }
   }
 
+  // Reaching here means the registry has no adapter for this URL. Any ATS we
+  // merely RECOGNISE is still worth reading as a page — and worth recording by
+  // its real family. Guarding on `ats === 'other'` used to be the same thing;
+  // once Workday became a known AtsType it silently stopped catching Workday
+  // pages, which then fell through to the generic web-page path and lost the
+  // board reference.
   const other = matchAnyAtsUrl(url)
-  if (other && other.ats === 'other') {
+  if (other) {
     const page = await fetchWithin(deps, url)
     if (!page) return { posting: null, outcome: 'budget', note: 'page-fetch budget exhausted' }
     if (page.robots_blocked || page.error || page.status < 200 || page.status >= 300) {
       return { posting: null, outcome: 'failed', note: `${other.family} page: ${page.error ?? `http ${page.status}`}` }
     }
-    const raw = pageRaw(p, page, 'careers_page', 'other')
+    const raw = pageRaw(p, page, 'careers_page', other.ats)
     raw.canonical_url = p.url
     raw.raw.board = toBoardRef(other, p.company_name)
     return { posting: raw, outcome: 'other_ats_page', note: `${other.family} posting page read` }

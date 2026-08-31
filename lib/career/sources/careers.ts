@@ -56,6 +56,51 @@ function dedupeBoards(boards: AtsBoardRef[]): AtsBoardRef[] {
   return out.sort((a, b) => Number(a.ats === 'other') - Number(b.ats === 'other'))
 }
 
+/**
+ * A large employer's careers page often renders its ATS link from JavaScript,
+ * so the URL survives only as text in the extracted body — that is how Intel,
+ * Micron and Amgen all looked link-less while naming their Workday tenant on
+ * the page. Sweeping the text costs nothing and is the difference between
+ * "no board detected" and a listable board.
+ */
+const URL_IN_TEXT_RE = /https?:\/\/[a-z0-9][a-z0-9._~:/?#[\]@!$&'()*+,;=%-]*/gi
+
+export function atsUrlsInText(text: string, max = 40): string[] {
+  const out: string[] = []
+  for (const raw of text.match(URL_IN_TEXT_RE) ?? []) {
+    const url = raw.replace(/[.,;:)\]}'"]+$/, '')
+    if (!matchAnyAtsUrl(url) || out.includes(url)) continue
+    out.push(url)
+    if (out.length >= max) break
+  }
+  return out
+}
+
+/**
+ * ATS families this page mentions at all — by link, by final URL, or by the
+ * vendor's hostname appearing anywhere in the text. `detect.ts` uses this to
+ * decide whether a tenant probe is warranted, so it is deliberately looser than
+ * `matchAnyAtsUrl`: a page that says "myworkdayjobs.com" without a usable URL
+ * still tells us where to look.
+ */
+const FAMILY_HOST_RE: [string, RegExp][] = [
+  ['workday', /myworkdayjobs\.com|\bworkday\b/i],
+  ['icims', /\bicims\.com\b/i],
+  ['taleo', /\btaleo\.net\b/i],
+  ['successfactors', /successfactors\.com|\bsapsf\.com\b|jobs2web\.com/i],
+  ['greenhouse', /greenhouse\.io/i],
+  ['lever', /jobs\.lever\.co/i],
+  ['ashby', /ashbyhq\.com/i],
+  ['smartrecruiters', /smartrecruiters\.com/i],
+  ['workable', /workable\.com/i],
+]
+
+export function atsFamilyHints(page: FetchedPage | null): string[] {
+  if (!page) return []
+  const haystack = `${page.final_url}\n${page.links.join('\n')}\n${page.text}`
+  return FAMILY_HOST_RE.filter(([, re]) => re.test(haystack)).map(([family]) => family)
+}
+
 function boardsFromLinks(links: string[], companyName: string): AtsBoardRef[] {
   const boards: AtsBoardRef[] = []
   for (const link of links) {
@@ -107,6 +152,11 @@ export async function scanCareersPage(input: ScanCareersInput, fetcher: PageFetc
   let fetches = 0
   let lastError: string | undefined
   let blocked = false
+  // The first page that loads is not always the one that names the ATS —
+  // intel.com/careers is a marketing page and intel.com/jobs is the board. Keep
+  // the first readable page as a fallback and keep looking for one with a board.
+  let fallback: CareersPageScan | null = null
+
   for (const url of candidates.slice(0, MAX_FETCHES_PER_COMPANY)) {
     fetches++
     const page = await fetcher.fetch(url)
@@ -119,18 +169,21 @@ export async function scanCareersPage(input: ScanCareersInput, fetcher: PageFetc
       lastError = page.error ?? `http ${page.status}`
       continue
     }
-    const boards = boardsFromLinks(page.links, input.companyName)
+    const boards = boardsFromLinks([...page.links, ...atsUrlsInText(page.text)], input.companyName)
     // A page that only redirected to a board is itself the board.
     const selfMatch = matchAnyAtsUrl(page.final_url)
     if (selfMatch) boards.unshift(toBoardRef(selfMatch, input.companyName))
-    return {
+    const scan: CareersPageScan = {
       careers_url: page.final_url,
       boards: dedupeBoards(boards),
       posting_links: boards.length ? [] : postingLinks(page, page.final_url),
       hints: extractHints(page.text),
       fetched: page,
     }
+    if (scan.boards.length) return scan
+    if (!fallback || (!fallback.posting_links.length && scan.posting_links.length)) fallback = scan
   }
+  if (fallback) return fallback
   return {
     careers_url: null,
     boards: [],

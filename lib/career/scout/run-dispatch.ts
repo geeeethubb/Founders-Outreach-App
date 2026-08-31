@@ -23,11 +23,24 @@ export interface ScoutRunParams {
   label: string
 }
 
-/** Vercel kills the function at 300s, so a hosted run is shallower and stops at 280s. */
-export const VERCEL_CAPS = { strategies: 2, rounds: 2, companies: 20, extract: 30 }
+/**
+ * Vercel kills the function at 300s, so a hosted run is shallower and stops at
+ * 280s. `companies` went 20 → 60: it is a LISTING budget, and a listing is one
+ * cached JSON request per board, so twenty was rationing the cheapest thing in
+ * the run. `extract` stays at 30 — that one is a model call per posting, it is
+ * where the money goes, and 280 seconds cannot buy more of it.
+ */
+export const VERCEL_CAPS = { strategies: 2, rounds: 2, companies: 60, extract: 30 }
 export const VERCEL_DEADLINE_MS = 280_000
-/** Off Vercel there is no ceiling: a browser-started run is as deep as the CLI's. */
-export const LOCAL_CAPS = { strategies: 3, rounds: 2, companies: 25, extract: 40 }
+/**
+ * Off Vercel there is no function ceiling, so a local run should reach the
+ * WHOLE watchlist rather than a sample of it: `companies` 25 → 250, which is
+ * more than the founder's 188 and therefore not a cap in practice. `extract`
+ * 40 → 80 because inventory no longer depends on it — a posting is stored
+ * whether or not it was read (lib/career/jobs/sweep.ts), so this number now
+ * only decides how many get read, and 80 is what twenty minutes affords.
+ */
+export const LOCAL_CAPS = { strategies: 3, rounds: 2, companies: 250, extract: 80 }
 export const LOCAL_DEADLINE_MS = 1_200_000
 
 export function onVercel(): boolean {

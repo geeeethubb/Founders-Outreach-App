@@ -43,6 +43,7 @@ import { renderPreferences, renderSkills } from '../evidence/render'
 import { getRelevantPersonalEvidence, renderRelevantEvidence } from '../evidence/retrieval'
 import { renderFeedbackHints } from '../fit/feedback'
 import { normalizeCompanyName, type NormalizedJob } from '../jobs/normalize'
+import { sweepWatchlist, SWEEP_MAX_COMPANIES, type SweepResult, type SweepStore } from '../jobs/sweep'
 import { runIntelligenceBatch } from '../intelligence/orchestrator'
 import { renderMission, sanitizeDirection } from '../missions/store'
 import { DEFAULT_SCOUT_BUDGET, type CareerBudget, type CareerRun } from '../runs'
@@ -53,8 +54,8 @@ import type { RawJobPosting } from '../sources/types'
 import type { CareerMission, VerificationStatus } from '../types'
 import { seedWatchlistFromPlan } from './company-first'
 import { fallbackStrategies, selectJobsToRank } from './direction'
-import type { RejectedJob } from './extract'
-import { ATS_SOURCES, persistBatch, type BatchContext } from './persist'
+import { extractPending, type PendingExtractionStore, type RejectedJob } from './extract'
+import { isAtsListingSource, persistBatch, type BatchContext } from './persist'
 import type { FetchBudget } from './resolve'
 import { runCompanyFirstStage, runJobFirstStage, type StageRun } from './stages'
 import { bump, emptyStats, noteQuery } from './stats'
@@ -76,6 +77,14 @@ export type { CompaniesSelected, JobScoutDeps, JobScoutParams, JobScoutResult, J
  * run says so in `stats.job_first_reserve_ms` when the cap bites.
  */
 const COMPANY_FIRST_TIME_SHARE = 0.55
+/**
+ * The share of the run's wall clock the free sweep may spend before anything
+ * costs money. It runs FIRST for one reason: a run should decide what to pay
+ * for after it has seen the inventory, not before. A quarter of the clock is
+ * enough for ~190 boards at concurrency 6, and whatever it does not use is
+ * handed straight back to discovery.
+ */
+const SWEEP_TIME_SHARE = 0.25
 // Post-scout ranking: how many of this run's jobs get a fit number before the
 // run returns, how many at once, and how much of the deadline must be left.
 // Research is skipped here (it is the slow stage); the package flow runs it.
@@ -84,13 +93,47 @@ const RANK_CONCURRENCY = 3
 const RANK_DEADLINE_RESERVE_MS = 20_000
 const RANK_MIN_WINDOW_MS = 30_000
 
+/**
+ * The wide, cheap half of a run, and the paid pass over what it found.
+ *
+ * These are additions to `JobScoutParams` rather than edits to it, so every
+ * existing caller keeps compiling and keeps its behaviour unchanged: both are
+ * off until a caller asks, and deferred extraction additionally has to say how
+ * much of itself to buy.
+ */
+export interface JobScoutSweepParams {
+  /**
+   * Sweep the whole watchlist before any model call.
+   *
+   * Opt-in, because the sweep's cost is WALL CLOCK and not every caller has
+   * it: a Vercel worker with 280 seconds cannot afford both a 190-board sweep
+   * and web discovery, while a CLI run with twenty minutes should always do
+   * both. The callers that can afford it (the sweep CLI, POST
+   * /api/career/sweep, the daily cron, `career:scout` locally) turn it on.
+   */
+  sweep?: boolean
+  /** Companies the sweep may visit. Default: all of them. */
+  maxSweepCompanies?: number
+  /**
+   * Extractions to run over the best UNEXTRACTED stored rows after discovery.
+   * Off (0) unless asked for, and never more than the run's unspent in-flight
+   * extraction budget — a run cannot exceed its own cap by taking this door.
+   */
+  deferredExtract?: number
+}
+
+export interface JobScoutSweepDeps {
+  /** The pending-extraction surface. Required for `deferredExtract` under test. */
+  pendingStore?: PendingExtractionStore
+}
+
 export function scoutToolContext(userId: string, runId: string | null, budget: CareerBudget): ToolContext {
   return { user_id: userId, run_id: runId, budget: { maxCompanies: 0, maxPeoplePerCompany: 0, maxApolloCalls: 0, maxWebSearches: budget.maxWebSearches, maxAgentSteps: budget.maxAgentSteps } }
 }
 
 // ─── The run ─────────────────────────────────────────────────────────────────
 
-export async function runJobScout(params: JobScoutParams, deps: JobScoutDeps = {}): Promise<JobScoutResult> {
+export async function runJobScout(params: JobScoutParams & JobScoutSweepParams, deps: JobScoutDeps & JobScoutSweepDeps = {}): Promise<JobScoutResult> {
   const started = Date.now()
   const store = deps.store ?? liveScoutStore()
   const registry = deps.registry ?? getSourceRegistry()
@@ -226,7 +269,7 @@ export async function runJobScout(params: JobScoutParams, deps: JobScoutDeps = {
   const keepRaw = (p: RawJobPosting) => {
     pending.push(p)
     postingsFound++
-    if (p.source_type && ATS_SOURCES.has(p.source_type)) atsListedUrls.add(p.canonical_url ?? p.source_url)
+    if (p.source_type && isAtsListingSource(p.source_type)) atsListedUrls.add(p.canonical_url ?? p.source_url)
     bump(stats.sources_consulted, p.source_type)
   }
 
@@ -285,6 +328,74 @@ export async function runJobScout(params: JobScoutParams, deps: JobScoutDeps = {
     progress, keepRaw, flush, pastDeadline, traced,
   }
 
+  // (c2) SWEEP — the free, wide pass, and it goes FIRST.
+  //
+  //      Every company on the watchlist with a resolvable board, listed through
+  //      the registry and stored with the extracted columns null. No model call
+  //      is reachable from here (lib/career/jobs/sweep.ts pins the extraction
+  //      budget to zero and verification off), so it costs the run nothing but
+  //      wall clock, and it decides what the rest of the run is choosing FROM.
+  //
+  //      It does not narrow company-first. Re-listing a board the sweep just
+  //      read is free — the adapters cache a listing per board per day — and
+  //      the store matches the second sighting to the row the sweep inserted.
+  //      What company-first still owns is the run's account of the user's own
+  //      choices (`companies_selected`), which is a different question from
+  //      "what is on the market today".
+  const sweepJobs: SweepResult['jobs'] = []
+  if (params.sweep === true && !pastDeadline('sweep')) {
+    progress('sweep', 'listing every resolvable board on the watchlist (no model calls)')
+    try {
+      // Its OWN stats object. The two passes see the same postings — the sweep
+      // lists a board, company-first re-lists it from cache — so sharing one
+      // record would count every rejection and every verdict twice and quietly
+      // double the funnel the founder reads.
+      const sweepStats = emptyStats()
+      const sw = await sweepWatchlist(
+        params.userId,
+        {
+          mission,
+          limit: params.maxSweepCompanies ?? SWEEP_MAX_COMPANIES,
+          deadline: Math.min(deadline, started + Math.floor(budget.deadlineMs * SWEEP_TIME_SHARE)),
+          runId: run.runId,
+          ctx,
+          stats: sweepStats,
+          onProgress: (stage, detail) => progress(stage, detail),
+        },
+        { store: store as SweepStore, registry, fetcher }
+      )
+      if (sw.migrationMissing) return finish(run, 'failed', 'migration 014_career_os.sql has not been applied', true)
+      errors.push(...sw.errors)
+      // The sweep persisted through the same `upsertJobs`, so its rows belong
+      // to this run's counts exactly as a stage's do. Merged by hand, once, so
+      // it is obvious which numbers a sweep contributes.
+      stats.companies_checked += sw.checked
+      stats.companies_with_openings += sw.withOpenings
+      stats.postings_seen += sw.postingsListed
+      stats.postings_resolved += sw.postingsListed
+      stats.jobs_inserted += sw.inserted
+      stats.jobs_updated += sw.updated
+      bump(stats.sources_consulted, 'sweep:postings', sw.postingsListed)
+      bump(stats.sources_consulted, 'sweep:boards', sw.withBoard)
+      // Prefixed so they are visible without colliding with the stages' own
+      // counts for the same rule — nothing a sweep discards is hidden.
+      for (const [reason, n] of Object.entries(sw.rejected)) bump(stats.jobs_rejected, `sweep:${reason}`, n)
+      postingsFound += sw.postingsListed
+      insertedRows += sw.inserted
+      for (const j of sw.jobs) {
+        sweepJobs.push(j)
+        persistedIds.add(j.id)
+        statusById.set(j.id, j.verification_status as VerificationStatus)
+      }
+      countStored()
+      progress('sweep', `${sw.checked} companies · ${sw.postingsListed} postings · ${sw.inserted} new, ${sw.updated} updated${sw.remaining ? ` · ${sw.remaining} companies left for the next sweep` : ''}`)
+    } catch (e) {
+      // A sweep is an optimisation, never a precondition: a run whose sweep
+      // throws still does everything it did before the sweep existed.
+      errors.push(`sweep: ${e instanceof Error ? e.message : String(e)}`)
+    }
+  }
+
   // (d) Company-first, by INTENT: every Target, then Watching, then a rotating
   //     least-recently-checked sample of Explore. The watchlist is an input to
   //     the run, never its ceiling — hence both the explore cap inside
@@ -333,6 +444,37 @@ export async function runJobScout(params: JobScoutParams, deps: JobScoutDeps = {
   //     its flush. Nothing this run paid for is discarded.
   if (!(await flush('final'))) return finish(run, 'failed', 'migration 014_career_os.sql has not been applied', true)
 
+  // (f2) DEFERRED EXTRACTION — the paid pass over what the free one found.
+  //
+  //      The sweep stores postings thin, on purpose. This is where a bounded
+  //      number of them get read properly, chosen by deterministic relevance
+  //      rather than by which board answered first. It can never exceed the
+  //      run's own extraction cap: it spends what in-flight extraction did not.
+  //      Off unless the caller asks for it and injects (or is in production
+  //      with) a pending-extraction store.
+  const deferred = Math.min(params.deferredExtract ?? 0, Math.max(0, extractBudget.left))
+  if (deferred > 0 && !pastDeadline('deferred extraction')) {
+    progress('extract', `filling in the ${deferred} highest-relevance postings stored without an extraction`)
+    const ep = await extractPending(params.userId, {
+      limit: deferred,
+      order: 'relevance',
+      direction: mission.preferences.direction,
+      mission: { geo_tiers: mission.preferences.geo_tiers },
+      ctx,
+      run,
+      concurrency: params.concurrency ?? 4,
+      deadline,
+      stats,
+      extractor: deps.extractor,
+      store: deps.pendingStore,
+      onProgress: (d) => progress('extract', d),
+    })
+    extractBudget.left = Math.max(0, extractBudget.left - ep.extracted)
+    errors.push(...ep.errors)
+    if (ep.migrationMissing) return finish(run, 'failed', 'migration 014_career_os.sql has not been applied', true)
+    progress('extract', `deferred: ${ep.extracted} of ${ep.candidates} pending rows extracted ($${ep.costUsd.toFixed(4)})`)
+  }
+
   // (g) Rank what was just stored, so the list the user gets back has fit
   // numbers on it. Stored evaluations at the current prompt version are reused
   // inside the batch, so only jobs without one cost anything. Bounded by count,
@@ -358,7 +500,21 @@ export async function runJobScout(params: JobScoutParams, deps: JobScoutDeps = {
       employment_type: job.employment_type, verification_status: job.verification_status, canonical_url: job.canonical_url, source_types: [...new Set(job.sources.map((s) => s.source_type))],
     })
   }
-  if (rankIds.length > 0 && params.rank !== false) {
+  // The sweep's rows are this run's too. They arrive already ordered by
+  // relevance, and any the stages re-found are dropped by id — a posting the
+  // sweep listed and company-first re-listed is one row, reported once.
+  const sweepOnly: string[] = []
+  for (const j of sweepJobs) {
+    if (seenIds.has(j.id)) continue
+    seenIds.add(j.id)
+    sweepOnly.push(j.id)
+    resultJobs.push({
+      id: j.id, title: j.title, company_name: j.company_name, location_raw: j.location_raw, location_tier: j.location_tier,
+      season_relevance: j.season_relevance, employment_type: j.employment_type, verification_status: j.verification_status as VerificationStatus,
+      canonical_url: j.canonical_url, source_types: j.source_types,
+    })
+  }
+  if ((rankIds.length > 0 || sweepOnly.length > 0) && params.rank !== false) {
     const window = deadline - Date.now() - RANK_DEADLINE_RESERVE_MS
     if (params.directionOverride !== undefined) {
       // Fit rows are persisted under the stored mission's id and reused at the
@@ -371,10 +527,19 @@ export async function runJobScout(params: JobScoutParams, deps: JobScoutDeps = {
     } else if (window < RANK_MIN_WINDOW_MS) {
       errors.push(`ranking skipped: ${Math.max(0, Math.round(window / 1000))}s left of the deadline`)
     } else {
-      progress('rank', `${Math.min(MAX_RANK_JOBS, rankIds.length)} jobs`)
+      // The stages' rows are chosen by `selectJobsToRank` (which can see the
+      // whole NormalizedJob); the sweep's are already relevance-ordered and top
+      // up whatever room is left. A run whose inventory came entirely from the
+      // sweep still ranks the best of it.
+      const toRank = selectJobsToRank(rankJobs, rankIds, MAX_RANK_JOBS, mission.preferences.direction)
+      for (const id of sweepOnly) {
+        if (toRank.length >= MAX_RANK_JOBS) break
+        toRank.push(id)
+      }
+      progress('rank', `${toRank.length} jobs`)
       const rank = deps.rank ?? runIntelligenceBatch
       try {
-        const r = await rank(params.userId, selectJobsToRank(rankJobs, rankIds, MAX_RANK_JOBS, mission.preferences.direction), { concurrency: RANK_CONCURRENCY, deadlineMs: window, skip: { research: true }, label: `post-scout ranking · ${mission.name}` })
+        const r = await rank(params.userId, toRank, { concurrency: RANK_CONCURRENCY, deadlineMs: window, skip: { research: true }, label: `post-scout ranking · ${mission.name}` })
         stats.jobs_ranked = Object.values(r.results).filter((x) => x.fit !== null).length
         stats.rank_cost_usd = Number(r.costUsd.toFixed(4))
         if (r.skipped.length) errors.push(`ranking: ${r.skipped.length} job(s) not started before the deadline`)

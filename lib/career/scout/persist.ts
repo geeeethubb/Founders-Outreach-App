@@ -22,14 +22,34 @@ import type { UpsertJobsResult } from '../jobs/store'
 import type { VerifyResult } from '../jobs/verify'
 import { verifyWithAgent, type VerifierFn } from '../jobs/verify-batch'
 import type { CareerRun } from '../runs'
+import { getSourceRegistry } from '../sources/registry'
 import type { PageFetcher, RawJobPosting, SourceRegistry } from '../sources/types'
 import type { CareerMission } from '../types'
 import { extractAndNormalize, type ExtractorFn, type RejectedJob } from './extract'
 import type { FetchBudget } from './resolve'
 import type { ScoutStats } from './stats'
 
-/** The ATS source types whose listing this run is itself proof of an open role. */
-export const ATS_SOURCES = new Set(['greenhouse', 'lever', 'ashby', 'smartrecruiters', 'workable'])
+/**
+ * The source types whose LISTING this run is itself proof of an open role.
+ *
+ * Derived from the registry rather than written out. It was a literal, and the
+ * literal drifted the moment a sixth adapter landed: every posting Workday
+ * listed was stored UNVERIFIED — "we could not confirm it" — while the board
+ * had just handed it to us. An adapter that can list a board is by definition
+ * one whose listing is proof, so ask the registry rather than remember.
+ *
+ * Computed once per process, because the adapter set does not change inside one.
+ */
+let atsSourceTypes: Set<string> | null = null
+export function atsListingSources(): Set<string> {
+  if (!atsSourceTypes) atsSourceTypes = new Set(getSourceRegistry().adapters().map((a) => a.source_type as string))
+  return atsSourceTypes
+}
+
+/** True when a posting arrived from an adapter that had just listed it on a board. */
+export function isAtsListingSource(sourceType: string): boolean {
+  return atsListingSources().has(sourceType)
+}
 
 /** The persistence a batch needs. `ScoutStore` satisfies it structurally. */
 export interface BatchStore {
@@ -120,7 +140,7 @@ export async function persistBatch(raws: RawJobPosting[], batch: BatchContext, e
   const listedThisRun = new Set<NormalizedJob>()
   let verified = 0
   for (const job of jobs) {
-    const listed = job.sources.some((s) => ATS_SOURCES.has(s.source_type) && batch.atsListedUrls.has(s.canonical_url ?? s.source_url))
+    const listed = job.sources.some((s) => isAtsListingSource(s.source_type) && batch.atsListedUrls.has(s.canonical_url ?? s.source_url))
     if (listed) {
       listedThisRun.add(job)
       job.verification_status = 'VERIFIED_OPEN'

@@ -17,7 +17,17 @@ import { getSourceRegistry } from '../sources/registry'
 import type { AtsBoardRef, PageFetcher, RawJobPosting, SourceRegistry } from '../sources/types'
 import { INTERNSHIP_LOOKUP_LIMIT, LOOKUP_POSTING_LIMIT } from './tools'
 
-const ADAPTED: AtsType[] = ['greenhouse', 'lever', 'ashby', 'smartrecruiters', 'workable']
+/**
+ * ATS families a stored `ats_type` can be trusted to list directly.
+ *
+ * It is derived from the registry rather than written out, so an adapter S1
+ * adds — Workday, say — is usable by every stored row the day it lands, with
+ * no edit here. A stored type with no adapter falls through to detection,
+ * which is the honest answer: we cannot list it, so look again.
+ */
+function adaptedAtsTypes(registry: SourceRegistry): Set<string> {
+  return new Set(registry.adapters().map((a) => a.id))
+}
 
 export interface WatchedCompany {
   id: string
@@ -68,10 +78,29 @@ export interface CompanyCheckResult {
   error: string | null
 }
 
+export interface CheckCompanyOptions {
+  internshipsOnly?: boolean
+  bypassCache?: boolean
+  /**
+   * Postings to keep per board, AFTER the internship filter. Defaults to the
+   * scout tool's depth; the watchlist sweep raises it, because a board listing
+   * is one JSON request whatever the cap and a company running fifty
+   * internships must not be cut to the first few.
+   */
+  limit?: number
+  /**
+   * Skip ATS detection: check only companies whose board is already stored.
+   * Detection costs slug probes and careers-page fetches, which is the slow,
+   * rude part of a sweep; a cheap pass turns it off and reports the companies
+   * it therefore did not check.
+   */
+  storedBoardsOnly?: boolean
+}
+
 export async function checkCompanyForOpenings(
   userId: string,
   company: WatchedCompany,
-  opts: { internshipsOnly?: boolean; bypassCache?: boolean } = {},
+  opts: CheckCompanyOptions = {},
   deps: CompanyFirstDeps = {}
 ): Promise<CompanyCheckResult> {
   const registry = deps.registry ?? getSourceRegistry()
@@ -85,9 +114,13 @@ export async function checkCompanyForOpenings(
   let note = ''
   let careersUrl = company.careers_url
 
-  if (company.ats_type && company.ats_identifier && ADAPTED.includes(company.ats_type as AtsType)) {
+  if (company.ats_type && company.ats_identifier && adaptedAtsTypes(registry).has(company.ats_type)) {
     board = { ats: company.ats_type as AtsType, identifier: company.ats_identifier, company_name: company.name, board_url: company.careers_url ?? undefined }
     method = 'stored'
+  } else if (opts.storedBoardsOnly) {
+    // Not an error and not a check: say so, and leave `last_careers_check_at`
+    // alone so the next pass that CAN detect still treats it as never checked.
+    return { ...base, postings: [], board: null, method: 'none', note: 'no stored board and detection was skipped', error: null }
   } else {
     const detection = await detectAtsForCompany(
       { companyName: company.name, domain: company.domain, careersUrl: company.careers_url },
@@ -118,7 +151,8 @@ export async function checkCompanyForOpenings(
   }
 
   // The cap runs after the internship filter; the same depth the scout's lookup tool uses, for the same reason (tools.ts).
-  const listing = await adapter.listPostings(board, { internshipsOnly, limit: internshipsOnly ? INTERNSHIP_LOOKUP_LIMIT : LOOKUP_POSTING_LIMIT })
+  const limit = opts.limit ?? (internshipsOnly ? INTERNSHIP_LOOKUP_LIMIT : LOOKUP_POSTING_LIMIT)
+  const listing = await adapter.listPostings(board, { internshipsOnly, limit })
   if (listing.error) {
     // A failed listing says nothing about openings: record that we looked, but
     // no count — "we could not tell" is not "there is nothing".
@@ -150,7 +184,7 @@ export interface CompanyFirstResult {
 export async function runCompanyFirst(
   userId: string,
   companies: WatchedCompany[],
-  opts: { concurrency?: number; deadline?: number; maxCompanies?: number; internshipsOnly?: boolean; onProgress?: (detail: string) => void } = {},
+  opts: CheckCompanyOptions & { concurrency?: number; deadline?: number; maxCompanies?: number; onProgress?: (detail: string) => void } = {},
   deps: CompanyFirstDeps = {}
 ): Promise<CompanyFirstResult> {
   // The caller decides WHICH companies and in what order — targets first, then
@@ -168,7 +202,12 @@ export async function runCompanyFirst(
       return
     }
     try {
-      const r = await checkCompanyForOpenings(userId, company, { internshipsOnly: opts.internshipsOnly ?? true }, deps)
+      const r = await checkCompanyForOpenings(
+        userId,
+        company,
+        { internshipsOnly: opts.internshipsOnly ?? true, limit: opts.limit, storedBoardsOnly: opts.storedBoardsOnly, bypassCache: opts.bypassCache },
+        deps
+      )
       outcomes.push(r)
       if (r.error) errors.push(`${company.name}: ${r.error}`)
       opts.onProgress?.(`${company.name}: ${r.postings.length} openings (${r.method})`)

@@ -135,8 +135,9 @@ eq('negative: company site', m('https://stripe.com/jobs/search?gh_jid=8026689'),
 eq('negative: greenhouse marketing', m('https://www.greenhouse.io/'), null)
 eq('negative: linkedin', m('https://www.linkedin.com/jobs/view/123'), null)
 eq('negative: workable api path', m('https://apply.workable.com/api/v3/accounts/x/jobs'), null)
-eq('other: workday', matchAnyAtsUrl('https://nvidia.wd5.myworkdayjobs.com/en-US/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Intern_JR1990')?.identifier, 'nvidia')
-eq('other: workday ats', matchAnyAtsUrl('https://nvidia.wd5.myworkdayjobs.com/NVIDIAExternalCareerSite')?.ats, 'other')
+// A Workday board needs tenant + wdN + site to address, so the identifier carries all three.
+eq('workday identifier round-trips tenant/wdN/site', matchAnyAtsUrl('https://nvidia.wd5.myworkdayjobs.com/en-US/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Intern_JR1990')?.identifier, 'nvidia/wd5/NVIDIAExternalCareerSite')
+eq("workday is a first-party ATS, not 'other'", matchAnyAtsUrl('https://nvidia.wd5.myworkdayjobs.com/NVIDIAExternalCareerSite')?.ats, 'workday')
 eq('other: icims', matchAnyAtsUrl('https://careers-acme.icims.com/jobs/1234/intern/job')?.identifier, 'acme')
 eq('other: jobvite', matchAnyAtsUrl('https://jobs.jobvite.com/acme/job/oX1')?.identifier, 'acme')
 eq('other: breezy', matchAnyAtsUrl('https://acme.breezy.hr/p/abc')?.family, 'breezy')

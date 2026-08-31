@@ -104,6 +104,18 @@ export function roleFamilyFromTitle(title: string, department?: string | null): 
 const SENIOR_RE = /\b(senior|sr\.?|staff|principal|lead|director|head of|vp|vice president|chief|manager|executive|architect|fellow|distinguished)\b/i
 const INTERN_RE = /\b(intern|interns|internship|internships|summer analyst|student (?:worker|associate|engineer|program)|undergraduate|new grad(?:uate)?)\b/i
 const COOP_RE = /\bco-?op\b|\bco op\b|\bcooperative education\b/i
+/**
+ * The hint (a department label, a worker-type field) says INTERNSHIP.
+ *
+ * `\bintern` was the whole test, and `\b` only guards the LEFT edge: "Internal
+ * Communications" and "International Sales" both matched it. Greenhouse's
+ * `hintFromMetadata` hands back the department name whenever it contains
+ * "intern", so every posting in an "Internal Communications" department was
+ * classified `internship` — which is exactly how "Office Management and
+ * Internal Communications" reached the founder's inbox as an internship. Both
+ * edges are guarded now, and only the words that are actually the type count.
+ */
+const HINT_INTERN_RE = /\b(intern|interns|internship|internships|co-?op|summer analyst|student (?:worker|associate|engineer|program|intern))\b/i
 
 export function detectEmploymentType(title: string, hint: string | null | undefined, text?: string | null): EmploymentType {
   const t = title ?? ''
@@ -113,7 +125,7 @@ export function detectEmploymentType(title: string, hint: string | null | undefi
   if (SENIOR_RE.test(core) && !INTERN_RE.test(core) && !COOP_RE.test(core)) return 'full_time'
   if (COOP_RE.test(t) || COOP_RE.test(h)) return 'co_op'
   if (/\bnew grad(?:uate)?\b/i.test(t)) return 'full_time'
-  if (INTERN_RE.test(t) || /\bintern/i.test(h)) return 'internship'
+  if (INTERN_RE.test(t) || HINT_INTERN_RE.test(h)) return 'internship'
   const hl = h.toLowerCase()
   if (/full[- ]?time|permanent|regular/.test(hl)) return 'full_time'
   if (/part[- ]?time/.test(hl)) return 'part_time'
@@ -123,6 +135,11 @@ export function detectEmploymentType(title: string, hint: string | null | undefi
   if (/\bthis (?:is an? |)(?:paid |)internship\b|\bour (?:summer |)internship program\b|\binternship program\b/i.test(head)) return 'internship'
   if (/\b(?:full|part)[- ]time\b/i.test(head)) return /\bpart[- ]time\b/i.test(head) ? 'part_time' : 'full_time'
   return 'unknown'
+}
+
+/** The title alone says internship or co-op. Exported so relevance.ts shares one vocabulary. */
+export function titleSaysInternship(title: string): boolean {
+  return INTERN_RE.test(title) || COOP_RE.test(title)
 }
 
 // ─── Season ──────────────────────────────────────────────────────────────────
@@ -286,3 +303,4 @@ export function buildNormalizedJob(raw: RawJobPosting, extracted?: ExtractedJobF
     sources: [raw],
   }
 }
+

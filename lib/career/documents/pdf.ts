@@ -15,8 +15,20 @@ import path from 'path'
 import { pdfPageCountFallback } from './pdf-text'
 import { makeTempDir, removeTempDir } from './tmp'
 
+/**
+ * Why a render ended the way it did (see documents/render-core.ts).
+ *
+ * `ok: false` alone was the bug: every caller string-matched NO_RENDERER_ERROR
+ * to tell "this machine has no Word" from "Word is installed and was too slow",
+ * and got it wrong — which is how a founder with Word running was told to
+ * install Word. The outcomes have different remedies and must be different values.
+ */
+export type { PdfRenderOutcome } from './render-core'
+
 export interface RenderResult {
   ok: boolean
+  /** 'ok' | 'no_renderer' | 'timeout' | 'failed'. Absent on old callers' fixtures; treat undefined as 'failed'. */
+  outcome?: import('./render-core').PdfRenderOutcome
   pageCount: number | null
   error?: string
   ms: number
@@ -315,12 +327,12 @@ export const wordComRenderer: PdfRenderer = {
       const ms = Date.now() - t0
       if (server === s) touchIdle(s)
 
-      if (reply === 'TIMEOUT') return { ok: false, pageCount: null, error: `Word render timed out after ${RENDER_TIMEOUT_MS}ms`, ms }
+      if (reply === 'TIMEOUT') return { ok: false, outcome: 'timeout', pageCount: null, error: `Word render timed out after ${RENDER_TIMEOUT_MS}ms`, ms }
       const err = reply.match(/^ERROR=(.*)/)?.[1]
-      if (err) return { ok: false, pageCount: null, error: err.trim(), ms }
-      if (!fs.existsSync(pdfAbs)) return { ok: false, pageCount: null, error: 'Word reported success but no PDF was written', ms }
+      if (err) return { ok: false, outcome: 'failed', pageCount: null, error: err.trim(), ms }
+      if (!fs.existsSync(pdfAbs)) return { ok: false, outcome: 'failed', pageCount: null, error: 'Word reported success but no PDF was written', ms }
       const pages = reply.match(/^PAGES=(\d+)/)?.[1]
-      return { ok: true, pageCount: pages ? Number(pages) : pdfPageCountFallback(fs.readFileSync(pdfAbs)), ms }
+      return { ok: true, outcome: 'ok', pageCount: pages ? Number(pages) : pdfPageCountFallback(fs.readFileSync(pdfAbs)), ms }
     })
   },
 }
@@ -369,12 +381,12 @@ export const libreOfficeRenderer: PdfRenderer = {
       try {
         const r = await runProcess(soffice, ['--headless', '--convert-to', 'pdf', '--outdir', outDir, docxAbs], RENDER_TIMEOUT_MS)
         const ms = Date.now() - t0
-        if (r.timedOut) return { ok: false, pageCount: null, error: `LibreOffice timed out after ${RENDER_TIMEOUT_MS}ms`, ms }
+        if (r.timedOut) return { ok: false, outcome: 'timeout', pageCount: null, error: `LibreOffice timed out after ${RENDER_TIMEOUT_MS}ms`, ms }
         const produced = path.join(outDir, path.basename(docxAbs, path.extname(docxAbs)) + '.pdf')
-        if (!fs.existsSync(produced)) return { ok: false, pageCount: null, error: (r.stderr || r.stdout || `exit ${r.code}`).trim(), ms }
+        if (!fs.existsSync(produced)) return { ok: false, outcome: 'failed', pageCount: null, error: (r.stderr || r.stdout || `exit ${r.code}`).trim(), ms }
         fs.mkdirSync(path.dirname(pdfAbs), { recursive: true })
         fs.copyFileSync(produced, pdfAbs)
-        return { ok: true, pageCount: pdfPageCountFallback(fs.readFileSync(pdfAbs)), ms }
+        return { ok: true, outcome: 'ok', pageCount: pdfPageCountFallback(fs.readFileSync(pdfAbs)), ms }
       } finally {
         removeTempDirLater(outDir)
       }
@@ -403,7 +415,8 @@ export const NO_RENDERER_ERROR = 'no PDF renderer available (install Microsoft W
  */
 export async function renderDocxToPdf(docx: Buffer | string, outPdfPath: string): Promise<RenderResult & { renderer: string | null }> {
   const renderer = await selectPdfRenderer()
-  if (!renderer) return { ok: false, pageCount: null, error: NO_RENDERER_ERROR, ms: 0, renderer: null }
+  // The ONLY path that may say "no renderer". Everything below has one.
+  if (!renderer) return { ok: false, outcome: 'no_renderer', pageCount: null, error: NO_RENDERER_ERROR, ms: 0, renderer: null }
   let docxPath: string
   let scratch: string | null = null
   if (Buffer.isBuffer(docx)) {
@@ -415,7 +428,8 @@ export async function renderDocxToPdf(docx: Buffer | string, outPdfPath: string)
   }
   try {
     const r = await renderer.render(docxPath, outPdfPath)
-    return { ...r, renderer: renderer.id }
+    // A renderer that answered without an outcome failed; it did not vanish.
+    return { ...r, outcome: r.outcome ?? (r.ok ? 'ok' : 'failed'), renderer: renderer.id }
   } finally {
     if (scratch) removeTempDirLater(scratch)
   }

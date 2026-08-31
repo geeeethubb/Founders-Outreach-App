@@ -194,6 +194,19 @@ export interface ResumeDocumentsResult {
 /** Said the same way everywhere so the UI can distinguish it from a build failure. */
 export const PDF_UNAVAILABLE_WARNING = 'PDF unavailable: no PDF renderer is installed (Microsoft Word or LibreOffice). The DOCX was produced and stored; no PDF was.'
 
+/**
+ * A renderer IS installed and did not finish. Completely different advice from
+ * PDF_UNAVAILABLE_WARNING — "try again", not "install something" — because
+ * telling a founder to install Word on the machine Word is running on is the
+ * bug this pair of messages exists to prevent. Word's first render after a cold
+ * start has been measured at ~106s on this machine.
+ */
+export function pdfRenderFailedWarning(outcome: 'timeout' | 'failed', detail: string): string {
+  return outcome === 'timeout'
+    ? `PDF not rendered: the converter did not finish in time (${detail}). The DOCX was produced and stored — retry the documents to get the PDF; nothing needs installing.`
+    : `PDF not rendered: the converter refused the document (${detail}). The DOCX was produced and stored.`
+}
+
 function effectiveIds(changes: ChangeWithId[]): Set<string> {
   const ids = new Set<string>()
   changes.forEach((c, i) => {
@@ -237,6 +250,13 @@ async function buildResumeDocuments(params: ResumeDocumentsParams, tmp: string, 
   const expectedPages = params.expectedPages ?? params.bank.masterDocument?.page_count ?? 1
   let renderer: string | null = null
   let noRenderer = false
+  /**
+   * Set when a renderer exists but did not produce a PDF — retryable, and never
+   * "install Word". Held on an object because the assignment happens inside the
+   * `toPdf` callback: control-flow analysis cannot see through a callback and
+   * would otherwise still believe a plain `let` is its initial `null`.
+   */
+  const render: { failure: { outcome: 'timeout' | 'failed'; detail: string } | null } = { failure: null }
   let lastApplyWarnings: string[] = []
   let usedSet: ChangeWithId[] = approved
 
@@ -257,7 +277,12 @@ async function buildResumeDocuments(params: ResumeDocumentsParams, tmp: string, 
       const pdfPath = path.join(tmp, `attempt-${attempt}.pdf`)
       const r = await renderDocxToPdf(docx, pdfPath)
       renderer = r.renderer
-      if (!r.ok && r.error === NO_RENDERER_ERROR) noRenderer = true
+      if (!r.ok) {
+        // Only an absent renderer is "unavailable"; a timeout or a refusal is a
+        // failure to retry, and either way the DOCX still stands.
+        if (r.outcome === 'no_renderer' || r.error === NO_RENDERER_ERROR) noRenderer = true
+        else if (r.outcome === 'timeout' || r.outcome === 'failed') render.failure = { outcome: r.outcome, detail: r.error ?? `${r.renderer ?? 'renderer'} gave no reason` }
+      }
       return { ok: r.ok, pageCount: r.pageCount, pdfPath: r.ok ? pdfPath : null, error: r.error, ms: r.ms }
     },
   })
@@ -267,6 +292,7 @@ async function buildResumeDocuments(params: ResumeDocumentsParams, tmp: string, 
     return { docxPath: null, pdfPath: null, filenames, qa: emptyQa(filenames.docx, renderer, fit.error ?? 'nothing rendered'), shrink_attempts: fit.shrink_attempts, droppedByShrink: [], renderer, warnings, finalChanges: usedSet, pdfUnavailable: noRenderer, error: fit.error ?? 'nothing rendered' }
   }
   if (noRenderer) warnings.push(PDF_UNAVAILABLE_WARNING)
+  else if (render.failure) warnings.push(pdfRenderFailedWarning(render.failure.outcome, render.failure.detail))
   else if (!fit.ok) warnings.push(`page fit: ${fit.error ?? 'over the page budget'}`)
 
   const dropped = droppedByShrink(approved, usedSet)

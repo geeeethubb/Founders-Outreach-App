@@ -3,11 +3,16 @@
 // What one scout run produced — every job it touched, curated by nothing.
 //
 // The inbox at /dashboard/jobs is a curated list: it hides jobs that are not
-// verified-or-likely open and ones already dismissed. That is right for daily
-// use and wrong for "show me what that run found", so this view asks the API
-// for the run's jobs with no defaults applied and says so on screen. The two
-// surfaces are deliberately different objects: this one is bordered, titled by
-// the run, and has one way back.
+// open, ones already dismissed, and ones off the stated direction. That is
+// right for daily use and wrong for "show me what that run found", so this view
+// asks the API for the run's jobs with no defaults applied and says so on
+// screen. The two surfaces are deliberately different objects: this one is
+// bordered, titled by the run, and has one way back.
+//
+// The relevance BAND is still attached to every card here — a run that swept
+// three hundred postings needs to be readable — but nothing is filtered by it.
+// Showing the band and hiding the row are two different decisions, and only the
+// inbox gets to make the second one.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
@@ -139,8 +144,9 @@ export default function RunResults({ runId }: { runId: string }) {
           </div>
         )}
         <p className="text-xs text-slate-500 mt-2">
-          Everything this run stored, including postings it could not verify and ones it has not ranked yet — the inbox&apos;s freshness and disposition
-          filters are not applied here.
+          Everything this run stored, including postings it could not verify, ones it has not ranked yet, and ones the inbox would call off-direction —
+          the inbox&apos;s freshness, disposition and relevance filters are not applied here. Each card still carries its direction band, so a wide sweep
+          is readable without being narrowed.
         </p>
       </div>
 

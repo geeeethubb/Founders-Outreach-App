@@ -11,18 +11,31 @@ import type { CareerMission } from '@/lib/career/types'
 import { api } from '@/components/career/api'
 import InlineNotice, { MigrationNotice } from '@/components/career/InlineNotice'
 import JobCard, { type JobCardData } from './JobCard'
-import JobFilters, { DEFAULT_FILTERS, filtersToQuery, type JobFilterState } from './JobFilters'
+import JobFilters, { DEFAULT_FILTERS, filtersToQuery, isDefaultFilters, type JobFilterState } from './JobFilters'
 import ScoutPanel, { readScoutEnvironment } from './ScoutPanel'
 import RunResults from './RunResults'
 import AddByUrl from './AddByUrl'
 import DirectionCard, { type DirectionStatus } from './DirectionCard'
 import { directionDirty, directionPatch } from './direction'
 
-const PAGE = 25
+// 50 rows a page: at 400 postings, 25 makes sixteen pages of scrolling.
+const PAGE = 50
 
 interface JobsResponse {
   jobs: JobCardData[]
+  /** How many postings this page is drawn from — after relevance, before paging. */
   total: number
+  matched?: number
+  /** What the server scored, counted and hid. The header says nothing this did not. */
+  relevance?: {
+    filter: 'strong' | 'possible' | 'any'
+    view: 'all' | 'needs_look'
+    direction: string | null
+    counts: { total: number; strong: number; possible: number; off: number; needsLook: number }
+    headline: string
+    truncated: boolean
+    windowed: boolean
+  }
   filters: { role_families: string[]; tiers: number[]; statuses: string[] }
 }
 
@@ -67,6 +80,10 @@ function JobsView() {
   const [directionSaving, setDirectionSaving] = useState(false)
   const [directionStatus, setDirectionStatus] = useState<DirectionStatus | null>(null)
 
+  // The query, not the filter object: `dense` is a display choice and must not
+  // cost a round trip.
+  const query = filtersToQuery(filters, PAGE, offset)
+
   const loadJobs = useCallback(async () => {
     // In run view the list belongs to RunResults, which fetches it unfiltered.
     if (runParam) {
@@ -74,7 +91,7 @@ function JobsView() {
       return
     }
     setLoading(true)
-    const r = await api<JobsResponse>(`/api/career/jobs?${filtersToQuery(filters, PAGE, offset)}`)
+    const r = await api<JobsResponse>(`/api/career/jobs?${query}`)
     setLoading(false)
     if (!r.ok) {
       setMigrationMissing(r.migrationMissing)
@@ -84,16 +101,18 @@ function JobsView() {
     }
     setError(null)
     setData(r.data)
-  }, [filters, offset, runParam])
+  }, [query, runParam])
 
   // Header counts and the "do you have a bank yet?" check. Cheap (limit=1
   // reads carry `total`), and independent of the current filters.
   const loadContext = useCallback(async () => {
     const [m, open, saved, warm, bank] = await Promise.all([
       api<{ missions: CareerMission[]; activeId: string | null }>('/api/career/missions'),
-      api<JobsResponse>('/api/career/jobs?freshness=likely&disposition=new,saved&limit=1'),
-      api<JobsResponse>('/api/career/jobs?freshness=any&disposition=saved&limit=1'),
-      api<JobsResponse>('/api/career/jobs?freshness=likely&disposition=new,saved&hasWarmPath=1&limit=200'),
+      // Inventory counts, deliberately unfiltered by relevance: the header's
+      // "N open" must not move when the relevance control does.
+      api<JobsResponse>('/api/career/jobs?freshness=open&relevance=any&disposition=new,saved&limit=1'),
+      api<JobsResponse>('/api/career/jobs?freshness=any&relevance=any&disposition=saved&limit=1'),
+      api<JobsResponse>('/api/career/jobs?freshness=open&relevance=any&disposition=new,saved&hasWarmPath=1&limit=200'),
       api<{ counts?: { experiences: number; facts: number } }>('/api/career/evidence'),
     ])
     if (m.ok && m.data) {
@@ -139,7 +158,9 @@ function JobsView() {
   }, [runParam])
 
   function changeFilters(next: JobFilterState) {
-    setOffset(0)
+    // Changing density is not changing the query — keep the reader's place.
+    const onlyDensity = next.dense !== filters.dense && filtersToQuery(next, PAGE, offset) === query
+    if (!onlyDensity) setOffset(0)
     setFilters(next)
   }
 
@@ -178,8 +199,9 @@ function JobsView() {
     setData((prev) => (prev ? { ...prev, jobs: prev.jobs.map((j) => (j.id === id ? { ...j, ...patch } : j)) } : prev))
   }
 
-  const total = data?.total ?? 0
+  const matched = data?.matched ?? data?.total ?? 0
   const jobs = data?.jobs ?? []
+  const rel = data?.relevance ?? null
 
   return (
     <div className="p-8 max-w-6xl">
@@ -299,30 +321,49 @@ function JobsView() {
       </div>
 
       <div className="mb-4">
-        <JobFilters value={filters} onChange={changeFilters} roleFamilies={data?.filters.role_families ?? []} tiers={data?.filters.tiers ?? []} />
+        <JobFilters
+          value={filters}
+          onChange={changeFilters}
+          roleFamilies={data?.filters.role_families ?? []}
+          tiers={data?.filters.tiers ?? []}
+          needsLook={rel?.counts.needsLook}
+          direction={rel?.direction ?? mission?.preferences.direction ?? null}
+        />
       </div>
 
       {loading && !data ? (
         <p className="text-sm text-slate-500">Loading…</p>
       ) : jobs.length === 0 && !error ? (
         <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center">
-          <p className="text-slate-700 font-medium">{total === 0 && filters === DEFAULT_FILTERS ? 'No jobs yet.' : 'Nothing matches these filters.'}</p>
+          <p className="text-slate-700 font-medium">
+            {rel && rel.counts.total > 0
+              ? `Nothing on direction — ${rel.counts.off} posting${rel.counts.off === 1 ? '' : 's'} are off-direction.`
+              : isDefaultFilters(filters)
+                ? 'No jobs yet.'
+                : 'Nothing matches these filters.'}
+          </p>
           <p className="text-sm text-slate-500 mt-1">
-            {total === 0 && filters === DEFAULT_FILTERS
+            {rel && rel.counts.total > 0
+              ? 'Widen the relevance filter to “Everything”, or edit what you’re scouting for above — relevance is scored against it and nothing was deleted.'
+              : isDefaultFilters(filters)
               ? 'Press Scout now to plan a search from what you’re scouting for and your mission, check watched companies and search the web — or paste a posting URL above.'
               : 'Loosen the freshness or disposition filter, or reset.'}
           </p>
         </div>
       ) : (
         <>
+          {/* The one line that must never lie: how many exist, how many are
+              strong, how many are on screen, and what is being hidden. */}
           <p className="text-xs text-slate-500 mb-2">
-            {total} job{total === 1 ? '' : 's'}
+            {rel ? rel.headline : `${matched} job${matched === 1 ? '' : 's'}`}
+            {filters.view === 'needs_look' && ' · needs a look'}
             {loading ? ' · refreshing…' : ''}
-            {(filters.hasWarmPath || filters.state) && ' · counts are per page when filtering by warm path or state'}
+            {rel?.windowed && ' · warm-path / state filters narrow the first 200 by relevance, so this count is that window'}
+            {rel?.truncated && ' · more postings exist than one census reads'}
           </p>
-          <div className="space-y-3">
+          <div className={filters.dense ? 'space-y-1.5' : 'space-y-3'}>
             {jobs.map((j) => (
-              <JobCard key={j.id} job={j} onChange={(p) => patchJob(j.id, p)} onReranked={loadJobs} />
+              <JobCard key={j.id} job={j} onChange={(p) => patchJob(j.id, p)} onReranked={loadJobs} dense={filters.dense} />
             ))}
           </div>
           <div className="mt-4 flex items-center justify-between text-xs text-slate-500">
@@ -330,9 +371,9 @@ function JobsView() {
               ← Previous
             </button>
             <span>
-              {offset + 1}–{Math.min(offset + PAGE, offset + jobs.length)} of {total}
+              {offset + 1}–{offset + jobs.length} of {matched}
             </span>
-            <button type="button" disabled={offset + PAGE >= total} onClick={() => setOffset(offset + PAGE)} className="px-2 py-1 rounded border border-slate-200 disabled:opacity-40">
+            <button type="button" disabled={offset + PAGE >= matched} onClick={() => setOffset(offset + PAGE)} className="px-2 py-1 rounded border border-slate-200 disabled:opacity-40">
               Next →
             </button>
           </div>

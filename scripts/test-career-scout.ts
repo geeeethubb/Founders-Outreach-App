@@ -632,7 +632,7 @@ async function main() {
     check('board URL → null + company to check', r.outcome === 'board_url' && r.posting === null && d.companiesToCheck[0]?.name === 'Acme')
     d = deps()
     r = await resolveScoutedPosting(sp({ url: 'https://acme.wd5.myworkdayjobs.com/en-US/careers/job/SF/Quality-Intern_R123', title: 'Quality Intern' }), d)
-    check('workday URL → careers_page posting with ats_type other', r.outcome === 'other_ats_page' && r.posting?.ats_type === 'other' && r.posting.source_type === 'careers_page' && r.posting.canonical_url === 'https://acme.wd5.myworkdayjobs.com/en-US/careers/job/SF/Quality-Intern_R123')
+    check('workday URL with no adapter in scope → careers_page posting that keeps its family', r.outcome === 'other_ats_page' && r.posting?.ats_type === 'workday' && r.posting.source_type === 'careers_page' && r.posting.canonical_url === 'https://acme.wd5.myworkdayjobs.com/en-US/careers/job/SF/Quality-Intern_R123')
     d = deps()
     r = await resolveScoutedPosting(sp({ url: 'https://aggregator.example/job/1', source_kind: 'aggregator', title: 'Materials Intern' }), d)
     check('aggregator with an ATS link → followed to the first-party record', r.outcome === 'aggregator_followed' && r.posting?.ats_job_id === '3' && d.fetchBudget.left === 4)

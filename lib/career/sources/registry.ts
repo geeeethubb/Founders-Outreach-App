@@ -13,8 +13,9 @@ import { leverAdapter } from './lever'
 import { ashbyAdapter } from './ashby'
 import { smartRecruitersAdapter } from './smartrecruiters'
 import { workableAdapter } from './workable'
+import { workdayAdapter } from './workday'
 
-const ALL: JobSourceAdapter[] = [greenhouseAdapter, leverAdapter, ashbyAdapter, smartRecruitersAdapter, workableAdapter]
+const ALL: JobSourceAdapter[] = [greenhouseAdapter, leverAdapter, ashbyAdapter, smartRecruitersAdapter, workableAdapter, workdayAdapter]
 
 let registry: SourceRegistry | null = null
 
@@ -64,13 +65,10 @@ export interface AnyAtsMatch {
  * Recognized ATS families without an adapter. Each entry extracts the tenant
  * from the hostname (or the first path segment) and rebuilds a board URL.
  */
+// Workday used to live here. It is an adapter now (lib/career/sources/workday.ts),
+// so `getSourceRegistry().matchUrl` claims those URLs first and they arrive with
+// a listable `tenant/pod/site` identifier instead of a bare tenant name.
 const OTHER_FAMILIES: { family: string; host: RegExp; identifier: (u: URL, m: RegExpExecArray) => string | null; board: (u: URL, id: string) => string }[] = [
-  {
-    family: 'workday',
-    host: /^([a-z0-9-]+)\.(wd\d+)\.myworkdayjobs\.com$/,
-    identifier: (_u, m) => m[1],
-    board: (u) => `${u.origin}${u.pathname.split('/').slice(0, 3).join('/')}`,
-  },
   { family: 'icims', host: /^(?:careers[-.])?([a-z0-9-]+)\.icims\.com$/, identifier: (_u, m) => m[1], board: (u) => `${u.origin}/jobs/search` },
   { family: 'taleo', host: /^([a-z0-9-]+)\.taleo\.net$/, identifier: (_u, m) => m[1], board: (u) => `${u.origin}${u.pathname.split('/').slice(0, 2).join('/')}` },
   {

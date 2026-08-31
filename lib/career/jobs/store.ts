@@ -22,6 +22,10 @@ export type { Db } from './db'
 // One owner for "what did this run find?" — see lib/career/jobs/run-results.ts.
 export { MAX_RUN_JOB_IDS, RUN_JOB_ID_URL_BYTES, runJobIds, runJobSummary } from './run-results'
 export type { RunJobIds, RunJobSummary } from './run-results'
+// One owner for "which stored rows still need an extraction?" — see
+// lib/career/jobs/extraction-store.ts. Re-exported so callers keep one door.
+export { MAX_EXTRACTION_POOL, applyExtraction, listExtractionCandidates, loadJobTexts } from './extraction-store'
+export type { ExtractionCandidate, ExtractionCandidateOptions } from './extraction-store'
 export {
   ensureCompany,
   isReinterpreted,
@@ -81,6 +85,17 @@ const EXTRACTED_COLUMNS: (keyof NormalizedJob)[] = [
   'deadline', 'compensation', 'min_qualifications', 'preferred_qualifications', 'graduation_eligibility',
   'work_authorization', 'skills', 'responsibilities', 'industry', 'extraction_version', 'extraction_confidence',
 ]
+/**
+ * Columns the heuristics compute for every copy but an extraction IMPROVES.
+ *
+ * They matter once discovery sweeps daily. A sweep re-lists a board and
+ * re-derives these from the title alone; if it wrote them back it would undo
+ * yesterday's extraction — "Summer 2027" learned from the body would revert to
+ * 'unspecified', a role family read from the responsibilities would revert to
+ * 'other'. So a thin copy leaves them alone whenever the stored row was
+ * extracted. Nothing is lost: a re-listing has no new information about them.
+ */
+const MODEL_REFINED_COLUMNS: (keyof NormalizedJob)[] = ['role_family', 'employment_type', 'season_relevance', 'work_mode']
 
 function jobRow(job: NormalizedJob): Record<string, unknown> {
   const row: Record<string, unknown> = {}
@@ -97,8 +112,8 @@ export function escapeLike(value: string): string {
   return value.replace(/[%_\\]/g, (m) => `\\${m}`)
 }
 
-async function findExistingJob(db: Db, userId: string, job: NormalizedJob, companyId: string | null): Promise<{ id: string; verification_status: VerificationStatus; description_text: string | null } | null> {
-  const select = 'id, verification_status, description_text'
+async function findExistingJob(db: Db, userId: string, job: NormalizedJob, companyId: string | null): Promise<{ id: string; verification_status: VerificationStatus; description_text: string | null; extraction_version: string | null } | null> {
+  const select = 'id, verification_status, description_text, extraction_version'
   if (job.ats_type && job.ats_job_id) {
     const { data } = await db.from('job_opportunities').select(select).eq('user_id', userId).eq('ats_type', job.ats_type).eq('ats_job_id', job.ats_job_id).limit(1).maybeSingle()
     if (data) return data as never
@@ -120,7 +135,7 @@ async function findExistingJob(db: Db, userId: string, job: NormalizedJob, compa
       // unchanged and "Analyst_Intern 50%" matching other postings.
       .ilike('title', escapeLike(job.title))
       .limit(5)
-    const hit = (data as { id: string; verification_status: VerificationStatus; description_text: string | null; location_raw: string | null }[] | null)?.find(
+    const hit = (data as { id: string; verification_status: VerificationStatus; description_text: string | null; extraction_version: string | null; location_raw: string | null }[] | null)?.find(
       (r) => (r.location_raw ?? '').toLowerCase() === (job.location_raw ?? '').toLowerCase()
     )
     if (hit) return hit
@@ -182,7 +197,11 @@ export async function upsertJobs(
       // listing carries no description, and a re-listing carries no extraction.
       // Only overwrite what the incoming copy actually has.
       if (!job.description_text) for (const k of DESCRIPTION_COLUMNS) delete update[k]
-      if (job.extraction_confidence == null) for (const k of EXTRACTED_COLUMNS) delete update[k]
+      if (job.extraction_confidence == null) {
+        for (const k of EXTRACTED_COLUMNS) delete update[k]
+        // …and never let a re-listing walk back what an extraction learned.
+        if (existing.extraction_version) for (const k of MODEL_REFINED_COLUMNS) delete update[k]
+      }
       const { error } = await db.from('job_opportunities').update(update as never).eq('id', existing.id)
       if (error) {
         if (isMissingSchema(error.message)) return { ...result, migrationMissing: true, errors: [...result.errors, error.message] }
