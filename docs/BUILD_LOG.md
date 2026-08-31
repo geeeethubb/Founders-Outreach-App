@@ -6,6 +6,86 @@ architecturally and why.
 
 ---
 
+## 2026-08-31 — Résumé tailoring: the objective reverses
+
+**Type:** agent behaviour (prompt 2.0.0) + migration 018 + eval rename ·
+**Behavior change:** the tailor argues for the role instead of minimising the diff.
+
+### Measured before anything was changed
+
+The spec said "do not guess — measure where the changes disappear". Over the 14
+patches already in the database, for $0:
+
+```
+proposed              32          types used:  reorder 17 · reword 15
+fact-verified         32                       swap 0 · new 0 · remove 0
+reached the document  24          no-op:       4/14 patches (29%)
+                                  cosmetic:    15/15 rewords (>80% overlap)
+```
+
+Of the six candidate causes, **B** (verifier rejects) is ruled out — it rejected
+nothing. **E** (representation cannot express it) is ruled out — `change_type`
+has accepted `swap/new/remove` since migration 014, and so does the agent schema.
+**C** is not the leak: 24 of 32 reached the page and the rest were `pending`.
+
+It was **F**, plus a budget that agreed with it. The prompt opened *"with the
+smallest truthful set of changes"* and ranked swap/new last, *"in a rare case"*,
+under caps of 6 / 1 / 0.25. Every reword it produced looked like this:
+
+```
+- Screened 40+ configurations using 73k CPU-hours of ASE/VASP.
++ Screened 40+ configurations using **73k CPU-hours** of ASE/VASP.
+```
+
+### What changed
+
+Prompt **2.0.0**: maximise role relevance subject to 100 % evidence-backed
+factuality; a smaller diff is not better; the Evidence Bank, not the master, is
+the factual universe; decide the **hiring argument** and the employer's **role
+themes** before writing any text; a no-op carries a burden of proof.
+
+Budgets 6 → 14 non-reorder, 1 → 3 new bullets, reword fraction 0.25 → 0.6.
+**This trades nothing away** — factuality was never the binding constraint. The
+Fact Verifier, `validateChangeShape`, the precheck and the ownership audit are
+untouched, and case C of the eval still requires a near-empty patch.
+
+New measurement, because edit distance cannot tell a re-argued bullet from a
+bolded number: `classifyChange` splits reword into `rewrite` and `emphasis`, and
+only reorder/rewrite/swap/new/remove are **meaningful**. Role-theme coverage is
+computed over evidence-**supported** themes only — counting the rest would make
+coverage a number the résumé could raise only by claiming things.
+
+### Migration 018, applied by hand like all the others
+
+Stores the argument, themes, counts and coverage. `insertResumePatch` writes the
+full row and, on "column does not exist", retries with the pre-018 row and
+reports the degradation — losing a package someone just paid for because a
+migration has not been pasted in yet is the wrong trade every time.
+
+### The eval was part of the problem
+
+`minimal-edit` scored restraint, and its own recorded result was the evidence:
+case A passed with three changes that were all emphasis-only, and case B's
+planted alternate bullet went unused — EVALS.md said so in words. Renamed to
+`tailoring` (`npm run eval:career-tailoring`) and re-scored: A must not regress
+coverage, B needs **≥ 3 meaningful changes**, C is unchanged. It has not been
+run — it costs money.
+
+### The other half of the end-to-end guarantee
+
+`content_match` already proved approved bullets reach the DOCX and the PDF. The
+opposite failure had no check: refused text printed anyway. `no_rejected_text`
+now fails the QA report if any of it appears, tested in both directions.
+
+### Still open
+
+The package UI, the three-archetype acceptance test, and the baseline run over
+8–10 real jobs — the last of which costs money and is the founder's call.
+
+`tsc` clean · `test:career` 32/32 · `check:sql` clean.
+
+---
+
 ## 2026-08-31 — Wave 2 sources go live, and the benchmark stops crediting itself
 
 **Type:** discovery coverage + eval integrity · **Behavior change:** the registry ships
