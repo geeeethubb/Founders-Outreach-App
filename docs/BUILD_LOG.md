@@ -6,6 +6,82 @@ architecturally and why.
 
 ---
 
+## 2026-08-31 — Inventory stops being capped by what we can afford to read
+
+**Type:** architecture · **Behavior change:** the watchlist is swept in full for
+free, postings are stored without being extracted, relevance is computed on read,
+and a slow PDF converter no longer claims to be a missing one. Measured: **43
+postings → 174, in 107 seconds, at $0.00.**
+
+### The two ceilings
+
+The founder asked for "over 200 postings at any given time" against an inventory
+of 43, "not all of them remotely relevant". Neither number was a tuning problem.
+
+**Ceiling one: five adapters.** Greenhouse, Lever, Ashby, SmartRecruiters and
+Workable were the entire discovery surface. `registry.ts` *recognised*
+Workday/iCIMS/Taleo/SuccessFactors URLs as families but had no adapter, so every
+company on one answered "no public board detected" — and those are exactly the
+employers a chemical engineer wants: Illumina, 3M, ExxonMobil, Intel, Amgen,
+Medtronic, Abbott, GlobalFoundries, Marathon. 126 of 188 watchlist companies had
+never been checked at all.
+
+**Ceiling two: a posting could not exist until it had been read.** Extraction is
+one model call per posting and is capped at ~40 per run, so INVENTORY was capped
+at ~40 per run. The pipeline could not store what it could not afford to analyse.
+
+### What changed
+
+- **A Workday adapter** (`lib/career/sources/workday.ts`) over the public `cxs`
+  JSON board: paginated, robots-respecting, `tenant/wdN/site` round-tripping
+  through `ats_identifier` because a Workday board needs all three to address.
+  Detection now also follows a careers page to the tenant it redirects to.
+  **18 of the 91 boards a live sweep read came through it.**
+- **The sweep** (`lib/career/jobs/sweep.ts`, `npm run career:sweep`,
+  `POST /api/career/sweep`, a daily cron): every company with a readable board,
+  listed and normalized deterministically, with bounded concurrency, per-company
+  error isolation and incremental persistence. **No model calls at all.**
+- **Deferred extraction.** A posting persists from its listing alone — title,
+  company, location, canonical URL, posted date, ATS ids — with the extracted
+  columns null. Extraction became a separate, bounded, relevance-ordered step
+  (`extraction-store.ts`), so spend follows relevance instead of arrival order.
+- **Relevance at read time** (`relevance.ts` + `inbox-relevance.ts`): a
+  deterministic score against the stated direction, role families, season and
+  tier, computed when the list is read — so changing the direction re-ranks
+  everything with no data change and no migration. The inbox header owns what it
+  hides ("312 postings · 47 strong · showing 47 — 265 off-direction hidden"), and
+  a thin row says it has not been analysed rather than faking empty fields.
+
+### A regression the change surfaced
+
+`resolve.ts` guarded on `ats === 'other'` to decide whether to read a recognised
+board's page. The moment Workday became a known `AtsType` that guard stopped
+matching Workday, and a Workday posting URL fell through to the generic
+web-page path, losing its board reference. The condition was never "is it
+other" — it was "do we have an adapter for it", which is what it now asks.
+
+### The PDF converter
+
+`selectPdfRenderer()` returns `word-com` on the founder's machine and a real
+render of the master résumé succeeded — in **106 seconds**, against
+`RENDER_TIMEOUT_MS = 90_000`. The timeout was then reported as *"no PDF renderer
+available (install Microsoft Word or LibreOffice)"*: install advice for software
+that was running. `renderDocxToPdf` now answers with `ok | no_renderer | timeout
+| failed`; only the absent case names software to install, a timeout says the
+DOCX was produced and a retry is the remedy, and `status.ts` gives a slow
+converter its own headline. The DOCX survives all of it.
+
+### Measured
+
+A dry-run sweep of all 188 companies read **91 boards** and found **173
+postings in 109 s at $0.00**; the real sweep left **174 canonical rows** (166
+VERIFIED_OPEN, 140 not yet extracted) across 31 companies — up from 43. 102
+companies still have no readable board (robots-disallowed, or an ATS with no
+adapter); they are named in the sweep report rather than silently dropped.
+23 offline suites pass; `tsc` and `next build` clean.
+
+---
+
 ## 2026-08-30 — Scout explores; the company list is memory, not the search universe
 
 **Type:** architecture · **Behavior change:** the planner and the scout can no longer create a
