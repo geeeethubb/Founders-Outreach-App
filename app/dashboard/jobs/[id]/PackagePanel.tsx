@@ -18,6 +18,8 @@ import LetterPanel from './LetterPanel'
 import PackageDocuments from './PackageDocuments'
 import PackageVersions from './PackageVersions'
 import PackageProgress, { STAGE_LABEL } from './PackageProgress'
+import PackageFailure from './PackageFailure'
+import { explainPackageError } from '@/lib/career/package/status'
 
 interface Props {
   jobId: string
@@ -127,7 +129,11 @@ export default function PackagePanel({ jobId, job, packages, view, application, 
       if (body.qa) setFailedQa(r.status === 422 ? body.qa : null)
     }
     if (!r.ok) {
-      setNotice({ kind: 'error', text: r.error ?? 'Document build failed' })
+      // The same translation the failure block below uses, so the notice never
+      // shows a raw ENOENT as if the user's résumé changes had caused it.
+      const raw = (body as { error?: string | null } | null)?.error ?? r.error ?? null
+      const explained = explainPackageError(raw)
+      setNotice({ kind: 'error', text: [explained.headline, explained.reassurance].filter(Boolean).join(' ') })
     } else {
       const res = body?.result
       if (res?.errors?.length) setNotice({ kind: 'warn', text: res.errors.join(' · ') })
@@ -198,6 +204,7 @@ export default function PackagePanel({ jobId, job, packages, view, application, 
       )}
 
       {generating && <PackageProgress stage={stage} />}
+      {busy === 'resume' && <PackageProgress stage={null} phase="documents" />}
 
       {latest && view && !generating && (
         <>
@@ -256,20 +263,18 @@ export default function PackagePanel({ jobId, job, packages, view, application, 
 
           {/* (e) failed */}
           {status === 'failed' && (
-            <InlineNotice kind="error">
-              <p className="font-medium">Package failed{view.stage ? ` during: ${STAGE_LABEL[view.stage] ?? view.stage}` : ''}.</p>
-              <p className="mt-0.5">{view.error ?? 'No error text was recorded.'}</p>
-              <div className="mt-2 flex gap-2">
-                {view.resume && (
-                  <button type="button" disabled={busy !== null} onClick={approveResume} className="px-2.5 py-1 rounded-md bg-indigo-600 text-white text-xs hover:bg-indigo-700 disabled:opacity-50">
-                    {busy === 'resume' ? 'Building…' : 'Retry documents'}
-                  </button>
-                )}
-                <button type="button" disabled={busy !== null} onClick={generate} className="px-2.5 py-1 rounded-md border border-rose-300 text-xs text-rose-800 hover:bg-rose-100 disabled:opacity-50">
-                  Redo package (new version)
-                </button>
-              </div>
-            </InlineNotice>
+            <PackageFailure
+              stage={view.stage}
+              error={view.error}
+              canRetry={Boolean(view.resume)}
+              // A letter exists only when one was already written and paid for;
+              // that is exactly what a retry reuses, so it is what the retry
+              // sentence is allowed to promise.
+              letterWritten={Boolean(view.cover_letter)}
+              busy={busy !== null}
+              onRetry={approveResume}
+              onRedo={generate}
+            />
           )}
 
           {/* (d) ready to apply */}

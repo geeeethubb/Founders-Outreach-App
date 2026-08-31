@@ -8,9 +8,9 @@
 
 import { mapWithConcurrency } from '@/lib/scouting/concurrency'
 import type { SeedCompany } from '@/lib/agents/job-mission-planner'
-import type { AtsType, WatchStatus } from '../types'
+import type { AtsType, WatchOrigin, WatchStatus } from '../types'
 import { normalizeCompanyName } from '../jobs/normalize'
-import { ensureCompany, markCareersChecked, upsertWatch, type UpsertWatchInput } from '../jobs/store'
+import { ensureCompany, markCareersChecked, upsertWatch, type UpsertWatchInput } from '../companies/watchlist'
 import { detectAtsForCompany } from '../sources/detect'
 import { getPageFetcher } from '../sources/fetch'
 import { getSourceRegistry } from '../sources/registry'
@@ -26,8 +26,14 @@ export interface WatchedCompany {
   careers_url: string | null
   ats_type: string | null
   ats_identifier: string | null
+  /** Intent, never state (migration 016). Nothing in this file writes it. */
   watch_status?: WatchStatus | null
+  watch_origin?: WatchOrigin | null
+  /** Openings at the last check — state, written by `markCareersChecked`. */
+  open_roles_count?: number | null
+  /** Higher = more important, 0–100 (lib/career/companies/intent.ts). */
   watch_priority?: number | null
+  last_careers_check_at?: string | null
 }
 
 /** The persistence the loop needs — injectable so the whole thing runs in memory under test. */
@@ -99,7 +105,7 @@ export async function checkCompanyForOpenings(
   if (!board) {
     // A careers page without a board is still worth remembering, and the check still counts.
     if (careersUrl && careersUrl !== company.careers_url) await store.ensureCompany(userId, { name: company.name, domain: company.domain, careers_url: careersUrl })
-    await store.markCareersChecked(company.id, { status: 'watching', note: note || 'no board', openings: 0 })
+    await store.markCareersChecked(company.id, { note: note || 'no board', openings: 0 })
     return { ...base, postings: [], board: null, method, note, error: null }
   }
 
@@ -107,16 +113,17 @@ export async function checkCompanyForOpenings(
   if (!adapter) {
     note = `board on ${board.ats} has no listing adapter; recorded the board URL`
     await store.ensureCompany(userId, { name: company.name, domain: company.domain, careers_url: board.board_url ?? careersUrl, ats: { ats_type: board.ats, ats_identifier: board.identifier } })
-    await store.markCareersChecked(company.id, { status: 'watching', note, openings: 0 })
+    await store.markCareersChecked(company.id, { note, openings: 0 })
     return { ...base, postings: [], board, method, note, error: null }
   }
 
   // The cap runs after the internship filter; the same depth the scout's lookup tool uses, for the same reason (tools.ts).
   const listing = await adapter.listPostings(board, { internshipsOnly, limit: internshipsOnly ? INTERNSHIP_LOOKUP_LIMIT : LOOKUP_POSTING_LIMIT })
   if (listing.error) {
-    // A failed listing says nothing about openings; do not demote, do not record a count.
+    // A failed listing says nothing about openings: record that we looked, but
+    // no count — "we could not tell" is not "there is nothing".
     note = `listing failed: ${listing.error}`
-    await store.markCareersChecked(company.id, { status: null, note, openings: 0 })
+    await store.markCareersChecked(company.id, { note, openings: 0, counted: false })
     return { ...base, postings: [], board, method, note, error: listing.error }
   }
 
@@ -125,7 +132,9 @@ export async function checkCompanyForOpenings(
   if (method !== 'stored') {
     await store.ensureCompany(userId, { name: company.name, domain: company.domain, careers_url: listing.board_url ?? board.board_url ?? careersUrl, ats: { ats_type: board.ats, ats_identifier: board.identifier } })
   }
-  await store.markCareersChecked(company.id, { status: postings.length ? 'opening_available' : 'watching', note, openings: postings.length })
+  // Openings are STATE (migration 016): this records how many are open, and
+  // never what the company means to the user.
+  await store.markCareersChecked(company.id, { note, openings: postings.length })
   return { ...base, postings, board, method, note, error: null }
 }
 
@@ -144,6 +153,9 @@ export async function runCompanyFirst(
   opts: { concurrency?: number; deadline?: number; maxCompanies?: number; internshipsOnly?: boolean; onProgress?: (detail: string) => void } = {},
   deps: CompanyFirstDeps = {}
 ): Promise<CompanyFirstResult> {
+  // The caller decides WHICH companies and in what order — targets first, then
+  // watching, then a rotating sample of explore (selectCompaniesToCheck). This
+  // loop only takes the first `max` of what it is handed.
   const max = opts.maxCompanies ?? 25
   const queue = companies.slice(0, max)
   const outcomes: CompanyCheckResult[] = []
@@ -175,7 +187,13 @@ export async function runCompanyFirst(
   }
 }
 
-/** Planner seeds → watchlist rows, skipping names already present. Returns counts. */
+/**
+ * Planner seeds → watchlist rows, skipping names already present.
+ *
+ * Every seed lands as `suggested` with origin `planner`: the planner is
+ * guessing at the KIND of company that fits the mission, and a guess is not a
+ * preference. Only the user promotes one to Watching or Target.
+ */
 export async function seedWatchlistFromPlan(
   userId: string,
   seeds: SeedCompany[],
@@ -196,8 +214,10 @@ export async function seedWatchlistFromPlan(
     const r = await store.upsertWatch(userId, {
       name: seed.name,
       domain: seed.domain,
-      watch_status: 'target',
+      // A planner seed is a hypothesis, never a preference (rule 1, ADR-039).
+      watch_status: 'suggested',
       watch_source: 'planner',
+      watch_origin: 'planner',
       watch_priority: Math.round(Math.max(0, Math.min(1, seed.priority)) * 100),
       watch_note: seed.why.slice(0, 300),
       company_type: seed.company_type || null,

@@ -270,6 +270,53 @@ it).
 language or a 404 is `CLOSED`; unconfirmed for longer than the staleness window is `STALE`.
 Saved and applied-to jobs are re-checked by `npm run career:verify` and by the cron route.
 
+### A run is a row, not a request
+
+A scout used to be one long HTTP request. On Vercel that request dies at 300 s, and the page
+that started it had to be kept open — so the panel counted a fake 25-second timer and told the
+founder that closing the tab spent the money for nothing.
+
+A run is now a **row**. `POST /api/career/scout` enqueues it and answers `202 { runId,
+status: 'queued', durable: true }`; a worker advances it; `GET /api/career/scout/runs/[id]`
+answers the only truth the UI ever shows — `status` (`queued | running | succeeded | partial |
+failed | cancelled`), the current `stage`, the last progress `events`, live `counts`, `stats`,
+`error`, and the server's own `partial` and `stale` judgements. `GET /api/career/runs?active=1`
+answers `{ active, durable }`: the newest run the server itself calls queued or running, so a
+refresh, a second tab, or a reopened panel resumes the same run instead of paying for another.
+
+`app/dashboard/jobs/ScoutPanel.tsx` is a monitor over that endpoint (3 s poll, four tolerated
+misses before it says it lost contact). It invents nothing: every number, stage line and
+headline is parsed from the answer by `app/dashboard/jobs/run-view.ts` and phrased by
+`run-copy.ts`, both pure and both covered offline by `npm run test:career-ui-direction`.
+
+**Before migration 016 the run is not durable**, because there is no row to write. The route
+falls back to running the scout inside the request, and both answers carry `durable` so the
+panel can say which one is happening — "you can close this tab" only when the server has said
+`durable: true`, and "this run happens inside this request — leave the tab open" until then.
+The panel never guesses that sentence.
+
+**`/dashboard/jobs?run=<id>`** is the second surface: exactly what one run produced.
+`GET /api/career/jobs?run=<id>` applies **none** of the inbox's curating defaults — an
+unverified or unranked posting from that run is still shown, which is the entire point — and
+orders and counts in the database over the whole set, so the header's counts and the list
+agree. The inbox keeps its defaults; the two are visually distinct (a bordered run card with
+one way back, "← Back to all jobs") and never conflated. The Runs page links a `job_scout` row
+straight to it.
+
+### The company list is an input, not the universe
+
+`/dashboard/companies` is organised by **intent**, in this order: **Opening available** (a
+careers check found a role open right now — state, not preference, and empty until 016 supplies
+`open_roles_count`), **Targets**, **Watching**, **Explore** ("Scout thinks these may be worth a
+look — not preferences until you say so"), and a collapsed **Ignored** section so a rejection
+can be undone. Explore rows carry one-click Target / Watch / Ignore, each an explicit user
+action through `PATCH /api/career/companies/[id]`; nothing on the page can make an agent's
+guess into a preference on its own. Origin is shown in plain words via `ORIGIN_LABEL` ("added
+by you" / "found by Scout" / "suggested by Scout's plan" / "from your contacts"), and every
+section sorts by `byCheckOrder` — **higher `watch_priority` first, the one direction the store,
+the scout and the page now share.** The page's pure half is
+`app/dashboard/companies/company-view.ts` (`npm run test:career-companies`).
+
 **Season** is Summer 2027 by construction: `lib/career/jobs/normalize.ts` classifies
 `season_relevance` against summer 2027, `lib/career/scout/orchestrator.ts` boosts `summer_2027`
 when ranking what to extract, and the Jobs card chip reads the same literal — none of them read
@@ -352,6 +399,52 @@ more than it needed to.
   `Zuyu_Liu_<Company>_Resume.{docx,pdf}` with the company name sanitized.
 - **Storage.** Supabase Storage bucket `career-docs`, paths keyed by package version. A local
   mirror under `.career-out/` for scripts and evals.
+
+### Three directories, three meanings
+
+Document code writes to exactly three places, and conflating two of them cost a paid run.
+
+| | Where | Lifetime | Written by |
+|---|---|---|---|
+| Temporary workspace | `os.tmpdir()/founders-outreach/<prefix>-XXXXXX` (`CAREER_TMP_DIR` overrides) | one build, removed in a `finally` | `lib/career/documents/tmp.ts` |
+| Persistent web output | Supabase Storage `career-docs`, local mirror only as the existing fallback | the life of the package | `lib/career/documents/store.ts` |
+| Final CLI output | `.career-out/…` | until the founder deletes it | `scripts/career-package.ts --out`, the eval scripts, the evidence writers |
+
+Scratch used to be `path.join('.career-out', 'tmp')` — a **relative** path. In a deployed
+runtime the working directory is not the repo, so `mkdir '.career-out/tmp/pkg-…'` failed with
+ENOENT *after* research and tailoring had been paid for. `tmpRoot / makeTempDir / withTempDir /
+removeTempDir / isTempPath` now own every scratch path: absolute, under `os.tmpdir()` by
+default, created with `mkdtemp` so concurrent builds cannot collide, removed in a `finally`
+including on a throw, and a cleanup failure is reported as a warning rather than replacing the
+error that actually broke the build. `assertDurablePath` (backed by `isTempPath`,
+case-insensitive on Windows) refuses to write a temp path into `application_packages`, so a
+scratch path can never become a stored document path.
+
+### Retry documents vs. Redo package
+
+Two different actions, deliberately separate (`lib/career/package/documents.ts` and
+`lib/career/package/redo.ts`):
+
+- **Retry documents** resumes the package that already exists — same version, same research and
+  intelligence, same approved résumé changes, same recorded cost — and restarts at the stage
+  that failed. `finishPackage` reaches its side effects through a `DocumentsIo` seam that
+  contains no intelligence run, no tailoring pipeline and no package insert, so a retry
+  *cannot* research, re-tailor or create a version. `planDocumentWork` decides what is reused:
+  résumé documents are kept only when the failure was past them, the patch is still `applied`
+  and their QA is not blocking; an already-written cover letter is reused verbatim. After a
+  failure inside the résumé documents there is no letter yet, so the retry does pay the writer
+  once — and the UI says exactly that instead of promising "nothing charged again".
+- **Redo package (new version)** is the only action that creates v2.
+
+A failure records the stage that was **running**, tracked in a mutable variable and persisted
+before the risky work, not the stage the row happened to hold when the request arrived — the UI
+once said "failed during: Waiting for your review" about a mkdir inside résumé generation.
+Readiness (`missingArtifacts` in `package/status.ts`) is computed from the artifacts and QA
+reports that actually exist, so a half-uploaded package reads as failed; a missing PDF is not on
+that list, because a machine with no renderer produces an honest DOCX-only package (ADR-033).
+`explainPackageError` translates a known infrastructure failure into one sentence for the
+primary UI — workspace, storage, master-résumé, renderer, QA and timeout each get their own,
+with their own remedy — and keeps the raw text in a disclosure and in the run diagnostics.
 
 ---
 

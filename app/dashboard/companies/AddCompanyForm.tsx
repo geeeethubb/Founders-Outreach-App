@@ -2,7 +2,15 @@
 
 import { useState } from 'react'
 import { api } from '@/components/career/api'
-import { WATCH_STATUSES } from './CompanyRow'
+import { PRIORITY_MAX, PRIORITY_MIN } from '@/lib/career/companies/intent'
+
+// Adding a company by hand IS the explicit choice this whole page turns on, so
+// the only options are the user's own two intents. 'suggested' belongs to the
+// scout and is never written from here.
+const CHOICES: { value: string; label: string }[] = [
+  { value: 'target', label: 'Target — I want to work here' },
+  { value: 'watching', label: 'Watching — keep an eye on it' },
+]
 
 export default function AddCompanyForm({ onAdded }: { onAdded: () => void }) {
   const [open, setOpen] = useState(false)
@@ -57,13 +65,21 @@ export default function AddCompanyForm({ onAdded }: { onAdded: () => void }) {
         <input value={domain} onChange={(e) => setDomain(e.target.value)} placeholder="domain (acme.com)" className={input} />
         <input value={careersUrl} onChange={(e) => setCareersUrl(e.target.value)} placeholder="careers URL (helps ATS detection)" className={input} />
         <select value={status} onChange={(e) => setStatus(e.target.value)} className={input}>
-          {WATCH_STATUSES.map((s) => (
-            <option key={s} value={s}>
-              {s.replace('_', ' ')}
+          {CHOICES.map((c) => (
+            <option key={c.value} value={c.value}>
+              {c.label}
             </option>
           ))}
         </select>
-        <input type="number" min={1} max={9} value={priority} onChange={(e) => setPriority(e.target.value)} placeholder="priority (1 = first)" className={input} />
+        <input
+          type="number"
+          min={PRIORITY_MIN}
+          max={PRIORITY_MAX}
+          value={priority}
+          onChange={(e) => setPriority(e.target.value)}
+          placeholder="priority 0–100 (higher is checked first)"
+          className={input}
+        />
         <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="note — why this company?" className={input} />
       </div>
       <div className="mt-2 flex items-center gap-2">

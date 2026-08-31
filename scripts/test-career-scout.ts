@@ -20,7 +20,12 @@ import { DEFAULT_MISSION_PREFERENCES, defaultMission, renderMission, sanitizeMis
 import { emptyBank } from '../lib/career/evidence/store'
 import type { CareerRun } from '../lib/career/runs'
 import type { NormalizedJob } from '../lib/career/jobs/normalize'
-import { directionMatches, directionPhrases, directionTerms, fallbackStrategies, runJobScout, selectJobsToRank, type JobScoutDeps, type ScoutStore } from '../lib/career/scout/orchestrator'
+import { buildPlannerWatchlist, directionMatches, directionPhrases, directionTerms, fallbackStrategies, runJobScout, selectJobsToRank, toWatched, type JobScoutDeps, type ScoutStore } from '../lib/career/scout/orchestrator'
+import type { PlannerWatchlist } from '../lib/agents/job-mission-planner'
+// The run monitor's own parser, so "these counts are what the UI reads" is an
+// assertion rather than a claim.
+import { parseRunDetail } from '../app/dashboard/jobs/run-view'
+import { runSummary } from '../app/dashboard/jobs/run-copy'
 import { resolveScoutedPosting } from '../lib/career/scout/resolve'
 import { emptyStats, summarizeStats } from '../lib/career/scout/stats'
 import { constraintRejections, extractAndNormalize, orderForExtraction } from '../lib/career/scout/extract'
@@ -144,9 +149,30 @@ const extractor = async (input: { title: string; text: string }): Promise<AgentR
   }, 'job_extractor')
 const verifier = async (): Promise<AgentResult<JobVerification>> => agentResult<JobVerification>({ verdict: 'OPEN', reasoning: 'title present', closed_signals: [] }, 'job_verifier')
 
-interface Mem { jobs: NormalizedJob[]; upserts: number; watch: { name: string; source: string; status: string }[]; checked: { id: string; status: string | null | undefined; openings: number }[]; runs: { status: string; stats: Record<string, unknown> }[]; traces: string[]; refreshed: { id: string; status: string }[]; ranked: { ids: string[]; skipResearch: boolean; deadlineMs: number; concurrency: number }[] }
-function memStore(opts: { watchlist?: Record<string, unknown>[]; slowCheck?: number; rerun?: boolean } = {}): { store: ScoutStore; mem: Mem; rank: NonNullable<JobScoutDeps['rank']> } {
-  const mem: Mem = { jobs: [], upserts: 0, watch: [], checked: [], runs: [], traces: [], refreshed: [], ranked: [] }
+interface Mem {
+  /** Every DISTINCT job the store holds, in insertion order — `job-<index>` is its id. */
+  jobs: NormalizedJob[]
+  /** One entry per upsertJobs call: the batch it was handed. Incremental persistence is visible here. */
+  batches: NormalizedJob[][]
+  upserts: number
+  /** Ordered record of what happened, so "persisted BEFORE the next stage" is assertable. */
+  timeline: string[]
+  watch: { name: string; source: string; status: string }[]
+  checked: { id: string; status: string | null | undefined; openings: number }[]
+  runs: { status: string; stats: Record<string, unknown> }[]
+  traces: string[]
+  refreshed: { id: string; status: string }[]
+  ranked: { ids: string[]; skipResearch: boolean; deadlineMs: number; concurrency: number }[]
+}
+function memStore(opts: { watchlist?: Record<string, unknown>[]; ignored?: Record<string, unknown>[]; slowCheck?: number; rerun?: boolean } = {}): { store: ScoutStore; mem: Mem; rank: NonNullable<JobScoutDeps['rank']> } {
+  const mem: Mem = { jobs: [], batches: [], upserts: 0, timeline: [], watch: [], checked: [], runs: [], traces: [], refreshed: [], ranked: [] }
+  // The real store dedupes an incoming job against what it already holds (ATS
+  // id, canonical URL, then company + title + location) — which is what makes
+  // cross-batch dedupe correct now that a run persists in several batches. The
+  // stub models exactly that; without it these tests would "prove" a dedupe
+  // the production store does and the orchestrator no longer performs.
+  const idByKey = new Map<string, string>()
+  const keyOf = (j: NormalizedJob) => (j.ats_type && j.ats_job_id ? `${j.ats_type}:${j.ats_job_id}` : j.canonical_url ?? `${j.company_name}|${j.title}|${j.location_raw}`)
   // The post-scout ranking stub: records what it was asked, answers a fit for every id, costs a cent each.
   const rank: NonNullable<JobScoutDeps['rank']> = async (_u, ids, o) => {
     mem.ranked.push({ ids, skipResearch: o.skip.research, deadlineMs: o.deadlineMs, concurrency: o.concurrency })
@@ -164,12 +190,33 @@ function memStore(opts: { watchlist?: Record<string, unknown>[]; slowCheck?: num
     async recentFeedback() { return [] },
     async startRun() { return run },
     async listWatchlist() { return { companies: watchlist, error: null, migrationMissing: false } },
+    async listIgnoredCompanies() { return { companies: opts.ignored ?? [], error: null } },
     async listJobs() { return { jobs: [], error: null, migrationMissing: false } },
     async upsertJobs(_u, jobs) {
       mem.upserts++
-      mem.jobs = jobs
-      // rerun: every row already existed, so the store reports updates and no inserts.
-      return { inserted: opts.rerun ? 0 : jobs.length, updated: opts.rerun ? jobs.length : 0, skippedClosed: 0, ids: jobs.map((_, i) => `job-${i}`), companyIds: {}, errors: [], migrationMissing: false }
+      mem.batches.push(jobs)
+      mem.timeline.push(`upsert:${jobs.length}`)
+      let inserted = 0
+      let updated = 0
+      const ids: string[] = []
+      for (const job of jobs) {
+        const key = keyOf(job)
+        const existing = idByKey.get(key)
+        if (existing) {
+          updated++
+          ids.push(existing)
+          continue
+        }
+        const id = `job-${mem.jobs.length}`
+        idByKey.set(key, id)
+        mem.jobs.push(job)
+        ids.push(id)
+        // rerun: every row already existed in the database, so the store
+        // reports updates and no inserts.
+        if (opts.rerun) updated++
+        else inserted++
+      }
+      return { inserted, updated, skippedClosed: 0, ids, companyIds: {}, errors: [], migrationMissing: false }
     },
     async updateJobVerification(_u, id, result) { mem.refreshed.push({ id, status: result.status }); return { error: null } },
     async upsertWatch(_u, input) { mem.watch.push({ name: input.name, source: input.watch_source, status: input.watch_status }); return { id: `c-${input.name}`, error: null, migrationMissing: false } },
@@ -189,10 +236,11 @@ async function main() {
       planner: async () => agentResult(PLAN, 'job_mission_planner'),
       session: async () => sessionResult(SCOUTED),
     })
-    const listed = mem.jobs.filter((j) => j.verification_method === 'ats_listing').length
+    const listed = mem.jobs.filter((j) => j.verification_method === 'ats_listing')
+    const listedIds = new Set(listed.map((j) => `job-${mem.jobs.indexOf(j)}`))
     check('re-run reports updates, not inserts', r.stats.jobs_updated > 0 && r.stats.jobs_inserted === 0)
-    check('every ATS-listed job is refreshed to VERIFIED_OPEN on re-run', listed > 0 && mem.refreshed.length === listed && mem.refreshed.every((x) => x.status === 'VERIFIED_OPEN'), `${listed} listed, ${mem.refreshed.length} refreshed`)
-    check('page-resolved jobs are not refreshed by the listing path', mem.refreshed.length < mem.jobs.length)
+    check('every ATS-listed job is refreshed to VERIFIED_OPEN on re-run', listed.length > 0 && mem.refreshed.length >= listed.length && mem.refreshed.every((x) => x.status === 'VERIFIED_OPEN'), `${listed.length} listed, ${mem.refreshed.length} refreshed`)
+    check('only ATS-listed rows are refreshed; page-resolved ones are left to the verifier', mem.refreshed.every((x) => listedIds.has(x.id)) && mem.refreshed.length < mem.jobs.length + listed.length, JSON.stringify(mem.refreshed))
   }
 
   // ─── A. Full run ──────────────────────────────────────────────────────────
@@ -204,18 +252,25 @@ async function main() {
     const r = await runJobScout({ userId: USER, maxStrategies: 1 }, {
       store, rank, registry, fetcher, extractor, verifier,
       planner: async () => agentResult(PLAN, 'job_mission_planner'),
-      session: async (p) => { sessionCalls++; check('session receives the highest-priority strategy', p.strategy.name === 'Bay Area process interns'); check('session receives the run deadline', typeof p.deadline === 'number' && p.deadline > Date.now()); return sessionResult(SCOUTED) },
+      session: async (p) => { sessionCalls++; mem.timeline.push(`session:${p.strategy.name}`); check('session receives the highest-priority strategy', p.strategy.name === 'Bay Area process interns'); check('session receives the run deadline', typeof p.deadline === 'number' && p.deadline > Date.now()); return sessionResult(SCOUTED) },
     })
     check('run succeeded', !r.migrationMissing && mem.runs[0]?.status === 'succeeded', JSON.stringify(r.errors))
     check('one session for maxStrategies 1', sessionCalls === 1)
     check('plan summarized', r.plan?.strategies.length === 2 && r.plan.seed_companies_count === 2)
     check('planner seeds new companies only', mem.watch.some((w) => w.name === 'Beta Robotics' && w.source === 'planner') && !mem.watch.some((w) => w.name === 'Acme' && w.source === 'planner'))
+    // A company an agent found is a HYPOTHESIS: written `suggested`, with a
+    // scout origin. Only the user's own click ever writes target/watching.
     check('scout companies_to_check are watched with source scout, known ones skipped', mem.watch.some((w) => w.name === 'Omega Labs' && w.source === 'scout') && !mem.watch.some((w) => w.name === 'Acme' && w.source === 'scout'))
-    check('company-first marked Acme opening_available', mem.checked.some((c) => c.id === 'c-acme' && c.status === 'opening_available' && c.openings === 2))
+    check('a scout-discovered company is written suggested, never target', mem.watch.find((w) => w.name === 'Omega Labs')?.status === 'suggested' && !mem.watch.some((w) => w.source === 'scout' && w.status !== 'suggested'), JSON.stringify(mem.watch))
+    check('company-first checked Acme and found its two openings', mem.checked.some((c) => c.id === 'c-acme' && c.openings === 2))
     check('every agent result traced', mem.traces.includes('job_mission_planner') && mem.traces.includes('job_scout') && mem.traces.filter((t) => t === 'job_extractor').length >= 2)
     const acme = mem.jobs.find((j) => j.company_name === 'Acme' && /Process Engineer Intern/.test(j.title))
     check('ATS-listed posting is VERIFIED_OPEN by construction', acme?.verification_status === 'VERIFIED_OPEN' && acme.verification_method === 'ats_listing')
-    check('company-first and job-first copies of the same posting collapse to one canonical', mem.jobs.filter((j) => j.canonical_url === 'https://boards.greenhouse.io/acme/jobs/1').length === 1 && r.stats.duplicates_removed >= 1)
+    // Company-first and job-first now persist in SEPARATE batches, so the
+    // cross-batch dedupe is the store's find-existing match, not clustering:
+    // one row, seen twice, reported as an update.
+    check('company-first and job-first copies of the same posting collapse to one stored row', mem.jobs.filter((j) => j.canonical_url === 'https://boards.greenhouse.io/acme/jobs/1').length === 1 && r.stats.jobs_updated >= 1, `${r.stats.jobs_inserted} new, ${r.stats.jobs_updated} updated`)
+    check('the result lists each stored job once', r.jobs.length === mem.jobs.length && new Set(r.jobs.map((j) => j.id)).size === r.jobs.length, `${r.jobs.length} result rows, ${mem.jobs.length} stored`)
     const beta = mem.jobs.find((j) => j.company_name === 'Beta')
     check('page-resolved posting went through verifyJob (its page was fetched twice: resolve + verify)', fetched.filter((u) => u === 'https://www.beta.com/careers/mech-intern').length === 2)
     check('page-resolved posting is LIKELY_OPEN via title coverage', beta?.verification_status === 'LIKELY_OPEN' && beta.verification_method === 'page', beta?.verification_note ?? '')
@@ -225,10 +280,13 @@ async function main() {
     check('senior role rejected under "Internships only"', (r.stats.jobs_rejected['Internships only'] ?? 0) === 1 && r.rejected.some((x) => x.title === 'Senior Process Engineer'))
     check('UK role rejected under "United States"', (r.stats.jobs_rejected['United States'] ?? 0) === 1)
     check('rejected jobs are not persisted', !mem.jobs.some((j) => j.title === 'Senior Process Engineer'))
-    check('jobs persisted once via upsert', mem.upserts === 1 && r.stats.jobs_inserted === mem.jobs.length && mem.jobs.length === 3, `${mem.jobs.length}`)
+    // Incremental persistence: company-first is stored BEFORE the first
+    // strategy runs, and each strategy is stored as it finishes.
+    check('jobs persist in batches, not once at the end', mem.upserts >= 2 && r.stats.jobs_inserted === mem.jobs.length && mem.jobs.length === 3, `${mem.upserts} upserts, ${mem.jobs.length} jobs`)
+    check('the company-first batch reached the store before the first scout session', mem.timeline[0]?.startsWith('upsert') && mem.timeline.indexOf('session:Bay Area process interns') > 0, mem.timeline.join(' → '))
     check('result jobs carry ids and source types', r.jobs.every((j) => j.id) && r.jobs.some((j) => j.source_types.includes('greenhouse')))
     check('stats: queries include planner and session queries', r.stats.queries.includes('process engineer intern summer 2027 san francisco') && r.stats.queries.includes('process engineer intern summer 2027'))
-    check('stats: verification histogram sums to jobs', Object.values(r.stats.verification).reduce((a, b) => a + b, 0) === mem.jobs.length)
+    check('stats: verification histogram sums to every job handed to the store', Object.values(r.stats.verification).reduce((a, b) => a + b, 0) === mem.batches.flat().length)
     check('stats: web searches and model calls counted', r.stats.web_searches >= 2 && r.stats.model_calls >= 4)
     check('post-scout ranking asked for every stored id, research skipped, within the deadline', mem.ranked.length === 1 && mem.ranked[0].ids.length === mem.jobs.length && mem.ranked[0].skipResearch && mem.ranked[0].deadlineMs > 0 && mem.ranked[0].deadlineMs < 270_000 && mem.ranked[0].concurrency === 3, JSON.stringify(mem.ranked))
     check('post-scout ranking puts the extracted, board-verified Summer 2027 tier-1 intern first and the unverified lead last', mem.ranked[0]?.ids[0] === `job-${mem.jobs.indexOf(acme!)}` && mem.ranked[0]?.ids[mem.ranked[0].ids.length - 1] === `job-${mem.jobs.indexOf(delta!)}`, JSON.stringify(mem.ranked[0]?.ids))
@@ -236,6 +294,151 @@ async function main() {
     check('stats: cost from the run plus ranking', r.costUsd === 0.08 && mem.runs[0].stats.cost_usd === 0.08, `${r.costUsd}`)
     check('location tier from mission geo tiers', acme?.location_tier === 1 && beta?.location_tier === 1)
     check('summarizeStats renders lines', summarizeStats(r.stats).length === 8 && summarizeStats(r.stats)[3].includes('Internships only'))
+  }
+
+  // ─── A1. Company selection by INTENT, with a rotating explore sample ──────
+  // The company list is an input to the run, not its universe: the user's own
+  // choices are checked first, and the scout's accumulated guesses get a
+  // bounded, rotating share so they can never starve fresh discovery.
+  console.log('orchestrator: company selection')
+  {
+    const co = (id: string, status: string, priority: number, checked: string | null) => ({ id, name: id, domain: null, careers_url: null, ats_type: null, ats_identifier: null, watch_status: status, watch_priority: priority, last_careers_check_at: checked })
+    // Deliberately perverse priorities: the explore rows are the "most
+    // important" by number, so only intent can put the targets first.
+    const list: Record<string, unknown>[] = [
+      co('E1', 'suggested', 99, '2026-01-01T00:00:00Z'),
+      co('E2', 'suggested', 99, '2026-02-01T00:00:00Z'),
+      co('E3', 'suggested', 99, '2026-03-01T00:00:00Z'),
+      co('E4', 'suggested', 99, '2026-04-01T00:00:00Z'),
+      co('E5', 'suggested', 99, '2026-05-01T00:00:00Z'),
+      co('E6', 'suggested', 99, '2026-06-01T00:00:00Z'),
+      co('W1', 'watching', 10, null),
+      co('T1', 'target', 5, '2026-01-15T00:00:00Z'),
+      co('T2', 'target', 5, null),
+    ]
+    const { store, mem, rank } = memStore({ watchlist: list })
+    const params = { userId: USER, maxStrategies: 0, maxCompaniesFirst: 5, rank: false, concurrency: 1 }
+    const deps: JobScoutDeps = { store, rank, registry, fetcher, extractor, verifier, planner: async () => agentResult(PLAN, 'job_mission_planner'), session: async () => { throw new Error('job-first must not run in this fixture') } }
+    const r = await runJobScout(params, deps)
+    const order = mem.checked.map((c) => c.id)
+    check('selection: every target first, then watching, then explore — intent beats watch_priority', order.slice(0, 3).sort().join(',') === 'T1,T2,W1' && order.indexOf('T1') < order.indexOf('W1') && order.indexOf('W1') < order.indexOf('E1'), order.join(','))
+    check('selection: explore never takes the whole budget', order.length === 5 && order.filter((n) => n.startsWith('E')).length === 2, order.join(','))
+    check('selection: the least-recently-checked explore rows go first', order.includes('E1') && order.includes('E2') && !order.includes('E6'), order.join(','))
+    check('selection: reported in stats by intent, with what was left over', JSON.stringify(r.stats.companies_selected) === JSON.stringify({ target: 2, watching: 1, suggested: 2, skipped: 4 }), JSON.stringify(r.stats.companies_selected))
+    check('selection: a job-first floor is reserved and stated', r.stats.job_first_reserve_ms > 0 && r.stats.job_first_reserve_ms < 270_000, `${r.stats.job_first_reserve_ms}ms`)
+
+    // Rotation: the run stamps a check date (markCareersChecked), so the next
+    // run reaches the explore rows it did not get to last time.
+    for (const row of list) if (mem.checked.some((c) => c.id === row.id)) row.last_careers_check_at = '2026-09-01T00:00:00Z'
+    mem.checked.length = 0
+    await runJobScout(params, deps)
+    const second = mem.checked.map((c) => c.id)
+    check('selection: explore rotates — the next run reaches different guesses', second.filter((n) => n.startsWith('E')).join(',') === 'E3,E4', second.join(','))
+    check('selection: the user’s own choices are re-checked every run', second.filter((n) => !n.startsWith('E')).sort().join(',') === 'T1,T2,W1', second.join(','))
+
+    // Nothing left for discovery is a diagnostic, not silence.
+    const empty = memStore({ watchlist: [co('X1', 'ignored', 50, null)] })
+    const er = await runJobScout({ ...params, maxCompaniesFirst: 0 }, { ...deps, store: empty.store, rank: empty.rank })
+    check('selection: a run that checks no company says so', er.errors.some((e) => e.startsWith('company-first checked nothing')), er.errors.join(' | '))
+    check('selection: an ignored company is never checked', empty.mem.checked.length === 0)
+  }
+
+  // ─── A1b. Whose choice was this row? ──────────────────────────────────────
+  // `watch_status` alone cannot answer that: the old build wrote 'target' from
+  // planner seeds and scout discoveries, and migration 016 is applied by hand.
+  // `toWatched` resolves intent from `watch_source`, so the run behaves the same
+  // before and after the migration — and the planner is never told that its own
+  // earlier guesses are the user's preferences.
+  console.log('orchestrator: stored intent')
+  {
+    const row = (over: Record<string, unknown>) => ({ id: 'x', name: 'X', domain: null, careers_url: null, ats_type: null, ats_identifier: null, watch_priority: 50, last_careers_check_at: null, company_type: null, industry_tags: null, ...over })
+    const active = [
+      toWatched(row({ id: 'u1', name: 'User Target', watch_status: 'target', watch_source: 'user', company_type: 'startup', industry_tags: ['advanced manufacturing'] })),
+      toWatched(row({ id: 'u2', name: 'User Watching', watch_status: 'opening_available', watch_source: 'user' })),
+      toWatched(row({ id: 'p1', name: 'Planner Guess', watch_status: 'target', watch_source: 'planner', company_type: 'bigco', industry_tags: ['aerospace'] })),
+      toWatched(row({ id: 's1', name: 'Scout Guess', watch_status: 'target', watch_source: 'scout' })),
+      toWatched(row({ id: 'g1', name: 'Legacy Guess', watch_status: 'suggested', watch_source: 'planner' })),
+    ]
+    const ignored = [toWatched(row({ id: 'i1', name: 'Rejected Co', watch_status: 'ignored', watch_source: 'user', company_type: 'consultancy' }))]
+    const w = buildPlannerWatchlist(active, ignored, [])
+    check('planner context: a user row is a target', w.targets.join(',') === 'User Target', w.targets.join(','))
+    check('planner context: a legacy opening_available row is watching', w.watching.join(',') === 'User Watching', w.watching.join(','))
+    check('planner context: a target an AGENT wrote is EXPLORE, never a preference', [...w.explore].sort().join(',') === 'Legacy Guess,Planner Guess,Scout Guess', w.explore.join(','))
+    check('planner context: an ignored company is a do-not-propose list and nothing else', w.ignored.join(',') === 'Rejected Co' && !w.targets.includes('Rejected Co') && !w.watching.includes('Rejected Co') && !w.explore.includes('Rejected Co'))
+    check('planner context: learned attributes come from the user’s choices, not the guesses', w.learned.includes('advanced manufacturing') && w.learned.includes('startup') && !w.learned.includes('aerospace'), w.learned)
+    const none = buildPlannerWatchlist([toWatched(row({ id: 'p2', name: 'Only A Guess', watch_status: 'target', watch_source: 'planner' }))], [], [])
+    check('planner context: nothing learned when the user has chosen nothing', none.learned === '' && none.targets.length === 0 && none.explore.join(',') === 'Only A Guess', JSON.stringify(none))
+
+    // End to end, on the shape the live database actually holds: one row the
+    // user chose and six an agent wrote as 'target'.
+    const agentRow = (n: string, month: number) => row({ id: n, name: n, watch_status: 'target', watch_source: 'planner', watch_priority: 99, last_careers_check_at: `2026-0${month}-01T00:00:00Z` })
+    const live: Record<string, unknown>[] = [
+      row({ id: 'U1', name: 'U1', watch_status: 'target', watch_source: 'user', watch_priority: 5 }),
+      agentRow('A1', 1), agentRow('A2', 2), agentRow('A3', 3), agentRow('A4', 4), agentRow('A5', 5), agentRow('A6', 6),
+    ]
+    const { store, mem, rank } = memStore({ watchlist: live })
+    let seen: PlannerWatchlist = { targets: [], watching: [], explore: [], ignored: [], learned: '' }
+    const r = await runJobScout({ userId: USER, maxStrategies: 0, maxCompaniesFirst: 3, rank: false, concurrency: 1 }, {
+      store, rank, registry, fetcher, extractor, verifier,
+      planner: async (input) => { seen = input.watchlist; return agentResult(PLAN, 'job_mission_planner') },
+      session: async () => { throw new Error('job-first must not run in this fixture') },
+    })
+    check('pre-016 rows: the planner is told only the user chose U1', seen.targets.join(',') === 'U1' && seen.explore.length === 6 && seen.watching.length === 0, JSON.stringify({ t: seen.targets, e: seen.explore.length }))
+    check('pre-016 rows: an agent’s "target" is budgeted as a guess', JSON.stringify(r.stats.companies_selected) === JSON.stringify({ target: 1, watching: 0, suggested: 2, skipped: 4 }), JSON.stringify(r.stats.companies_selected))
+    check('pre-016 rows: the user’s row is checked first, then the least recently checked guesses', mem.checked.map((c) => c.id).join(',') === 'U1,A1,A2', mem.checked.map((c) => c.id).join(','))
+  }
+
+  // ─── A2. Incremental persistence ──────────────────────────────────────────
+  // A run that dies must not lose what it paid for. Everything gathered before
+  // a stage fails is already in the store when that stage throws.
+  console.log('orchestrator: incremental persistence')
+  {
+    const { store, mem, rank } = memStore({ watchlist: [{ id: 'c-acme', name: 'Acme', domain: 'acme.com', careers_url: null, ats_type: 'greenhouse', ats_identifier: 'acme', watch_status: 'target', watch_priority: 90 }] })
+    const seen: string[] = []
+    const r = await runJobScout({ userId: USER, maxStrategies: 2, rank: false }, {
+      store, rank, registry, fetcher, extractor, verifier,
+      planner: async () => agentResult(PLAN, 'job_mission_planner'),
+      session: async (p) => {
+        seen.push(p.strategy.name)
+        mem.timeline.push(`session:${p.strategy.name}`)
+        if (seen.length === 1) throw new Error('board went away')
+        return sessionResult(SCOUTED)
+      },
+    })
+    check('a strategy that throws is surfaced, not swallowed', r.errors.some((e) => /board went away/.test(e)), r.errors.join(' | '))
+    check('the company-first batch was already stored when the strategy threw', mem.timeline[0] === 'upsert:1' && mem.jobs.some((j) => j.canonical_url === 'https://boards.greenhouse.io/acme/jobs/1'), mem.timeline.join(' → '))
+    check('the surviving strategy still persists its own batch afterwards', mem.upserts === 2 && mem.timeline[mem.timeline.length - 1].startsWith('upsert'), mem.timeline.join(' → '))
+    check('a re-seen posting updates the row the earlier batch created', r.stats.jobs_updated >= 1 && mem.jobs.length === 3, `${mem.jobs.length} rows`)
+  }
+
+  // ─── A3. Progress counts ──────────────────────────────────────────────────
+  console.log('orchestrator: progress counts')
+  {
+    const { store, mem, rank } = memStore({ watchlist: [{ id: 'c-acme', name: 'Acme', domain: 'acme.com', careers_url: null, ats_type: 'greenhouse', ats_identifier: 'acme', watch_status: 'target', watch_priority: 90 }] })
+    const emitted: Record<string, number>[] = []
+    // Every key is the name that number has where it is READ — run-view.ts and
+    // run-copy.ts — so the monitor never has to guess which count it has.
+    const CUMULATIVE = ['discovered', 'companies_checked', 'jobs_extracted', 'jobs', 'inserted', 'ranked', 'rejected']
+    const KEYS = [...CUMULATIVE, 'verified_open', 'likely_open', 'closed']
+    await runJobScout({ userId: USER, maxStrategies: 1, onProgress: (_s, _d, counts) => { if (counts) emitted.push(counts) } }, {
+      store, rank, registry, fetcher, extractor, verifier,
+      planner: async () => agentResult(PLAN, 'job_mission_planner'),
+      session: async () => sessionResult(SCOUTED),
+    })
+    check('progress carries counts on every line', emitted.length > 5 && emitted.every((c) => KEYS.every((k) => typeof c[k] === 'number')), `${emitted.length} lines`)
+    const monotonic = CUMULATIVE.every((k) => emitted.every((c, i) => i === 0 || c[k] >= emitted[i - 1][k]))
+    check('progress counts only ever go up', monotonic, JSON.stringify(emitted[emitted.length - 1]))
+    const last = emitted[emitted.length - 1]
+    check('progress counts are the real funnel, not a timer', last.companies_checked >= 1 && last.discovered >= 3 && last.jobs_extracted >= 1 && last.jobs === mem.jobs.length && last.inserted === mem.jobs.length && last.rejected === 2 && last.ranked === mem.jobs.length, JSON.stringify(last))
+    // Rows, not sightings: company-first and job-first both saw the Acme
+    // posting, and it is one stored row with one verdict.
+    const verdict = (s: string) => mem.jobs.filter((j) => j.verification_status === s).length
+    check('verdict counts are distinct stored rows, not sightings', last.verified_open === verdict('VERIFIED_OPEN') && last.likely_open === verdict('LIKELY_OPEN') && last.closed === verdict('CLOSED') && last.verified_open <= last.jobs, JSON.stringify(last))
+    // The names are not private to this file: this is the monitor's own parser.
+    const parsed = parseRunDetail({ id: '11111111-1111-1111-1111-111111111111', status: 'running', counts: last })
+    check('the run monitor reads the emitted counts by name', !!parsed && parsed.jobs.total === last.jobs && parsed.jobs.inserted === last.inserted && parsed.jobs.verified_open === last.verified_open && parsed.jobs.ranked === last.ranked, JSON.stringify(parsed?.jobs))
+    const summary = parsed ? runSummary(parsed) : null
+    check('the run summary reads discovered and rejected off the same payload', !!summary && summary.discovered === last.discovered && summary.rejected === last.rejected, JSON.stringify(summary))
   }
 
   // ─── B. Deadline ──────────────────────────────────────────────────────────
@@ -260,6 +463,9 @@ async function main() {
     check('jobs found before the deadline still persist (the UK one is constraint-rejected)', mem.upserts === 1 && mem.jobs.length === 1 && (r.stats.jobs_rejected['United States'] ?? 0) === 1, `${mem.jobs.length}`)
     check('unextracted ATS postings still VERIFIED_OPEN', mem.jobs.every((j) => j.verification_status === 'VERIFIED_OPEN'))
     check('run still finishes succeeded', mem.runs[0]?.status === 'succeeded')
+    // The caller records it as `partial`: everything found is stored, but the
+    // run did not get through the work it planned.
+    check('a deadline-hit run reports itself partial', r.partial && r.stats.deadline_hit && (mem.runs[0]?.stats.deadline_hit as boolean), `partial=${r.partial}`)
     check('ranking is not started past the deadline, and says so', mem.ranked.length === 0 && r.errors.some((e) => e.startsWith('ranking skipped')) && r.stats.jobs_ranked === 0, r.errors.join(' | '))
   }
 

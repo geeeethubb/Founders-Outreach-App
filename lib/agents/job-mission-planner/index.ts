@@ -15,10 +15,10 @@ import { runAgent } from '../runtime/loop'
 import { normalizeModelText } from '../runtime/text'
 import { normalizeDomain } from '@/lib/providers/apollo/normalize'
 import type { AgentResult, EvidenceSource, ToolContext } from '../runtime/types'
-import { jobMissionPlannerPrompt, type JobMissionPlannerInput } from './prompt'
+import { jobMissionPlannerPrompt, type JobMissionPlannerInput, type PlannerWatchlist } from './prompt'
 
 export { jobMissionPlannerPrompt }
-export type { JobMissionPlannerInput }
+export type { JobMissionPlannerInput, PlannerWatchlist }
 
 export interface RoleFamily {
   name: string
@@ -304,7 +304,18 @@ export async function runJobMissionPlanner(
       mission: sha(input.mission),
       evidence: sha(input.evidenceSummaries + '\n' + input.skills),
       preferences: sha(input.preferences),
-      watchlist: sha([...input.watchlist].sort().join('|')),
+      // The four groups are hashed SEPARATELY: promoting a company from
+      // explore to target changes what the plan should do, and a cache key
+      // that only saw one flat list would serve the old plan back.
+      watchlist: sha(
+        [
+          `t:${[...input.watchlist.targets].sort().join(',')}`,
+          `w:${[...input.watchlist.watching].sort().join(',')}`,
+          `e:${[...input.watchlist.explore].sort().join(',')}`,
+          `i:${[...input.watchlist.ignored].sort().join(',')}`,
+          `l:${input.watchlist.learned}`,
+        ].join('|')
+      ),
       feedback: sha([...input.recentFeedback].sort().join('|')),
     },
   })

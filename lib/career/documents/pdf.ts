@@ -11,9 +11,9 @@
 
 import { spawn, type ChildProcess } from 'child_process'
 import fs from 'fs'
-import os from 'os'
 import path from 'path'
 import { pdfPageCountFallback } from './pdf-text'
+import { makeTempDir, removeTempDir } from './tmp'
 
 export interface RenderResult {
   ok: boolean
@@ -255,12 +255,21 @@ function touchIdle(s: WordServer): void {
   s.idleTimer.unref()
 }
 
-/** Close the shared Word instance. Scripts call it before exiting; process exit calls it too. */
+/**
+ * Close the shared Word instance and take the deferred scratch with it.
+ * Scripts call it before exiting; process exit calls it too. Sweeping here is
+ * what stops a render's temp directory outliving the process that made it —
+ * the retry timers are `unref`'d, so an exit cancels them.
+ */
 export function shutdownPdfRenderers(): void {
   killWordServer('graceful')
+  sweepRenderScratch()
 }
 
-process.on('exit', () => killWordServer('immediate'))
+process.on('exit', () => {
+  killWordServer('immediate')
+  sweepRenderScratch()
+})
 
 export const wordComRenderer: PdfRenderer = {
   id: 'word-com',
@@ -356,7 +365,7 @@ export const libreOfficeRenderer: PdfRenderer = {
       if (!soffice) return { ok: false, pageCount: null, error: 'soffice not found', ms: 0 }
       const docxAbs = path.resolve(docxPath)
       const pdfAbs = path.resolve(pdfPath)
-      const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'career-pdf-'))
+      const outDir = makeTempDir('soffice')
       try {
         const r = await runProcess(soffice, ['--headless', '--convert-to', 'pdf', '--outdir', outDir, docxAbs], RENDER_TIMEOUT_MS)
         const ms = Date.now() - t0
@@ -367,7 +376,7 @@ export const libreOfficeRenderer: PdfRenderer = {
         fs.copyFileSync(produced, pdfAbs)
         return { ok: true, pageCount: pdfPageCountFallback(fs.readFileSync(pdfAbs)), ms }
       } finally {
-        fs.rmSync(outDir, { recursive: true, force: true })
+        removeTempDirLater(outDir)
       }
     })
   },
@@ -384,19 +393,23 @@ export async function selectPdfRenderer(): Promise<PdfRenderer | null> {
 
 export const NO_RENDERER_ERROR = 'no PDF renderer available (install Microsoft Word or LibreOffice)'
 
-export const TMP_DIR = path.join('.career-out', 'tmp')
-
-/** Render a DOCX (bytes or path) to `outPdfPath`. A buffer is written to a temp file under .career-out/tmp first. */
+/**
+ * Render a DOCX (bytes or path) to `outPdfPath`.
+ *
+ * A buffer needs a file on disk for the renderer to open. That file goes in an
+ * OS temp directory (`documents/tmp.ts`) — never under `.career-out`, which is
+ * a relative path that does not exist in a deployed runtime and whose `mkdir`
+ * is what used to fail with ENOENT after research had already been paid for.
+ */
 export async function renderDocxToPdf(docx: Buffer | string, outPdfPath: string): Promise<RenderResult & { renderer: string | null }> {
   const renderer = await selectPdfRenderer()
   if (!renderer) return { ok: false, pageCount: null, error: NO_RENDERER_ERROR, ms: 0, renderer: null }
   let docxPath: string
-  let cleanup: string | null = null
+  let scratch: string | null = null
   if (Buffer.isBuffer(docx)) {
-    fs.mkdirSync(TMP_DIR, { recursive: true })
-    docxPath = path.join(TMP_DIR, `render-${Date.now()}-${Math.random().toString(16).slice(2, 8)}.docx`)
+    scratch = makeTempDir('render')
+    docxPath = path.join(scratch, 'source.docx')
     fs.writeFileSync(docxPath, docx)
-    cleanup = docxPath
   } else {
     docxPath = docx
   }
@@ -404,15 +417,43 @@ export async function renderDocxToPdf(docx: Buffer | string, outPdfPath: string)
     const r = await renderer.render(docxPath, outPdfPath)
     return { ...r, renderer: renderer.id }
   } finally {
-    if (cleanup) removeLater(cleanup)
+    if (scratch) removeTempDirLater(scratch)
   }
 }
 
-/** Word keeps the file handle a moment after Close; retry a few times, then leave it — the dir is gitignored. */
-function removeLater(file: string, attempt = 0): void {
-  try {
-    fs.rmSync(file, { force: true })
-  } catch {
-    if (attempt < 5) setTimeout(() => removeLater(file, attempt + 1), 500).unref()
+/** Scratch whose removal was deferred because a renderer still held the file. */
+const pendingScratch = new Set<string>()
+
+/**
+ * Word keeps the file handle a moment after Close, so the first remove can
+ * fail with EBUSY. Retry a few times, then give up quietly: the directory is
+ * OS-owned scratch, and a cleanup failure must never replace the real error.
+ *
+ * The retry timers are `unref`'d — they must never hold a CLI open — which
+ * means a process that exits first would leak the directory. `sweepRenderScratch`
+ * is the answer to that, and both `shutdownPdfRenderers` and process exit call it.
+ */
+function removeTempDirLater(dir: string, attempt = 0): void {
+  const failure = removeTempDir(dir)
+  if (!failure) {
+    pendingScratch.delete(dir)
+    return
   }
+  pendingScratch.add(dir)
+  if (attempt < 5) setTimeout(() => removeTempDirLater(dir, attempt + 1), 500).unref()
+  else console.warn(`[career/pdf] could not remove the temp directory ${dir}: ${failure.message}`)
+}
+
+/**
+ * Remove every deferred scratch directory now, and say which ones would not go.
+ * Best effort by design: this runs at shutdown, when the only alternative to a
+ * best effort is a leak.
+ */
+export function sweepRenderScratch(): string[] {
+  const left: string[] = []
+  for (const dir of Array.from(pendingScratch)) {
+    if (removeTempDir(dir)) left.push(dir)
+    else pendingScratch.delete(dir)
+  }
+  return left
 }

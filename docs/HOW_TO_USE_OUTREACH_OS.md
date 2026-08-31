@@ -24,9 +24,11 @@ Use for one-off emails to people I add by hand or LinkedIn URL. Compose writes t
 or fills one of my Templates; multi-contact runs land in Draft Emails for review.
 
 **C. Find internships**
-`Evidence (once) → Jobs → Mission → Scout now → react to cards → Track this job`
-Builds a ranked, verified list of Summer 2027 openings. Companies holds the watchlist the
-scout checks first. Love / Not interested feedback re-ranks the whole list.
+`Evidence (once) → Jobs → what I'm scouting for → Scout now → View results → react to cards → Track this job`
+Builds a ranked, verified list of Summer 2027 openings. Scout runs on the server: I can refresh
+or close the tab and come back to it. Every company it proposes lands in **Explore** — a
+suggestion, not a preference — and promoting one to Target or Watching is what teaches the next
+run. Love / Not interested feedback re-ranks the whole list.
 
 **D. Prepare an application**
 `Job → Generate package → review résumé diff → build documents → cover letter → Ready to apply → Open application → I applied`
@@ -47,9 +49,9 @@ Everything the job-search agents may claim about me comes from approved Evidence
 |---|---|---|
 | **Dashboard** | Counters (contacts, emails sent, replies) and shortcuts to Scout, Jobs, Outreach, Conversations. | A rough glance; the shortcuts. |
 | **Scout** | Describe a mission → ranked prospects with why-them / why-me → build a draft per person. Can write in a campaign's voice. | Start here for any people search. The last run is shown again after a refresh; drafts live on Outreach. |
-| **Jobs** | Ranked, verified internship postings; **What I'm scouting for** (leads the search — a pivot goes here); Scout now; Add by URL; feedback; Generate package. Mission editor lives here. | Daily triage in recruiting season. |
+| **Jobs** | Ranked, verified internship postings; **What I'm scouting for** (leads the search — a pivot goes here); Scout now (runs on the server — close the tab if you like); Add by URL; feedback; Generate package. Mission editor lives here. | Daily triage in recruiting season. |
 | **Applications** | Tracker: Tracked → Applied → OA → Interview → Offer/Rejected, with notes and the exact documents submitted. | After applying or hearing back. |
-| **Companies** | Watchlist (target / watching / opening available). "Check now" reads one company's board. | Add dream companies; check one board. |
+| **Companies** | **Target** (you want to work here) · **Watching** (keep an eye on it) · **Explore** (Scout's suggestions — not preferences until you promote one) · **Opening available** (state, whatever the intent). "Check now" reads one board. | Promote what looks good; add dream companies. |
 | **Evidence** | The Personal Evidence Bank. **Canonical**: organization → role → facts, each with its sources. **Review**: suggested merges and conflicts. Plus experiences, bullets, facts, skills, stories with approval. | Setup; after any import (check Review); when I gain a project or skill. |
 | **Outreach** | Review queue + funnel for every Scout draft: edit, approve, send, interpret replies, one follow-up suggestion, record outcome. | After every Scout run; after sends. |
 | **Contacts** | Address book: add by LinkedIn URL (Apollo), bulk, or manually; older "research" summaries; add to campaigns. | To add a known person or look one up. |
@@ -79,6 +81,8 @@ changes*, *Mark READY TO APPLY*, *I applied* · Evidence → *Approve all*, *Upl
 - **Make Scout sound like me** → Campaigns → paste a reference email → pick it on Scout
 - **See who replied / answer them** → Conversations (Outreach shows the interpretation)
 - **Find internships** → Jobs → Scout now
+- **See exactly what one Scout run found** → the run's *View results* button, or Runs → open a job scout
+- **Tell Scout a company matters** → Companies → Explore → *Target* or *Watch*
 - **Pivot what the scout looks for (e.g. into genomics)** → Jobs → What I'm scouting for → Save
 - **Change cities, priorities, fit weights** → Jobs → Mission
 - **Watch a company for an opening** → Companies → Add company
@@ -135,5 +139,6 @@ application exists once I track it or generate a package, and locks its document
 
 - **Save vs Track on Jobs**: the card's *Save* only shortlists; *Track this job* (Application tab) or *Generate package* creates the application that Applications lists as *Tracked*.
 - **Evidence → Preferences is not the editor**: those rows only add a line to two prompts. Jobs → Mission is what gates and ranks; edit there.
-- **Runs shows Career OS runs only**: a run that never finished reads *abandoned* after 25 minutes — it was cut off, not still working.
+- **Explore is not a preference list**: everything Scout proposes lands in Explore. It only becomes a signal when I press Target or Watch — which is also what teaches the next run what kind of company to look for.
+- **The Jobs inbox hides things on purpose**: it shows likely-open, undismissed jobs sorted by fit. A run's *View results* shows everything that run found, including the unverified and unranked — that is the page to open after a Scout.
 - **A merged experience looks gone**: it is hidden, not deleted — its facts now sit under the surviving row, and every apply is preceded by a snapshot.

@@ -24,12 +24,39 @@ import path from 'path'
 /** Everything this app writes to temp lives under one directory, so a stray file is easy to find. */
 export const TMP_NAMESPACE = 'founders-outreach'
 
-/** Absolute root for temporary work. `CAREER_TMP_DIR` wins; otherwise the OS temp directory. */
+/**
+ * The override, but only when it can be trusted. A RELATIVE `CAREER_TMP_DIR`
+ * would resolve against the process working directory — which is precisely the
+ * failure this module exists to prevent (`.career-out/tmp` was relative, and
+ * that is why document generation died in the web runtime). A relative value is
+ * therefore ignored rather than honoured half-way.
+ */
+export function tmpOverride(env: NodeJS.ProcessEnv = process.env): { dir: string | null; ignored: string | null } {
+  const raw = (env.CAREER_TMP_DIR ?? '').trim()
+  if (!raw) return { dir: null, ignored: null }
+  if (!path.isAbsolute(raw)) return { dir: null, ignored: raw }
+  return { dir: path.resolve(raw), ignored: null }
+}
+
+/** Absolute root for temporary work. An absolute `CAREER_TMP_DIR` wins; otherwise the OS temp directory. */
 export function tmpRoot(): string {
-  const override = (process.env.CAREER_TMP_DIR ?? '').trim()
-  const root = override ? path.resolve(override) : path.join(os.tmpdir(), TMP_NAMESPACE)
+  const root = tmpOverride().dir ?? path.join(os.tmpdir(), TMP_NAMESPACE)
   fs.mkdirSync(root, { recursive: true })
   return root
+}
+
+/**
+ * Is `resolved` the root, or inside it?
+ *
+ * Case-insensitive on Windows, where `C:\Users\…\AppData\Local\Temp` and
+ * `c:\users\…\appdata\local\temp` name the same directory. This comparison is
+ * a safety backstop — `assertDurablePath` is the only thing standing between
+ * scratch and `application_packages` — and a backstop that recognises just one
+ * spelling of a path is not a backstop.
+ */
+function within(root: string, resolved: string): boolean {
+  const [a, b] = process.platform === 'win32' ? [root.toLowerCase(), resolved.toLowerCase()] : [root, resolved]
+  return b === a || b.startsWith(a + path.sep)
 }
 
 /**
@@ -53,7 +80,7 @@ export function removeTempDir(dir: string | null | undefined): Error | null {
     const resolved = path.resolve(dir)
     // Only ever delete inside our own namespace — a bad `dir` must not take a
     // real directory with it.
-    if (resolved !== root && !resolved.startsWith(root + path.sep)) {
+    if (!within(root, resolved)) {
       return new Error(`refusing to remove a path outside the temp root: ${resolved}`)
     }
     fs.rmSync(resolved, { recursive: true, force: true })
@@ -95,7 +122,7 @@ export function isTempPath(p: string | null | undefined): boolean {
   if (!path.isAbsolute(value)) return false
   const resolved = path.resolve(value)
   const roots = [path.join(os.tmpdir(), TMP_NAMESPACE)]
-  const override = (process.env.CAREER_TMP_DIR ?? '').trim()
-  if (override) roots.push(path.resolve(override))
-  return roots.some((root) => resolved === root || resolved.startsWith(root + path.sep))
+  const override = tmpOverride().dir
+  if (override) roots.push(override)
+  return roots.some((root) => within(root, resolved))
 }

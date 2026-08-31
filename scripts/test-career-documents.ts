@@ -12,11 +12,12 @@ import { applyResumePatch, extractBulletTexts, parseMarkdownSegments, renderMark
 import { readDocx, fontsUsed, fontSizesUsed, sectPrOf, parseRuns, documentText } from '../lib/career/documents/docx-read'
 import { buildResumeModel } from '../lib/career/documents/resume-model'
 import { buildCoverLetterDocx } from '../lib/career/documents/cover-letter-docx'
-import { renderDocxToPdf, selectPdfRenderer, shutdownPdfRenderers } from '../lib/career/documents/pdf'
+import { renderDocxToPdf, selectPdfRenderer, shutdownPdfRenderers, sweepRenderScratch } from '../lib/career/documents/pdf'
 import { pdfInfo } from '../lib/career/documents/pdf-text'
 import { qaResumeDocument, qaCoverLetterDocument, normalizeText, xmlLooksWellFormed } from '../lib/career/documents/qa'
 import { sanitizeCompanyForFilename, resumeFilenames, coverLetterFilenames } from '../lib/career/documents/filenames'
 import { fitToOnePage, shrinkStrategies, type ShrinkableChange } from '../lib/career/documents/fit-page'
+import { tmpRoot } from '../lib/career/documents/tmp'
 
 let passed = 0
 let failed = 0
@@ -328,6 +329,81 @@ async function main(): Promise<void> {
       check('j: report records shrink_attempts', finalQa.shrink_attempts === fit.shrink_attempts)
     }
   }
+
+  // (k) renderer policy: "no renderer" and "the render failed" are different
+  // things, and only one of them is a broken package (ADR-033).
+  console.log('(k) renderer policy')
+  const qaArgs = { docx: combined.docx, expectedBullets: [], expectedPages: 1, allowedFonts: masterFonts, allowedFontSizes: masterSizes, masterSectPr: masterSect, filename: names.docx, company: 'Procter & Gamble' }
+  const noRendererQa = await qaResumeDocument({ ...qaArgs, pdfPath: null, renderer: null })
+  const pdfCheck = noRendererQa.checks.find((c) => c.name === 'pdf_present')
+  check('k: no renderer → pdf_present fails but does not block', pdfCheck?.pass === false && pdfCheck?.blocking === false, JSON.stringify(pdfCheck))
+  check('k: no renderer → the report is still ok (DOCX-only package)', noRendererQa.ok, noRendererQa.checks.filter((c) => !c.pass && c.blocking).map((c) => c.name).join(','))
+  check('k: no renderer → the reason is stated, not hidden', /no PDF renderer available/.test(pdfCheck?.detail ?? ''), pdfCheck?.detail)
+  check('k: no renderer → the absence is surfaced as a warning', noRendererQa.warnings.some((w) => /^pdf_present/.test(w)), noRendererQa.warnings.join(' | '))
+  check('k: no renderer → no PDF is invented', noRendererQa.pdf_path === null && noRendererQa.page_count === null && noRendererQa.renderer === null)
+
+  const failedRenderQa = await qaResumeDocument({ ...qaArgs, pdfPath: null, renderer: 'word-com' })
+  const failedCheck = failedRenderQa.checks.find((c) => c.name === 'pdf_present')
+  check('k: a renderer that produced nothing DOES block', failedCheck?.pass === false && failedCheck?.blocking === true, JSON.stringify(failedCheck))
+  check('k: a failed render makes the report not ok', !failedRenderQa.ok)
+
+  const clNoRenderer = await qaCoverLetterDocument({ docx: cl, pdfPath: null, expectedParagraphs: paragraphs, company: 'Procter & Gamble', filename: clNames.docx, renderer: null })
+  const onePage = clNoRenderer.checks.find((c) => c.name === 'one_page')
+  check('k: cover letter without a renderer → one_page does not block', onePage?.pass === false && onePage?.blocking === false, JSON.stringify(onePage))
+  check('k: cover letter without a renderer → the report is still ok', clNoRenderer.ok, clNoRenderer.checks.filter((c) => !c.pass && c.blocking).map((c) => c.name).join(','))
+  const clFailedRender = await qaCoverLetterDocument({ docx: cl, pdfPath: null, expectedParagraphs: paragraphs, company: 'Procter & Gamble', filename: clNames.docx, renderer: 'word-com' })
+  check('k: cover letter with a renderer but no PDF DOES block', clFailedRender.checks.find((c) => c.name === 'one_page')?.blocking === true && !clFailedRender.ok)
+
+  // The scratch a buffer render needs is OS-owned. The old code dropped its
+  // source DOCX under `.career-out/tmp` — a relative path that does not exist
+  // in a deployed runtime, which is the ENOENT this workstream fixed.
+  //
+  // Two assertions, because the negative one alone is vacuous on a clean
+  // machine: `.career-out/tmp` is CREATED for the duration (so a regression
+  // could actually land there and be seen), and the temp root is SAMPLED while
+  // the render is in flight, so the scratch is caught existing where it should.
+  const oldScratch = path.resolve('.career-out', 'tmp')
+  const createdOldScratch = !fs.existsSync(oldScratch)
+  if (createdOldScratch) fs.mkdirSync(oldScratch, { recursive: true })
+  const legacy = (): number => (fs.existsSync(oldScratch) ? fs.readdirSync(oldScratch).length : -1)
+  const before = legacy()
+  const root = tmpRoot()
+  const renderDirs = (): Set<string> => new Set(fs.readdirSync(root).filter((f) => /^render-/.test(f)))
+  if (renderer) {
+    const probe = path.join(OUT, 'renderer-policy-probe.pdf')
+    // Only THIS render's scratch is judged: the root is shared, and Word can
+    // still be holding an earlier one open.
+    const before = renderDirs()
+    const fresh = new Set<string>()
+    const watch = setInterval(() => {
+      for (const d of renderDirs()) if (!before.has(d)) fresh.add(d)
+    }, 10)
+    let r: Awaited<ReturnType<typeof renderDocxToPdf>>
+    try {
+      r = await renderDocxToPdf(cl, probe)
+    } finally {
+      clearInterval(watch)
+    }
+    check('k: a buffer render still works', r.ok, r.error)
+    check('k: the render scratch appears under the OS temp root', fresh.size > 0, `no new render-* directory was seen in ${root}`)
+    // Word holds the source file for a moment after Close, so removal is
+    // deferred and retried; give the retries their window rather than
+    // asserting on the instant the promise resolved.
+    const gone = async (): Promise<boolean> => {
+      for (let i = 0; i < 30; i++) {
+        const now = renderDirs()
+        if (![...fresh].some((d) => now.has(d))) return true
+        await new Promise((resolve) => setTimeout(resolve, 200))
+      }
+      return false
+    }
+    check('k: and the scratch is removed again, never leaked', await gone(), [...fresh].join(', '))
+    check('k: nothing is left deferred for the sweep at shutdown', sweepRenderScratch().length === 0)
+  } else {
+    skip('k: buffer render', 'no PDF renderer')
+  }
+  check('k: a buffer render writes nothing under .career-out/tmp', legacy() === before && before >= 0, `${before} → ${legacy()}`)
+  if (createdOldScratch && fs.existsSync(oldScratch) && fs.readdirSync(oldScratch).length === 0) fs.rmdirSync(oldScratch)
 
   report()
 }

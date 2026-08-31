@@ -21,8 +21,9 @@ import { printableName } from '../identity'
 import { runCoverLetterPipeline, type CompanyResearchForLetter, type CoverLetterResult, type EvidenceMapForLetter, type LetterDeps } from '../letter/pipeline'
 import type { CareerRun } from '../runs'
 import type { CoverLetter, DocumentQaReport, EvidenceBank, ResumeParagraphMapEntry } from '../types'
+import { withTempDir } from '../documents/tmp'
 import { insertCoverLetter, nextLetterVersion, updateCoverLetter, type LetterSigner } from './persist'
-import { scratchDir, writeOutput, type DocumentOutput } from './resume'
+import { PDF_UNAVAILABLE_WARNING, writeOutput, type DocumentOutput } from './resume'
 
 export interface LetterJob {
   title: string
@@ -66,10 +67,20 @@ export interface LetterDocumentsResult {
   qa: DocumentQaReport
   renderer: string | null
   warnings: string[]
+  /** True when no PDF exists because no renderer is installed — NOT a document failure. */
+  pdfUnavailable: boolean
 }
 
 export async function buildLetterDocuments(params: LetterDocumentsParams): Promise<LetterDocumentsResult> {
   const warnings: string[] = []
+  return withTempDir(
+    'pkg-letter',
+    (tmp) => buildLetterDocumentsIn(params, tmp, warnings),
+    (e) => warnings.push(`temporary workspace cleanup: ${e.message}`)
+  )
+}
+
+async function buildLetterDocumentsIn(params: LetterDocumentsParams, tmp: string, warnings: string[]): Promise<LetterDocumentsResult> {
   const filenames = coverLetterFilenames(params.company)
   const name = printableName(params.user.name)
   const docx = await buildCoverLetterDocx({
@@ -85,14 +96,15 @@ export async function buildLetterDocuments(params: LetterDocumentsParams): Promi
     signatureName: name,
   })
 
-  const tmp = scratchDir()
   const tmpPdf = path.join(tmp, filenames.pdf)
   const render = await renderDocxToPdf(docx, tmpPdf)
   let renderer: string | null = render.renderer
+  let pdfUnavailable = false
   if (!render.ok) {
     if (render.error === NO_RENDERER_ERROR) {
       renderer = null
-      warnings.push(`${NO_RENDERER_ERROR}; DOCX produced, PDF skipped`)
+      pdfUnavailable = true
+      warnings.push(PDF_UNAVAILABLE_WARNING)
     } else {
       warnings.push(`pdf render failed: ${render.error ?? 'unknown'}`)
     }
@@ -119,8 +131,7 @@ export async function buildLetterDocuments(params: LetterDocumentsParams): Promi
   }
   qa.docx_path = out.path
   qa.pdf_path = pdfPath
-  fs.rmSync(tmp, { recursive: true, force: true })
-  return { docxPath: out.path, pdfPath, filenames, qa, renderer, warnings }
+  return { docxPath: out.path, pdfPath, filenames, qa, renderer, warnings, pdfUnavailable }
 }
 
 // ─── Generate ────────────────────────────────────────────────────────────────

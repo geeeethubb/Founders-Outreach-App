@@ -51,15 +51,25 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   }
 }
 
-/** POST { approve: true } → build the documents from the approved changes plus the cover letter; returns the package view. */
+/**
+ * POST { approve: true } — or { retry: true }, the same call by its other name.
+ *
+ * Builds the documents from the approved changes plus the cover letter, on the
+ * package that already exists: same id, same version, same research, same
+ * approved changes, same recorded cost. It resumes at the stage that failed and
+ * makes no research or tailoring model call, so retrying a document failure is
+ * free of the expensive work already paid for.
+ *
+ * Creating a v2 is a different action entirely — POST …/packages/[id]/redo.
+ */
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const body = (await request.json().catch(() => ({}))) as { approve?: boolean }
-    if (body.approve !== true) return NextResponse.json({ error: '{ approve: true } is required' }, { status: 400 })
+    const body = (await request.json().catch(() => ({}))) as { approve?: boolean; retry?: boolean }
+    if (body.approve !== true && body.retry !== true) return NextResponse.json({ error: '{ approve: true } is required' }, { status: 400 })
 
     const r = await finishPackage({ userId: user.id, packageId: params.id })
     if (r.migrationMissing) return NextResponse.json(MIGRATION, { status: 409 })

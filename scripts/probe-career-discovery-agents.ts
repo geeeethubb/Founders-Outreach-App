@@ -91,7 +91,7 @@ async function main(): Promise<void> {
     console.log('\n=== JOB MISSION PLANNER ===')
     const started = Date.now()
     const res = await runJobMissionPlanner(
-      { mission: missionText, evidenceSummaries: summaries, skills, preferences: mission.preferences.notes ?? '', watchlist: [], recentFeedback: [] },
+      { mission: missionText, evidenceSummaries: summaries, skills, preferences: mission.preferences.notes ?? '', watchlist: { targets: [], watching: [], explore: [], ignored: [], learned: '' }, recentFeedback: [] },
       ctx,
       { onStep: (s) => console.log(`  step ${s.step} ${s.elapsedMs}ms stop=${s.stopReason} tools=[${s.toolCalls.join(',')}]`) }
     )

@@ -1,94 +1,52 @@
-// Persistence for jobs, sources, snapshots, feedback and the company watchlist.
+// Persistence for jobs, sources, snapshots, feedback and run results.
 //
 // Migration 014 is applied by hand; until it is, every call here reports
 // `migrationMissing` rather than throwing, the same way lib/scouting/persist.ts
-// does. Nothing in this file judges anything — it matches, upserts and reads.
+// does. Migration 016 adds `scouting_run_jobs`, and every path that uses it
+// falls back to `discovery_run_id` when the table is not there yet. Nothing in
+// this file judges anything — it matches, upserts and reads.
+//
+// The company watchlist lives in lib/career/companies/watchlist.ts and is
+// re-exported here, because that is where the rule "an agent's guess is never a
+// user preference" is enforced and it belongs next to the intent model.
 
 import { createServiceClient } from '@/lib/supabase/server'
-import { normalizeCompanyName, normalizeDomain } from '@/lib/providers/apollo/normalize'
-import type { AtsType, FeedbackReason, FeedbackVerdict, JobDisposition, JobOpportunity, VerificationStatus, WatchStatus } from '../types'
+import type { FeedbackReason, FeedbackVerdict, JobDisposition, JobOpportunity, VerificationStatus } from '../types'
+import { isMissingSchema, type Db } from './db'
 import type { NormalizedJob } from './normalize'
 import { buildSnapshot } from './snapshot'
 import type { VerifyResult } from './verify'
 
-export function isMissingSchema(message: string): boolean {
-  return /relation .* does not exist|column .* does not exist|schema cache|could not find/i.test(message)
-}
+export { isMissingSchema } from './db'
+export type { Db } from './db'
+// One owner for "what did this run find?" — see lib/career/jobs/run-results.ts.
+export { MAX_RUN_JOB_IDS, RUN_JOB_ID_URL_BYTES, runJobIds, runJobSummary } from './run-results'
+export type { RunJobIds, RunJobSummary } from './run-results'
+export {
+  ensureCompany,
+  isReinterpreted,
+  listWatchlist,
+  markCareersChecked,
+  resolveStoredIntent,
+  setUserCompanyIntent,
+  toCompanyView,
+  upsertWatch,
+  INTENT_COLUMNS,
+} from '../companies/watchlist'
+export type {
+  CareersCheck,
+  EnsureCompanyInput,
+  ListWatchlistOptions,
+  StoredIntentRow,
+  UpsertWatchInput,
+  UpsertWatchResult,
+  UserCompanyEdit,
+  UserCompanyResult,
+  WatchlistResult,
+} from '../companies/watchlist'
 
-type Db = ReturnType<typeof createServiceClient>
-
-// ─── Companies ───────────────────────────────────────────────────────────────
-
-export interface EnsureCompanyInput {
-  name: string
-  domain?: string | null
-  careers_url?: string | null
-  ats?: { ats_type: AtsType; ats_identifier: string } | null
-  company_type?: string | null
-  website_url?: string | null
-}
-
-// Intent strength (migration 016). `opening_available` is a legacy value that
-// meant state, not intent; readers map it to 'watching'.
-// Canonical ranking lives in lib/career/companies/intent.ts.
-const WATCH_RANK: Record<WatchStatus, number> = { ignored: 0, suggested: 1, watching: 2, target: 3, opening_available: 2 }
-
-/**
- * Find-or-create a company by domain, else normalized name — the same keys
- * lib/scouting/persist.ts uses, so a job's company is the outreach's company.
- * Never downgrades watch_status: a scout seeing an opening must not demote a
- * user-marked target.
- */
-export async function ensureCompany(userId: string, input: EnsureCompanyInput, db: Db = createServiceClient()): Promise<{ id: string | null; created: boolean; error: string | null; migrationMissing: boolean }> {
-  const domain = normalizeDomain(input.domain)
-  const normalizedName = normalizeCompanyName(input.name)
-  const query = domain
-    ? db.from('companies').select('id, watch_status, careers_url, ats_type, ats_identifier').eq('user_id', userId).eq('domain', domain)
-    : db.from('companies').select('id, watch_status, careers_url, ats_type, ats_identifier').eq('user_id', userId).eq('normalized_name', normalizedName)
-  const { data: existing, error: readErr } = await query.limit(1).maybeSingle()
-  if (readErr) return { id: null, created: false, error: readErr.message, migrationMissing: isMissingSchema(readErr.message) }
-
-  const patch: Record<string, unknown> = {}
-  if (input.careers_url) patch.careers_url = input.careers_url
-  if (input.ats) {
-    patch.ats_type = input.ats.ats_type
-    patch.ats_identifier = input.ats.ats_identifier
-  }
-  if (input.company_type) patch.company_type = input.company_type
-
-  if (existing) {
-    const row = existing as { id: string; careers_url: string | null; ats_type: string | null }
-    // Keep a careers URL the user set; fill only blanks unless we found an ATS board.
-    if (row.careers_url && !input.ats) delete patch.careers_url
-    if (Object.keys(patch).length) {
-      const { error } = await db.from('companies').update(patch as never).eq('id', row.id)
-      if (error && !isMissingSchema(error.message)) return { id: row.id, created: false, error: error.message, migrationMissing: false }
-    }
-    return { id: row.id, created: false, error: null, migrationMissing: false }
-  }
-
-  const { data: created, error } = await db
-    .from('companies')
-    .insert({
-      user_id: userId,
-      name: input.name,
-      domain,
-      normalized_name: domain ? null : normalizedName,
-      website_url: input.website_url ?? (domain ? `https://${domain}` : null),
-      status: 'discovered',
-      ...patch,
-    } as never)
-    .select('id')
-    .maybeSingle()
-  if (error) return { id: null, created: false, error: error.message, migrationMissing: isMissingSchema(error.message) }
-  return { id: (created as { id: string } | null)?.id ?? null, created: true, error: null, migrationMissing: false }
-}
-
-/** Raise (never lower) a company's watch status. */
-export async function raiseWatchStatus(companyId: string, status: WatchStatus, current: WatchStatus | null, db: Db = createServiceClient()): Promise<void> {
-  if (current && WATCH_RANK[current] >= WATCH_RANK[status]) return
-  await db.from('companies').update({ watch_status: status } as never).eq('id', companyId)
-}
+import { ensureCompany } from '../companies/watchlist'
+import { runJobIds } from './run-results'
 
 // ─── Jobs ────────────────────────────────────────────────────────────────────
 
@@ -100,6 +58,12 @@ export interface UpsertJobsResult {
   companyIds: Record<string, string>
   errors: string[]
   migrationMissing: boolean
+  /** Rows that actually landed in `scouting_run_jobs` this call. */
+  runJobs?: number
+  /** Links offered — one per job touched. Higher than `runJobs` when a link already existed. */
+  runJobsAttempted?: number
+  /** Set when the run→job table is not there yet; the run still succeeds. */
+  runJobsNote?: string | null
 }
 
 const JOB_COLUMNS: (keyof NormalizedJob)[] = [
@@ -124,6 +88,15 @@ function jobRow(job: NormalizedJob): Record<string, unknown> {
   return row
 }
 
+/**
+ * A literal string as a LIKE pattern: `%`, `_` and the escape character itself
+ * become themselves. Exported so the test can prove it, since the previous
+ * version silently did nothing.
+ */
+export function escapeLike(value: string): string {
+  return value.replace(/[%_\\]/g, (m) => `\\${m}`)
+}
+
 async function findExistingJob(db: Db, userId: string, job: NormalizedJob, companyId: string | null): Promise<{ id: string; verification_status: VerificationStatus; description_text: string | null } | null> {
   const select = 'id, verification_status, description_text'
   if (job.ats_type && job.ats_job_id) {
@@ -140,8 +113,12 @@ async function findExistingJob(db: Db, userId: string, job: NormalizedJob, compa
       .select(`${select}, title, location_raw`)
       .eq('user_id', userId)
       .eq('company_id', companyId)
-      // `%` and `_` are LIKE wildcards; a title containing them must match itself, not everything.
-      .ilike('title', job.title.replace(/[\%_]/g, '\$&'))
+      // `%` and `_` are LIKE wildcards; a title containing them must match
+      // itself, not everything. LIKE's escape character is the backslash, so
+      // each one is prefixed with a real backslash — `'\\$&'` looked like an
+      // escape and was not: `$&` expands to the match, leaving the title
+      // unchanged and "Analyst_Intern 50%" matching other postings.
+      .ilike('title', escapeLike(job.title))
       .limit(5)
     const hit = (data as { id: string; verification_status: VerificationStatus; description_text: string | null; location_raw: string | null }[] | null)?.find(
       (r) => (r.location_raw ?? '').toLowerCase() === (job.location_raw ?? '').toLowerCase()
@@ -151,10 +128,33 @@ async function findExistingJob(db: Db, userId: string, job: NormalizedJob, compa
   return null
 }
 
-export async function upsertJobs(userId: string, jobs: NormalizedJob[], opts: { runId?: string | null; missionId?: string | null } = {}): Promise<UpsertJobsResult> {
-  const db = createServiceClient()
+/**
+ * Record which jobs a run touched. `discovery_run_id` only ever named the run
+ * that INSERTED a job, so a run that re-found ten postings looked like it found
+ * nothing. One row per (run, job), `inserted` saying which it was.
+ */
+async function linkRunJobs(db: Db, userId: string, runId: string, touched: { job_id: string; inserted: boolean }[]): Promise<{ written: number; attempted: number; note: string | null; error: string | null }> {
+  const attempted = touched.length
+  if (attempted === 0) return { written: 0, attempted: 0, note: null, error: null }
+  const rows = touched.map((t) => ({ run_id: runId, job_id: t.job_id, user_id: userId, inserted: t.inserted }))
+  // `ignoreDuplicates` means a re-touched (or retried) link writes nothing, so
+  // the count is asked for rather than assumed — otherwise a retry would report
+  // rows that never landed.
+  const { error, count } = await db.from('scouting_run_jobs').upsert(rows as never, { onConflict: 'run_id,job_id', ignoreDuplicates: true, count: 'exact' })
+  if (!error) return { written: typeof count === 'number' ? count : attempted, attempted, note: null, error: null }
+  if (isMissingSchema(error.message)) return { written: 0, attempted, note: 'run results fall back to discovery_run_id — apply migration 016', error: null }
+  return { written: 0, attempted, note: null, error: `run jobs: ${error.message}` }
+}
+
+export async function upsertJobs(
+  userId: string,
+  jobs: NormalizedJob[],
+  opts: { runId?: string | null; missionId?: string | null } = {},
+  db: Db = createServiceClient()
+): Promise<UpsertJobsResult> {
   const result: UpsertJobsResult = { inserted: 0, updated: 0, skippedClosed: 0, ids: [], companyIds: {}, errors: [], migrationMissing: false }
   const now = new Date().toISOString()
+  const touched: { job_id: string; inserted: boolean }[] = []
 
   for (const job of jobs) {
     // Company first — a job with no company row still persists, just unlinked.
@@ -192,6 +192,7 @@ export async function upsertJobs(userId: string, jobs: NormalizedJob[], opts: { 
       if (existing.verification_status === 'CLOSED') result.skippedClosed++
       else result.updated++
       jobId = existing.id
+      touched.push({ job_id: jobId, inserted: false })
     } else {
       const { data, error } = await db
         .from('job_opportunities')
@@ -206,6 +207,7 @@ export async function upsertJobs(userId: string, jobs: NormalizedJob[], opts: { 
       }
       result.inserted++
       jobId = (data as { id: string }).id
+      touched.push({ job_id: jobId, inserted: true })
     }
     result.ids.push(jobId)
 
@@ -225,6 +227,14 @@ export async function upsertJobs(userId: string, jobs: NormalizedJob[], opts: { 
       if (error) result.errors.push(`snapshot ${job.title}: ${error.message}`)
     }
   }
+
+  if (opts.runId) {
+    const linked = await linkRunJobs(db, userId, opts.runId, touched)
+    result.runJobs = linked.written
+    result.runJobsAttempted = linked.attempted
+    result.runJobsNote = linked.note
+    if (linked.error) result.errors.push(linked.error)
+  }
   return result
 }
 
@@ -239,6 +249,12 @@ export interface ListJobsFilters {
   minFit?: number
   search?: string
   canonicalOnly?: boolean
+  /**
+   * One scout run's results. Everything that run touched — including postings
+   * it re-found — and none of the inbox's narrowing: no freshness, no
+   * disposition, no canonical-only unless the caller asks for them.
+   */
+  runId?: string | null
   limit?: number
   offset?: number
   sort?: 'fit' | 'recent' | 'deadline'
@@ -251,13 +267,34 @@ export type JobListRow = JobOpportunity & {
   warm_paths: { count: number }[]
 }
 
-export async function listJobs(userId: string, filters: ListJobsFilters = {}): Promise<{ jobs: JobListRow[]; total: number | null; error: string | null; migrationMissing: boolean }> {
-  const db = createServiceClient()
+export interface ListJobsResult {
+  jobs: JobListRow[]
+  total: number | null
+  error: string | null
+  migrationMissing: boolean
+  /** In a run view: jobs the run touched beyond `MAX_RUN_JOB_IDS`, not fetched. */
+  truncated?: number
+}
+
+export async function listJobs(userId: string, filters: ListJobsFilters = {}, db: Db = createServiceClient()): Promise<ListJobsResult> {
+  let runIds: string[] | null = null
+  let truncated = 0
+  if (filters.runId) {
+    const link = await runJobIds(userId, filters.runId, db)
+    truncated = link.truncated
+    if (link.ids.length === 0) return { jobs: [], total: 0, error: link.error, migrationMissing: false, truncated }
+    runIds = link.ids
+  }
+
   let q = db
     .from('job_opportunities')
     .select('*, fit:job_fit_evaluations(*), applications(id, state, current_package_id), feedback:job_feedback(verdict, created_at), warm_paths(count)', { count: 'exact' })
     .eq('user_id', userId)
-  if (filters.canonicalOnly ?? true) q = q.eq('is_canonical', true)
+  if (runIds) q = q.in('id', runIds)
+  // Outside a run view, the inbox shows canonical rows only. Inside one, the
+  // question is "what did this run find?" — every default that narrows the
+  // answer is off unless the caller set it.
+  if (filters.canonicalOnly ?? !runIds) q = q.eq('is_canonical', true)
   if (filters.mission_id) q = q.eq('mission_id', filters.mission_id)
   if (filters.status?.length) q = q.in('verification_status', filters.status)
   if (filters.disposition) q = q.in('disposition', Array.isArray(filters.disposition) ? filters.disposition : [filters.disposition])
@@ -272,13 +309,15 @@ export async function listJobs(userId: string, filters: ListJobsFilters = {}): P
   if (sort === 'fit') q = q.order('fit_overall', { ascending: false, nullsFirst: false }).order('last_seen_at', { ascending: false })
   else if (sort === 'deadline') q = q.order('deadline', { ascending: true, nullsFirst: false }).order('fit_overall', { ascending: false, nullsFirst: false })
   else q = q.order('first_seen_at', { ascending: false })
-  const limit = Math.min(200, filters.limit ?? 50)
+  const limit = Math.min(200, filters.limit ?? (runIds ? 200 : 50))
   const offset = filters.offset ?? 0
   q = q.range(offset, offset + limit - 1)
 
   const { data, error, count } = await q
-  if (error) return { jobs: [], total: null, error: error.message, migrationMissing: isMissingSchema(error.message) }
-  return { jobs: (data ?? []) as unknown as JobListRow[], total: count ?? null, error: null, migrationMissing: false }
+  if (error) return { jobs: [], total: null, error: error.message, migrationMissing: isMissingSchema(error.message), truncated }
+  // `total` is the count across pages, not the page — a run header must never
+  // report a page size as what the run found.
+  return { jobs: (data ?? []) as unknown as JobListRow[], total: count ?? null, error: null, migrationMissing: false, truncated }
 }
 
 export async function getJob(userId: string, id: string): Promise<{ job: Record<string, unknown> | null; error: string | null; migrationMissing: boolean }> {
@@ -322,63 +361,4 @@ export async function recordFeedback(userId: string, jobId: string, verdict: Fee
   const disposition: JobDisposition | null = verdict === 'NOT_INTERESTED' ? 'dismissed' : verdict === 'MAYBE' ? null : 'saved'
   if (disposition) await db.from('job_opportunities').update({ disposition } as never).eq('user_id', userId).eq('id', jobId)
   return { id: (data as { id: string } | null)?.id ?? null, error: null }
-}
-
-// ─── Watchlist ───────────────────────────────────────────────────────────────
-
-export async function listWatchlist(userId: string): Promise<{ companies: Record<string, unknown>[]; error: string | null; migrationMissing: boolean }> {
-  const db = createServiceClient()
-  const { data, error } = await db
-    .from('companies')
-    .select('id, name, domain, website_url, careers_url, ats_type, ats_identifier, watch_status, watch_priority, watch_note, watch_source, last_careers_check_at, careers_check_note, company_type, industry_tags, jobs:job_opportunities(count)')
-    .eq('user_id', userId)
-    .not('watch_status', 'is', null)
-    .neq('watch_status', 'ignored')
-    .order('watch_priority', { ascending: false, nullsFirst: false })
-    .order('name', { ascending: true })
-  if (error) return { companies: [], error: error.message, migrationMissing: isMissingSchema(error.message) }
-  return { companies: (data ?? []) as Record<string, unknown>[], error: null, migrationMissing: false }
-}
-
-export interface UpsertWatchInput {
-  name: string
-  domain?: string | null
-  careers_url?: string | null
-  watch_status: WatchStatus
-  watch_priority?: number | null
-  watch_note?: string | null
-  watch_source: 'planner' | 'user' | 'scout'
-  ats?: { ats_type: AtsType; ats_identifier: string } | null
-  company_type?: string | null
-}
-
-export async function upsertWatch(userId: string, input: UpsertWatchInput): Promise<{ id: string | null; error: string | null; migrationMissing: boolean }> {
-  const db = createServiceClient()
-  const c = await ensureCompany(userId, { name: input.name, domain: input.domain, careers_url: input.careers_url, ats: input.ats, company_type: input.company_type }, db)
-  if (!c.id) return { id: null, error: c.error, migrationMissing: c.migrationMissing }
-  const { data: cur } = await db.from('companies').select('watch_status, watch_source').eq('id', c.id).maybeSingle()
-  const current = (cur as { watch_status: WatchStatus | null; watch_source: string | null } | null) ?? null
-  // The user's own marking outranks the planner's and the scout's; those may only raise.
-  const userOwned = current?.watch_source === 'user' && input.watch_source !== 'user'
-  const status = userOwned && current?.watch_status ? (WATCH_RANK[input.watch_status] > WATCH_RANK[current.watch_status] ? input.watch_status : current.watch_status) : input.watch_status
-  const patch: Record<string, unknown> = { watch_status: status, watch_source: userOwned ? 'user' : input.watch_source }
-  if (input.watch_priority !== undefined) patch.watch_priority = input.watch_priority
-  if (input.watch_note !== undefined) patch.watch_note = input.watch_note
-  const { error } = await db.from('companies').update(patch as never).eq('id', c.id)
-  if (error) return { id: c.id, error: error.message, migrationMissing: isMissingSchema(error.message) }
-  return { id: c.id, error: null, migrationMissing: false }
-}
-
-export async function markCareersChecked(companyId: string, check: { status?: WatchStatus | null; note: string; openings: number }, now = new Date()): Promise<{ error: string | null }> {
-  const db = createServiceClient()
-  const patch: Record<string, unknown> = { last_careers_check_at: now.toISOString(), careers_check_note: `${check.note} (${check.openings} matching openings)` }
-  if (check.status) {
-    const { data } = await db.from('companies').select('watch_status').eq('id', companyId).maybeSingle()
-    const current = (data as { watch_status: WatchStatus | null } | null)?.watch_status ?? null
-    if (!current || WATCH_RANK[check.status] >= WATCH_RANK[current] || (current === 'opening_available' && check.openings === 0 && check.status === 'watching')) {
-      patch.watch_status = check.status
-    }
-  }
-  const { error } = await db.from('companies').update(patch as never).eq('id', companyId)
-  return { error: error?.message ?? null }
 }

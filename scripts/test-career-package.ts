@@ -267,9 +267,248 @@ async function main(): Promise<void> {
     check('no renderer → warning surfaced, docx still produced', docs.warnings.some((w) => /no PDF renderer/.test(w)) && docs.pdfPath === null)
   }
 
+  await documentPhaseChecks(bank, docx)
+
   console.log(`\n${count} checks, ${failures} failed`)
   console.log(failures === 0 ? 'all package checks passed' : `${failures} check(s) FAILED`)
   process.exitCode = failures === 0 ? 0 : 1
+}
+
+// ─── The document phase: stages, retries, and what a failure leaves behind ───
+//
+// Driven through `finishPackage`'s io seam, so a résumé build can fail exactly
+// the way it failed in production (a mkdir ENOENT) with no database, no key,
+// no Word and no money spent. Everything asserted here is a promise the UI
+// makes to the founder: the stage is the truth, a retry is free, a retry is
+// not a new version, and a missing PDF is not a broken package.
+
+interface IoCall {
+  fn: string
+  arg: Record<string, unknown>
+}
+
+function packageRow(over: Partial<ApplicationPackage>): ApplicationPackage {
+  const now = new Date().toISOString()
+  return {
+    id: 'pkg-1', user_id: USER, job_id: 'job-1', application_id: 'app-1', version: 2, status: 'resume_review', stage: 'resume_review',
+    run_id: null, resume_patch_id: 'patch-1', cover_letter_id: null, resume_docx_path: null, resume_pdf_path: null, cover_docx_path: null,
+    cover_pdf_path: null, resume_filename: null, cover_filename: null, qa: null, company_research_snapshot: null, fit_snapshot: null,
+    evidence_map_snapshot: null, warm_paths_snapshot: null, job_snapshot_id: null, cost_usd: 1.2345, error: null, approved_at: null,
+    created_at: now, updated_at: now, ...over,
+  } as ApplicationPackage
+}
+
+function okQa(document: 'resume' | 'cover_letter', pdf: string | null) {
+  return {
+    ok: true, document, docx_path: null, pdf_path: pdf, page_count: pdf ? 1 : null, expected_pages: 1, renderer: pdf ? 'word-com' : null,
+    checks: [{ name: 'docx_valid', pass: true, detail: 'fine', blocking: true }, { name: 'pdf_present', pass: pdf !== null, detail: pdf ? '1 page' : 'no PDF renderer available', blocking: pdf !== null }],
+    warnings: [],
+  }
+}
+
+async function documentPhaseChecks(bank: EvidenceBank, master: Buffer): Promise<void> {
+  console.log('document phase (injected io — no DB, no model, no money)')
+  const { finishPackage, planDocumentWork, REAL_DOCUMENTS_IO } = await import('../lib/career/package/documents')
+  const { explainPackageError, missingArtifacts } = await import('../lib/career/package/status')
+  const { assertDurablePath } = await import('../lib/career/documents/store')
+  const { isTempPath, makeTempDir, removeTempDir } = await import('../lib/career/documents/tmp')
+
+  const calls: IoCall[] = []
+  const record = (fn: string, arg: Record<string, unknown> = {}) => calls.push({ fn, arg })
+  const wrote = (field: string) => calls.filter((c) => c.fn === 'updatePackage' && field in c.arg).map((c) => c.arg[field])
+  const called = (fn: string) => calls.filter((c) => c.fn === fn).length
+
+  const job = { id: 'job-1', user_id: USER, company_name: 'Acme Robotics, Inc.', title: 'Process Engineering Intern', location_raw: null, canonical_url: null, apply_url: null, verification_status: 'VERIFIED_OPEN', company_id: null, description_text: 'x', responsibilities: [], min_qualifications: [], preferred_qualifications: [], skills: [] } as unknown as JobOpportunity
+  // The memory bank has no storage_path (nothing was uploaded); the document
+  // phase loads the master through io.loadDocument, so give it one to load.
+  const storedBank = { ...bank, masterDocument: { ...(bank.masterDocument as object), storage_path: 'local:test-user/master/Zuyu_Resume.docx' } } as EvidenceBank
+  const context = {
+    job, company: null, mission: { id: 'mission-1' }, bank: storedBank,
+    existing: { fit: null, evidenceMap: null, research: { summary: null, facts: [] }, warmPaths: [], latestSnapshot: null }, errors: [],
+  }
+  const patchRow = { patch: { id: 'patch-1', status: 'reviewed' }, changes: [] }
+  const run = { runId: 'run-1', migrationMissing: false, trace: async () => null, costUsd: () => 0, agentCalls: () => 0, finish: async () => undefined }
+
+  const baseIo = (pkg: ApplicationPackage, patchStatus: string) => ({
+    getPackage: async () => { record('getPackage'); return { pkg, error: null, migrationMissing: false } },
+    loadJobContext: async () => ({ ctx: context, error: null, migrationMissing: false }),
+    loadResumePatch: async () => ({ patch: { ...patchRow, patch: { ...patchRow.patch, status: patchStatus } }, error: null, migrationMissing: false }),
+    loadDocument: async () => master,
+    getCoverLetter: async () => ({ letter: { id: 'cl-1', greeting: 'Dear Team,', paragraphs: ['One.'], closing: 'Sincerely,', full_text: 'x', edited_text: null, word_count: 2, claims: [], grounding: null, review_status: 'approved', prompt_version: '1' }, error: null, migrationMissing: false }),
+    startCareerRun: async () => run,
+    updatePackage: async (_id: string, p: Record<string, unknown>) => { record('updatePackage', p); return { error: null, migrationMissing: false } },
+    updateResumePatch: async (_id: string, p: Record<string, unknown>) => { record('updateResumePatch', p); return { error: null, migrationMissing: false } },
+    transitionApplication: async () => ({ ok: true, application: { state: 'READY_FOR_REVIEW' }, error: null }),
+    letterSigner: async () => ({ name: 'Zuyu Liu', nameSource: 'resume', email: 'z@example.com', phone: '', linkedin: null }),
+    generateResumeDocuments: async () => { record('generateResumeDocuments'); throw new Error('stub not configured') },
+    generateCoverLetter: async () => { record('generateCoverLetter'); throw new Error('stub not configured') },
+    reuseCoverLetter: async () => { record('reuseCoverLetter'); throw new Error('stub not configured') },
+  })
+
+  const letterDocs = (docx: string, pdf: string | null) => ({
+    docxPath: docx, pdfPath: pdf, filenames: { docx: 'Zuyu_Liu_Acme_Robotics_Cover_Letter.docx', pdf: 'Zuyu_Liu_Acme_Robotics_Cover_Letter.pdf' },
+    qa: okQa('cover_letter', pdf), renderer: pdf ? 'word-com' : null, warnings: pdf ? [] : ['PDF unavailable: no PDF renderer is installed'], pdfUnavailable: pdf === null,
+  })
+
+  // ── (1) a mkdir failure inside the résumé documents ────────────────────────
+  calls.length = 0
+  const io1 = {
+    ...baseIo(packageRow({}), 'reviewed'),
+    generateResumeDocuments: async () => {
+      record('generateResumeDocuments')
+      throw new Error("ENOENT: no such file or directory, mkdir '.career-out/tmp/pkg-1770000000000-ab12cd'")
+    },
+  }
+  const r1 = await finishPackage({ userId: USER, packageId: 'pkg-1', io: io1 as never })
+  const failUpdate = calls.filter((c) => c.fn === 'updatePackage' && c.arg.status === 'failed')[0]
+  check('a failed résumé build records stage resume_documents', failUpdate?.arg.stage === 'resume_documents', String(failUpdate?.arg.stage))
+  check('it does NOT record the stage it came in on (resume_review)', failUpdate?.arg.stage !== 'resume_review')
+  check('the result reports the running stage too', r1.stage === 'resume_documents' && r1.status === 'failed', `${r1.stage}/${r1.status}`)
+  check('the version is untouched by a failure', r1.version === 2, String(r1.version))
+  check('the recorded cost is preserved, not reset', Number(failUpdate?.arg.cost_usd) >= 1.2345, String(failUpdate?.arg.cost_usd))
+  check('approved changes are left alone (the patch is not marked applied)', called('updateResumePatch') === 0)
+  check('the stage was persisted BEFORE the risky work', wrote('stage')[0] === 'resume_documents')
+  const explained = explainPackageError(r1.error)
+  check('the raw ENOENT is translated for the UI', explained.kind === 'temp_workspace' && /temporary document workspace/.test(explained.headline), explained.headline)
+  check('the translation never blames the résumé changes', /safe/i.test(explained.reassurance) && explained.retryDocuments, explained.reassurance)
+  check('the raw error is kept verbatim on the package', /ENOENT/.test(r1.error ?? ''), r1.error ?? '')
+
+  // ── (2) retry documents: same version, no research, no tailoring ───────────
+  calls.length = 0
+  const failedPkg = packageRow({
+    status: 'failed', stage: 'cover_letter', error: 'cover letter: boom', cover_letter_id: 'cl-1',
+    resume_docx_path: 'local:test-user/packages/pkg-1/v2/1/Zuyu_Liu_Acme_Robotics_Resume.docx',
+    resume_pdf_path: 'local:test-user/packages/pkg-1/v2/1/Zuyu_Liu_Acme_Robotics_Resume.pdf',
+    qa: { resume: okQa('resume', 'x.pdf'), cover_letter: null } as never,
+  })
+  const io2 = {
+    ...baseIo(failedPkg, 'applied'),
+    reuseCoverLetter: async () => { record('reuseCoverLetter'); return { row: { id: 'cl-2' }, documents: letterDocs('local:u/cover.docx', 'local:u/cover.pdf'), flagged: false, errors: [], fullText: 'Dear Team,\n\nOne.' } },
+  }
+  const r2 = await finishPackage({ userId: USER, packageId: 'pkg-1', io: io2 as never })
+  check('retry finishes the package', r2.status === 'ready_for_review' && r2.error === null, `${r2.status}: ${r2.error}`)
+  check('retry re-renders nothing that already succeeded', called('generateResumeDocuments') === 0)
+  check('retry makes no cover-letter writer call (the paid text is reused)', called('generateCoverLetter') === 0 && called('reuseCoverLetter') === 1)
+  check('retry keeps the same version', r2.version === 2, String(r2.version))
+  check('retry says what it reused', r2.warnings.some((w) => /résumé documents from the earlier attempt/.test(w)), r2.warnings.join(' | '))
+  check('finishPackage cannot research, tailor or create a version', !Object.keys(REAL_DOCUMENTS_IO).some((k) => /intelligence|tailor|insertPackage|nextPackageVersion/i.test(k)), Object.keys(REAL_DOCUMENTS_IO).join(','))
+  const docSrc = fs.readFileSync(path.resolve('lib/career/package/documents.ts'), 'utf8')
+  const redoSrc = fs.readFileSync(path.resolve('lib/career/package/redo.ts'), 'utf8')
+  check('the document phase never imports the expensive pipelines', !/runJobIntelligence|runTailoringPipeline/.test(docSrc))
+  check('the document phase never inserts a package row', !/insertPackage|nextPackageVersion/.test(docSrc))
+  check('redo DOES create a new version (it goes through generatePackage)', /generatePackage/.test(redoSrc) && /nextPackageVersion|insertPackage/.test(redoSrc))
+
+  // planDocumentWork, the rule behind all of that
+  check('plan: a fresh package builds the résumé', planDocumentWork({ status: 'resume_review', stage: 'resume_review', resumeDocxPath: null, patchStatus: 'reviewed', qa: null, coverLetterId: null }).startStage === 'resume_documents')
+  check('plan: a failure after the résumé resumes at the letter', planDocumentWork({ status: 'failed', stage: 'cover_letter', resumeDocxPath: 'local:x', patchStatus: 'applied', qa: { resume: okQa('resume', null) as never, cover_letter: null }, coverLetterId: 'cl-1' }).reuseResume)
+  check('plan: changed decisions force a rebuild', !planDocumentWork({ status: 'failed', stage: 'cover_letter', resumeDocxPath: 'local:x', patchStatus: 'reviewed', qa: { resume: okQa('resume', null) as never, cover_letter: null }, coverLetterId: 'cl-1' }).reuseResume)
+  const blockedQa = { ...okQa('resume', null), ok: false, checks: [{ name: 'pdf_present', pass: false, detail: 'no PDF produced', blocking: true }] }
+  check('plan: a résumé whose QA blocks is rebuilt, never frozen in', !planDocumentWork({ status: 'failed', stage: 'documents', resumeDocxPath: 'local:x', patchStatus: 'applied', qa: { resume: blockedQa as never, cover_letter: null }, coverLetterId: 'cl-1' }).reuseResume)
+
+  // ── (3) no renderer: DOCX stored, PDF absent, and that is a WARNING ────────
+  calls.length = 0
+  const io3 = {
+    ...baseIo(packageRow({}), 'reviewed'),
+    generateResumeDocuments: async () => ({
+      docxPath: 'local:u/packages/pkg-1/v2/1/Zuyu_Liu_Acme_Robotics_Resume.docx', pdfPath: null,
+      filenames: { docx: 'Zuyu_Liu_Acme_Robotics_Resume.docx', pdf: 'Zuyu_Liu_Acme_Robotics_Resume.pdf' },
+      qa: okQa('resume', null), shrink_attempts: 0, droppedByShrink: [], renderer: null,
+      warnings: ['PDF unavailable: no PDF renderer is installed (Microsoft Word or LibreOffice). The DOCX was produced and stored; no PDF was.'],
+      finalChanges: [], pdfUnavailable: true, error: null,
+    }),
+    reuseCoverLetter: async () => ({ row: { id: 'cl-2' }, documents: letterDocs('local:u/cover.docx', null), flagged: false, errors: [], fullText: 'Dear Team,\n\nOne.' }),
+    getCoverLetter: async () => ({ letter: null, error: null, migrationMissing: false }),
+    generateCoverLetter: async () => ({ letter: { fullText: 'Dear Team,\n\nOne.', error: null }, row: { id: 'cl-2' }, documents: letterDocs('local:u/cover.docx', null), flagged: false, errors: [] }),
+  }
+  const r3 = await finishPackage({ userId: USER, packageId: 'pkg-1', io: io3 as never })
+  check('a missing PDF renderer still produces a ready package', r3.status === 'ready_for_review' && r3.error === null, `${r3.status}: ${r3.error}`)
+  check('the DOCX is still stored', String(wrote('resume_docx_path')[0]).endsWith('Resume.docx'), String(wrote('resume_docx_path')[0]))
+  check('the unavailability is recorded as a warning, not a failure', r3.warnings.some((w) => /PDF unavailable: no PDF renderer/.test(w)) && r3.warnings.some((w) => /Install Microsoft Word or LibreOffice/.test(w)), r3.warnings.join(' | '))
+  check('no PDF path is invented', wrote('resume_pdf_path')[0] === null)
+
+  // ── (4) an incomplete set of artifacts is never "ready" ───────────────────
+  calls.length = 0
+  const io4 = {
+    ...baseIo(packageRow({}), 'reviewed'),
+    generateResumeDocuments: async () => ({
+      docxPath: 'local:u/r.docx', pdfPath: null, filenames: { docx: 'Zuyu_Liu_Acme_Robotics_Resume.docx', pdf: 'x.pdf' }, qa: okQa('resume', null),
+      shrink_attempts: 0, droppedByShrink: [], renderer: null, warnings: [], finalChanges: [], pdfUnavailable: true, error: null,
+    }),
+    getCoverLetter: async () => ({ letter: null, error: null, migrationMissing: false }),
+    // A letter whose DOCX never landed: text yes, document no.
+    generateCoverLetter: async () => ({ letter: { fullText: 'Dear Team,\n\nOne.', error: null }, row: { id: 'cl-2' }, documents: null, flagged: false, errors: [] }),
+  }
+  const r4 = await finishPackage({ userId: USER, packageId: 'pkg-1', io: io4 as never })
+  check('a half-built package reads as failed, not ready', r4.status === 'failed' && /incomplete/.test(r4.error ?? ''), `${r4.status}: ${r4.error}`)
+  check('the failure names the stage that was running', r4.stage === 'documents', String(r4.stage))
+  check('missingArtifacts lists exactly what is absent', missingArtifacts({ resumeDocxPath: 'local:r.docx', resumeQaPresent: true, coverDocxPath: null, coverQaPresent: false, coverLetterText: 'x' }).join(',') === 'cover letter DOCX,cover letter QA report')
+  check('missingArtifacts does not require a PDF', missingArtifacts({ resumeDocxPath: 'a', resumeQaPresent: true, coverDocxPath: 'b', coverQaPresent: true, coverLetterText: 'x' }).length === 0)
+
+  // ── (5) a temp path can never be stored ──────────────────────────────────
+  calls.length = 0
+  const scratch = makeTempDir('assert')
+  const io5 = {
+    ...baseIo(packageRow({}), 'reviewed'),
+    generateResumeDocuments: async () => ({
+      docxPath: path.join(scratch, 'Zuyu_Liu_Acme_Robotics_Resume.docx'), pdfPath: null,
+      filenames: { docx: 'Zuyu_Liu_Acme_Robotics_Resume.docx', pdf: 'x.pdf' }, qa: okQa('resume', null),
+      shrink_attempts: 0, droppedByShrink: [], renderer: null, warnings: [], finalChanges: [], pdfUnavailable: true, error: null,
+    }),
+  }
+  const r5 = await finishPackage({ userId: USER, packageId: 'pkg-1', io: io5 as never })
+  check('a document left in scratch fails the build', r5.status === 'failed' && /temporary scratch/.test(r5.error ?? ''), `${r5.status}: ${r5.error}`)
+  check('the temp path is never written to the package row', wrote('resume_docx_path').length === 0, JSON.stringify(wrote('resume_docx_path')))
+  check('every stored path in the passing runs is durable', ![...wrote('resume_docx_path'), ...wrote('cover_docx_path')].some((p) => isTempPath(p as string)))
+  let threw = false
+  try {
+    assertDurablePath(path.join(scratch, 'x.docx'), 'résumé')
+  } catch {
+    threw = true
+  }
+  check('assertDurablePath refuses a temp path', threw)
+  check('assertDurablePath passes a storage path', assertDurablePath('local:u/packages/pkg-1/v2/x.docx', 'résumé') === 'local:u/packages/pkg-1/v2/x.docx')
+  removeTempDir(scratch)
+
+  // ── (6) each failure gets its OWN sentence and its own remedy ─────────────
+  // The master-résumé sentence contains the word "storage", so a storage-first
+  // translation swallowed it and offered a Retry button that could only fail
+  // again for ever. The string below is pinned to the one documents.ts emits.
+  const MASTER_ERROR = 'master résumé file is missing from storage — re-import it'
+  check('the master-résumé error is still the string the code emits', docSrc.includes(`failed('${MASTER_ERROR}')`), 'documents.ts no longer emits this sentence — update the check and the translation together')
+  const masterExplained = explainPackageError(MASTER_ERROR)
+  check('a missing master résumé is not translated as a storage failure', masterExplained.kind === 'master_missing', masterExplained.kind)
+  check('and the remedy offered is re-import, not retry', masterExplained.retryDocuments === false && /Re-import the master résumé/.test(masterExplained.reassurance), masterExplained.reassurance)
+  check('a real storage failure is still a storage failure', explainPackageError('refusing to overwrite existing document: packages/pkg-1/v2/x.docx').kind === 'storage')
+  check('a renderer failure is its own kind', explainPackageError('no PDF renderer available (install Microsoft Word or LibreOffice)').kind === 'renderer')
+  check('a QA failure is its own kind', explainPackageError('document QA failed: pdf_present (no PDF)').kind === 'qa')
+  check('an unknown failure is shown verbatim, never swallowed', explainPackageError('something nobody predicted').headline === 'something nobody predicted')
+
+  // ── (7) what a retry after a RÉSUMÉ failure actually costs ────────────────
+  // No letter has been written at that point, so the retry does call the
+  // writer once. The screen must not promise "nothing charged again".
+  calls.length = 0
+  const failedAtResume = packageRow({ status: 'failed', stage: 'resume_documents', error: "ENOENT: no such file or directory, mkdir '.career-out/tmp/pkg-1'", cover_letter_id: null })
+  const io7 = {
+    ...baseIo(failedAtResume, 'reviewed'),
+    generateResumeDocuments: async () => {
+      record('generateResumeDocuments')
+      return {
+        docxPath: 'local:u/packages/pkg-1/v2/2/Zuyu_Liu_Acme_Robotics_Resume.docx', pdfPath: null,
+        filenames: { docx: 'Zuyu_Liu_Acme_Robotics_Resume.docx', pdf: 'x.pdf' }, qa: okQa('resume', null),
+        shrink_attempts: 0, droppedByShrink: [], renderer: null, warnings: [], finalChanges: [], pdfUnavailable: true, error: null,
+      }
+    },
+    generateCoverLetter: async () => { record('generateCoverLetter'); return { letter: { fullText: 'Dear Team,\n\nOne.', error: null }, row: { id: 'cl-9' }, documents: letterDocs('local:u/cover.docx', null), flagged: false, errors: [] } },
+  }
+  const r7 = await finishPackage({ userId: USER, packageId: 'pkg-1', io: io7 as never })
+  check('a retry after a résumé failure rebuilds the résumé', r7.status === 'ready_for_review' && called('generateResumeDocuments') === 1, `${r7.status}: ${r7.error}`)
+  check('and it DOES pay the letter writer once — there was no letter to reuse', called('generateCoverLetter') === 1 && called('reuseCoverLetter') === 0)
+  check('plan: nothing to reuse when the failure was before the letter', planDocumentWork({ status: 'failed', stage: 'resume_documents', resumeDocxPath: null, patchStatus: 'reviewed', qa: null, coverLetterId: null }).reuseLetterText === false)
+  const failureUi = fs.readFileSync(path.resolve('app/dashboard/jobs/[id]/PackageFailure.tsx'), 'utf8')
+  const panelUi = fs.readFileSync(path.resolve('app/dashboard/jobs/[id]/PackagePanel.tsx'), 'utf8')
+  check('the retry sentence does not promise "nothing charged again" unconditionally', /letterWritten\s*\n?\s*\?/.test(failureUi) && !/no re-tailoring, nothing charged again/.test(failureUi), 'PackageFailure.tsx claims the retry is free')
+  check('and it says so when there IS no letter yet', /has not been written yet/.test(failureUi))
+  check('the panel tells it whether a letter exists', /letterWritten=\{Boolean\(view\.cover_letter\)\}/.test(panelUi))
 }
 
 main()

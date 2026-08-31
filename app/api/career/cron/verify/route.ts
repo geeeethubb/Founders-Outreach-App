@@ -4,6 +4,7 @@ import { isMissingSchema } from '@/lib/career/jobs/store'
 import { verifyJobs } from '@/lib/career/jobs/verify-batch'
 import { DEFAULT_PACKAGE_BUDGET, startCareerRun } from '@/lib/career/runs'
 import { scoutToolContext } from '@/lib/career/scout/orchestrator'
+import { reapStaleRuns } from '@/lib/career/scout/run-reaper'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
@@ -13,7 +14,7 @@ const PER_USER_LIMIT = 40
 const DEADLINE_MS = 250_000
 
 /**
- * GET (Authorization: Bearer $CRON_SECRET) → { users: [{ user_id, checked, outcomes, changed, applicationsClosed, errors }], skipped, elapsed_ms }
+ * GET (Authorization: Bearer $CRON_SECRET) → { users: [{ user_id, checked, outcomes, changed, applicationsClosed, errors, reaped }], skipped, elapsed_ms }
  * No cookies — Vercel cron has none. 401 on a bad secret, 503 when none is configured.
  */
 export async function GET(request: NextRequest) {
@@ -33,6 +34,12 @@ export async function GET(request: NextRequest) {
       skipped++
       continue
     }
+    // A scout worker that died takes its run row with it: nothing else moves a
+    // run out of 'running' unless someone opens the page and polls it. This is
+    // the one process that runs whether or not anybody is watching, so it is
+    // where a dead run finally becomes 'partial' (it stored jobs) or 'failed'.
+    const reap = await reapStaleRuns(p.id)
+
     const run = await startCareerRun({ userId: p.id, kind: 'job_verify', label: 'cron verify', mission: { scope: 'stale' } })
     try {
       const r = await verifyJobs(p.id, { scope: 'stale', limit: PER_USER_LIMIT, ctx: scoutToolContext(p.id, run.runId, DEFAULT_PACKAGE_BUDGET), run })
@@ -41,12 +48,12 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: 'Apply supabase/migrations/014_career_os.sql first', migrationMissing: true, users }, { status: 409 })
       }
       await run.finish(r.errors.length && !r.checked ? 'failed' : 'succeeded', { checked: r.checked, outcomes: r.outcomes, changed: r.changed.length, applications_closed: r.applicationsClosed.length }, r.errors[0] ?? null)
-      users.push({ user_id: p.id, run_id: run.runId, checked: r.checked, outcomes: r.outcomes, changed: r.changed, applicationsClosed: r.applicationsClosed, errors: r.errors })
+      users.push({ user_id: p.id, run_id: run.runId, checked: r.checked, outcomes: r.outcomes, changed: r.changed, applicationsClosed: r.applicationsClosed, errors: r.errors, reaped: reap.reaped })
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e)
       await run.finish('failed', {}, message)
       if (isMissingSchema(message)) return NextResponse.json({ error: 'Apply supabase/migrations/014_career_os.sql first', migrationMissing: true, users }, { status: 409 })
-      users.push({ user_id: p.id, run_id: run.runId, checked: 0, outcomes: {}, changed: [], applicationsClosed: [], errors: [message] })
+      users.push({ user_id: p.id, run_id: run.runId, checked: 0, outcomes: {}, changed: [], applicationsClosed: [], errors: [message], reaped: reap.reaped })
     }
   }
   return NextResponse.json({ users, skipped, elapsed_ms: Date.now() - started })

@@ -288,14 +288,37 @@ const goodExtraction = {
 // ─── Prompts: the stated direction leads (ADR-009: versions bumped) ─────────
 
 {
-  const planner = jobMissionPlannerPrompt.build({ mission: 'DIRECTION (what I want to scout for — this leads the plan): genomics', evidenceSummaries: '', skills: '', preferences: '', watchlist: [], recentFeedback: [] })
-  check('planner prompt: version bumped past 1.0.0', jobMissionPlannerPrompt.version !== '1.0.0' && jobMissionPlannerPrompt.version === '1.1.0', jobMissionPlannerPrompt.version)
+  const emptyWatchlist = { targets: [], watching: [], explore: [], ignored: [], learned: '' }
+  const planner = jobMissionPlannerPrompt.build({ mission: 'DIRECTION (what I want to scout for — this leads the plan): genomics', evidenceSummaries: '', skills: '', preferences: '', watchlist: emptyWatchlist, recentFeedback: [] })
+  check('planner prompt: version bumped past 1.1.0', jobMissionPlannerPrompt.version !== '1.0.0' && jobMissionPlannerPrompt.version !== '1.1.0' && jobMissionPlannerPrompt.version === '1.2.0', jobMissionPlannerPrompt.version)
   check('planner prompt: the direction is the starting point', /DIRECTION line/.test(planner.system) && /STARTING POINT/.test(planner.system) && /WHY THIS PERSON IS CREDIBLE/.test(planner.system))
   check('planner prompt: a pivot is planned, not retreated from', /a pivot — do NOT retreat to the\s+evidence's own industry/.test(planner.system) && /0\.3-0\.6 for a pure pivot/.test(planner.system))
   check('planner prompt: seeds and strategies match the direction first', /matching the DIRECTION\s+first/.test(planner.system) && /strategies in question 2 follow the same order: the DIRECTION first/.test(planner.system))
   check('planner prompt: adjacency applies to the direction; old-industry roles are off-target', /"genomics research" implies sequencing platforms/.test(planner.system) && /OFF-target unless the direction says "also open to…"/.test(planner.system))
   check('planner prompt: without a direction, inference from the evidence stays', /When no DIRECTION is stated, infer the families from the evidence/.test(planner.system))
   check('planner prompt: the mission text is passed through verbatim', planner.user.includes('DIRECTION (what I want to scout for — this leads the plan): genomics'))
+
+  // The company list is four kinds of evidence, not one list. A seed company
+  // is an exploration candidate; the user's own choices are the only signal
+  // about what they actually want (migration 016, ADR-039).
+  const withCompanies = jobMissionPlannerPrompt.build({
+    mission: 'm', evidenceSummaries: '', skills: '', preferences: '', recentFeedback: [],
+    watchlist: {
+      targets: ['Kairos Power'], watching: ['Ginkgo Bioworks'], explore: ['Old Guess Corp'], ignored: ['Rejected Robotics'],
+      learned: 'likes company types: startup · avoids: staffing',
+    },
+  })
+  check('planner prompt: seed companies are exploration candidates, not preferences', /EXPLORATION CANDIDATES, not preferences/.test(withCompanies.system) && /stored\s+as a SUGGESTION the user can promote/.test(withCompanies.system))
+  check('planner prompt: the four groups are named and weighted in the system prompt', ['TARGETS', 'WATCHING', 'EXPLORE', 'IGNORED'].every((g) => new RegExp(`\\n\\s+${g}\\s`).test(withCompanies.system)) && /STRONG evidence/.test(withCompanies.system) && /WEAK evidence/.test(withCompanies.system) && /NEGATIVE signal/.test(withCompanies.system))
+  check('planner prompt: the explore group is called out as the model’s own earlier guesses', /YOUR OWN earlier suggestions/.test(withCompanies.system))
+  check('planner prompt: the direction still outranks the whole list', /DIRECTION still outranks all four/.test(withCompanies.system))
+  check('planner prompt: overfitting to the list is called a failure, with a share of new names asked for', /A plan that only re-proposes companies already on it has failed/.test(withCompanies.system) && /MEANINGFUL SHARE/.test(withCompanies.system) && /NONE of the four lists/.test(withCompanies.system))
+  check('planner prompt: adjacency over archetypes is strengthened, and the examples are illustrations', /ADJACENCY, not string matching/.test(withCompanies.system) && /ILLUSTRATIONS of the move, not a taxonomy/.test(withCompanies.system) && /machine vision/.test(withCompanies.system))
+  check('planner prompt: the four groups are rendered in the user message with their names', /TARGETS — the user chose these[\s\S]*Kairos Power/.test(withCompanies.user) && /WATCHING[\s\S]*Ginkgo Bioworks/.test(withCompanies.user) && /EXPLORE[\s\S]*Old Guess Corp/.test(withCompanies.user))
+  check('planner prompt: ignored companies appear as a do-not-propose list', /IGNORED — the user rejected these; DO NOT propose any of them again\nRejected Robotics/.test(withCompanies.user), withCompanies.user.slice(withCompanies.user.indexOf('IGNORED'), withCompanies.user.indexOf('IGNORED') + 120))
+  check('planner prompt: the learned attributes line is rendered', withCompanies.user.includes("WHAT THE USER'S CHOICES HAVE IN COMMON") && withCompanies.user.includes('likes company types: startup · avoids: staffing'))
+  check('planner prompt: an empty list says so rather than rendering nothing', planner.user.includes('(none)') && /nothing learned yet/.test(planner.user))
+  check('planner prompt: prestige warning and exclusions survive the rewrite', /DO NOT equate prestige with quality/.test(withCompanies.system) && /EXCLUSIONS\./.test(withCompanies.system) && /honest\s+confidence/.test(withCompanies.system))
 
   const fit = fitEvaluatorPrompt.build({ mission: 'm', job: { title: 't', company: 'c', location_raw: null, location_tier: null, work_mode: 'unknown', employment_type: 'internship', season_relevance: 'summer_2027', posted_at: null, deadline: null, description_excerpt: '', min_qualifications: [], preferred_qualifications: [], graduation_eligibility: null, work_authorization: null, skills: [], responsibilities: [], industry: null, company_size_stage: null }, companyResearch: '', evidenceSummaries: '', preferences: '', feedbackContext: [] })
   check('fit prompt: version bumped past 1.0.0', fitEvaluatorPrompt.version !== '1.0.0' && fitEvaluatorPrompt.version === '1.1.0', fitEvaluatorPrompt.version)

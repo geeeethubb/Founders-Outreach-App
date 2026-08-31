@@ -1,8 +1,8 @@
 // The application package, in three human-gated steps.
 //
-//   generatePackage   intelligence → tailoring → STOP at résumé review
-//   finishPackage     approved changes → documents → cover letter → READY_FOR_REVIEW
-//   finalizePackage   the human has read everything → READY_TO_APPLY
+//   generatePackage   intelligence → tailoring → STOP at résumé review   (here)
+//   finishPackage     approved changes → documents → cover letter        (documents.ts)
+//   finalizePackage   the human has read everything → READY_TO_APPLY     (here)
 //
 // The stop after tailoring is the product: the diff is reviewed by a person
 // before a single document exists, so nothing that was not approved can be
@@ -10,76 +10,29 @@
 // UI, every agent call is traced on one run of kind 'package', and a failure
 // lands on the package row as `status: failed` + `error` — never silently.
 //
+// This module is still the front door: the document half and the shared
+// vocabulary are re-exported below, so routes and scripts keep importing
+// `package/orchestrator`.
+//
 // Nothing here submits anything. The last action is still a link.
 
-import { loadDocument } from '../documents/store'
 import { ensureApplication, transitionApplication, updateApplicationDetails } from '../applications/store'
 import { runJobIntelligence, packageToolContext, type IntelligenceStage } from '../intelligence/orchestrator'
-import { letterPointsFromFacts, loadJobContext, type JobContext } from '../intelligence/load'
-import { groundedPoints } from '../research/company'
-import type { CompanyResearch } from '@/lib/agents/company-researcher'
-import type { CompanyResearchForLetter } from '../letter/pipeline'
-import { DEFAULT_PACKAGE_BUDGET, startCareerRun, type CareerRun } from '../runs'
-import { runTailoringPipeline, type TailorDeps, type VerifiedChange } from '../tailor/pipeline'
-import { jobTermsFor, tailorJobFromOpportunity, type EvidenceMapForTailor } from '../tailor/render'
-import type { LetterDeps } from '../letter/pipeline'
+import { loadJobContext } from '../intelligence/load'
+import { DEFAULT_PACKAGE_BUDGET, startCareerRun } from '../runs'
+import { runTailoringPipeline } from '../tailor/pipeline'
+import { jobTermsFor, tailorJobFromOpportunity } from '../tailor/render'
 import type { ToolContext } from '@/lib/agents/runtime/types'
-import type { ApplicationPackage, ApplicationState, DocumentQaReport, PackageStatus, ResumePatchChange } from '../types'
-import { resolveApplicantName } from '../identity'
-import { contactFromParagraphMap, generateCoverLetter, reuseCoverLetter, type LetterDocumentsResult, type StoredLetterText } from './letter'
-import {
-  ensureJobSnapshot, getCoverLetter, getPackage, insertPackage, insertResumePatch, loadProfile, loadResumePatch, nextPackageVersion,
-  supersedePackages, updatePackage, updateResumePatch, type LetterSigner,
-} from './persist'
-import { generateResumeDocuments, type ChangeWithId } from './resume'
+import type { ApplicationPackage, ApplicationState, PackageStatus } from '../types'
+import { ensureJobSnapshot, getCoverLetter, getPackage, insertPackage, insertResumePatch, nextPackageVersion, supersedePackages, updatePackage } from './persist'
+import { bankIsUsable, failed, MIGRATION, tailorMapFrom, type PackageDeps, type PackageResult, type PackageStage } from './shared'
 
-export type PackageStage =
-  | 'started' | 'intelligence' | 'tailoring' | 'resume_review' | 'resume_documents' | 'cover_letter' | 'documents' | 'finalized'
-
-export interface PackageQa {
-  resume: DocumentQaReport | null
-  cover_letter: DocumentQaReport | null
-}
-
-export interface PackageResult {
-  packageId: string | null
-  status: PackageStatus | null
-  stage: PackageStage | null
-  version: number | null
-  applicationId: string | null
-  applicationState: ApplicationState | null
-  resume: { proposed: number; supported: number; autoRejected: number; noChangeReason: string | null; summary: string } | null
-  costUsd: number
-  warnings: string[]
-  errors: string[]
-  error: string | null
-  migrationMissing: boolean
-}
-
-export interface PackageDeps {
-  tailor?: Partial<TailorDeps>
-  letter?: Partial<LetterDeps>
-}
-
-const MIGRATION = 'migration 014_career_os.sql has not been applied'
-
-function failed(error: string, migrationMissing = false, extra: Partial<PackageResult> = {}): PackageResult {
-  return {
-    packageId: null, status: null, stage: null, version: null, applicationId: null, applicationState: null, resume: null,
-    costUsd: 0, warnings: [], errors: [error], error, migrationMissing, ...extra,
-  }
-}
-
-/** The tailor needs a map; without a matcher result it gets an honest empty one. */
-function tailorMapFrom(map: { why_i_fit: string | null; emphasize: string[]; do_not_claim: string[]; top_experience_ids: string[] } | null): EvidenceMapForTailor {
-  return map ?? { why_i_fit: null, emphasize: [], do_not_claim: [], top_experience_ids: [] }
-}
-
-export function bankIsUsable(ctx: JobContext): string | null {
-  if (!ctx.bank.masterDocument) return 'Evidence Bank is empty — import and approve your résumé first'
-  if (!ctx.bank.bullets.some((b) => b.is_on_master && b.approved)) return 'Evidence Bank is empty — import and approve your résumé first'
-  return null
-}
+export { finishPackage, planDocumentWork, REAL_DOCUMENTS_IO } from './documents'
+export type { DocumentPlan, DocumentPlanInput, DocumentsIo, FinishPackageParams } from './documents'
+export {
+  bankIsUsable, changesFromRows, failed, letterResearchFor, letterSigner, MIGRATION, tailorMapFrom,
+} from './shared'
+export type { PackageDeps, PackageQa, PackageResult, PackageStage } from './shared'
 
 // ─── Step 1: generate ────────────────────────────────────────────────────────
 
@@ -107,7 +60,7 @@ export async function generatePackage(params: {
   if (!app.application) return failed(app.error ?? 'could not create the application')
   const moved = await transitionApplication(params.userId, app.application.id, 'PREPARING', { actor: 'system', detail: { reason: 'package generation' } })
   if (!moved.ok) warnings.push(`application stays ${app.application.state}: ${moved.error}`)
-  let applicationState: ApplicationState = moved.application?.state ?? app.application.state
+  const applicationState: ApplicationState = moved.application?.state ?? app.application.state
 
   const run = await startCareerRun({
     userId: params.userId, kind: 'package', label: `package: ${context.job.company_name} — ${context.job.title}`,
@@ -128,16 +81,20 @@ export async function generatePackage(params: {
   const pkg = ins.pkg
   await updateApplicationDetails(params.userId, app.application.id, { current_package_id: pkg.id })
 
+  // The stage that is RUNNING, so a failure is recorded against the work that
+  // was actually happening rather than where the row happened to be.
+  let stage: PackageStage = 'started'
   const fail = async (error: string): Promise<PackageResult> => {
-    await updatePackage(pkg.id, { status: 'failed', error, cost_usd: run.costUsd() })
-    await run.finish('failed', { package_id: pkg.id }, error)
-    return failed(error, false, { packageId: pkg.id, version: pkg.version, status: 'failed', applicationId: app.application?.id ?? null, applicationState, costUsd: run.costUsd(), warnings, errors: [...errors, error] })
+    await updatePackage(pkg.id, { status: 'failed', stage, error, cost_usd: run.costUsd() })
+    await run.finish('failed', { package_id: pkg.id, stage }, error)
+    return failed(error, false, { packageId: pkg.id, version: pkg.version, stage, status: 'failed', applicationId: app.application?.id ?? null, applicationState, costUsd: run.costUsd(), warnings, errors: [...errors, error] })
   }
 
   try {
     // ─── Intelligence (stored answers reused when fresh) ───
+    stage = 'intelligence'
     progress('intelligence', context.job.company_name)
-    await updatePackage(pkg.id, { stage: 'intelligence' })
+    await updatePackage(pkg.id, { stage })
     const intel = await runJobIntelligence({ userId: params.userId, jobId: params.jobId, ctx, run, context, onProgress: progress })
     errors.push(...intel.errors)
     await updatePackage(pkg.id, {
@@ -149,8 +106,9 @@ export async function generatePackage(params: {
     })
 
     // ─── Tailoring ───
+    stage = 'tailoring'
     progress('tailoring', context.job.title)
-    await updatePackage(pkg.id, { stage: 'tailoring' })
+    await updatePackage(pkg.id, { stage })
     const tailorJob = tailorJobFromOpportunity(context.job)
     const tailored = await runTailoringPipeline({
       bank: context.bank, job: tailorJob, evidenceMap: tailorMapFrom(intel.evidenceMap), ctx, jobTerms: jobTermsFor(tailorJob), deps: params.deps?.tailor,
@@ -168,7 +126,8 @@ export async function generatePackage(params: {
     if (!patch.patch) return fail(`resume patch persist: ${patch.error}`)
     if (patch.error) errors.push(`resume patch changes: ${patch.error}`)
 
-    await updatePackage(pkg.id, { resume_patch_id: patch.patch.patch.id, status: 'resume_review', stage: 'resume_review', cost_usd: run.costUsd() })
+    stage = 'resume_review'
+    await updatePackage(pkg.id, { resume_patch_id: patch.patch.patch.id, status: 'resume_review', stage, cost_usd: run.costUsd() })
     await run.finish('succeeded', { package_id: pkg.id, changes: tailored.changes.length, errors }, null)
 
     return {
@@ -181,166 +140,6 @@ export async function generatePackage(params: {
         noChangeReason: tailored.no_change_reason, summary: tailored.summary,
       },
       costUsd: Number(run.costUsd().toFixed(4)), warnings, errors, error: null, migrationMissing: false,
-    }
-  } catch (e) {
-    return fail(e instanceof Error ? e.message : String(e))
-  }
-}
-
-// ─── Step 2: finish (after the résumé review) ────────────────────────────────
-
-export function changesFromRows(rows: ResumePatchChange[]): ChangeWithId[] {
-  return rows.map((r) => ({
-    ...(r as unknown as VerifiedChange),
-    id: r.id,
-    precheck_findings: (r.precheck_findings as VerifiedChange['precheck_findings']) ?? null,
-    confidence: Number(r.confidence ?? 0),
-  }))
-}
-
-/**
- * What the letter may cite: stored research_facts rows (by id) when the job
- * has a companies row; otherwise the grounded points of the research snapshot
- * the package captured. A job with no company row has no facts table entry,
- * and a letter with zero citable points is a letter with no reason to write.
- */
-export function letterResearchFor(ctx: JobContext, pkg: Pick<ApplicationPackage, 'company_research_snapshot'>): CompanyResearchForLetter {
-  const points = letterPointsFromFacts(ctx.existing.research.facts)
-  const snap = pkg.company_research_snapshot as unknown as CompanyResearch | null
-  const summary = ctx.existing.research.summary ?? snap?.summary ?? ''
-  if (points.length || !snap || !Array.isArray(snap.why_interesting_for_intern)) return { points, summary }
-  return { points: groundedPoints(snap).map((p) => ({ id: p.id, text: p.text })), summary }
-}
-
-/**
- * Who signs. The name goes through resolveApplicantName — profiles.name is
- * the email local-part for anyone the signup trigger named, and the first
- * live letter opened "zuyu.alex06" because this used to trust it first.
- */
-export async function letterSigner(userId: string, ctx: JobContext): Promise<LetterSigner> {
-  const profile = await loadProfile(userId)
-  const contact = contactFromParagraphMap(ctx.bank.masterDocument?.paragraph_map ?? [])
-  const { name, source } = resolveApplicantName({ profileName: profile.name, bank: ctx.bank })
-  return { name, nameSource: source, email: contact.email ?? profile.email ?? '', phone: contact.phone ?? '', linkedin: contact.linkedin ?? profile.linkedin_url }
-}
-
-export async function finishPackage(params: {
-  userId: string
-  packageId: string
-  ctx?: ToolContext
-  deps?: PackageDeps
-  /**
-   * Carry an existing letter's text into this version instead of calling the
-   * writer — no model call, no cost beyond rendering. The name-repair script
-   * and a no-cost redo use it; the letter's grounding and review status ride
-   * along unchanged because the body is verbatim.
-   */
-  letterFromStored?: StoredLetterText | null
-  onProgress?: (stage: PackageStage, detail: string) => void
-}): Promise<PackageResult> {
-  const progress = params.onProgress ?? (() => {})
-  const warnings: string[] = []
-  const errors: string[] = []
-  const got = await getPackage(params.userId, params.packageId)
-  if (got.migrationMissing) return failed(MIGRATION, true)
-  if (!got.pkg) return failed('package not found')
-  const pkg = got.pkg
-  if (!['resume_review', 'failed', 'ready_for_review'].includes(pkg.status)) return failed(`package is ${pkg.status}; documents can only be built from resume_review`)
-  if (!pkg.resume_patch_id) return failed('package has no résumé patch')
-
-  const loaded = await loadJobContext(params.userId, pkg.job_id)
-  if (!loaded.ctx) return failed(loaded.error, loaded.migrationMissing)
-  const context = loaded.ctx
-  const patch = await loadResumePatch(params.userId, pkg.resume_patch_id)
-  if (!patch.patch) return failed(patch.error ?? 'résumé patch not found')
-  const storagePath = context.bank.masterDocument?.storage_path
-  const master = storagePath ? await loadDocument(storagePath) : null
-  if (!master) return failed('master résumé file is missing from storage — re-import it')
-
-  const run = await startCareerRun({
-    userId: params.userId, kind: 'package', label: `package documents: ${context.job.company_name} v${pkg.version}`,
-    mission: { job_id: pkg.job_id, package_id: pkg.id }, budget: DEFAULT_PACKAGE_BUDGET, careerMissionId: context.mission.id,
-  })
-  const ctx = params.ctx ?? packageToolContext(params.userId, run.runId)
-  const costBase = Number(pkg.cost_usd ?? 0)
-  // One folder per attempt: storage refuses to overwrite (upsert:false, and
-  // the local mirror throws), so a re-run after a QA failure must not land on
-  // the paths the failed attempt already wrote.
-  const output = { kind: 'store' as const, userId: params.userId, relativePrefix: `packages/${pkg.id}/v${pkg.version}/${Date.now()}` }
-  const qa: PackageQa = { resume: null, cover_letter: null }
-  const setQa = () => qa as unknown as DocumentQaReport
-
-  const fail = async (error: string): Promise<PackageResult> => {
-    await updatePackage(pkg.id, { status: 'failed', stage: pkg.stage, error, qa: setQa(), cost_usd: costBase + run.costUsd() })
-    await run.finish('failed', { package_id: pkg.id }, error)
-    return failed(error, false, { packageId: pkg.id, version: pkg.version, status: 'failed', applicationId: pkg.application_id, costUsd: costBase + run.costUsd(), warnings, errors: [...errors, error] })
-  }
-
-  try {
-    // ─── Résumé documents ───
-    progress('resume_documents', context.job.company_name)
-    await updatePackage(pkg.id, { stage: 'resume_documents', error: null })
-    const changes = changesFromRows(patch.patch.changes)
-    const resume = await generateResumeDocuments({ bank: context.bank, masterBuffer: master, changes, company: context.job.company_name, output })
-    warnings.push(...resume.warnings)
-    if (resume.droppedByShrink.length) warnings.push(`dropped to fit one page: ${resume.droppedByShrink.join(', ')}`)
-    qa.resume = resume.qa
-    await updatePackage(pkg.id, {
-      resume_docx_path: resume.docxPath, resume_pdf_path: resume.pdfPath, resume_filename: resume.filenames.docx, qa: setQa(),
-    })
-    if (resume.error) return fail(`résumé document: ${resume.error}`)
-    await updateResumePatch(patch.patch.patch.id, { status: 'applied' })
-
-    // ─── Cover letter ───
-    progress('cover_letter', context.job.company_name)
-    await updatePackage(pkg.id, { stage: 'cover_letter' })
-    const signer = await letterSigner(params.userId, context)
-    if (signer.nameSource === 'fallback') warnings.push(`no applicant name could be resolved — the letter is signed "${signer.name}"; set your name on the profile or import a résumé with a name line`)
-    const persist = { userId: params.userId, jobId: pkg.job_id, packageId: pkg.id }
-    let letter: { fullText: string | null; error: string | null; row: { id: string } | null; documents: LetterDocumentsResult | null; flagged: boolean; errors: string[] }
-    if (params.letterFromStored) {
-      progress('cover_letter', `reusing the stored letter text (no writer call)`)
-      const reused = await reuseCoverLetter({ stored: params.letterFromStored, user: signer, company: context.job.company_name, output, persist })
-      letter = { fullText: reused.fullText, error: null, row: reused.row, documents: reused.documents, flagged: reused.flagged, errors: reused.errors }
-    } else {
-      const gen = await generateCoverLetter({
-        bank: context.bank,
-        job: context.job,
-        research: letterResearchFor(context, pkg),
-        evidenceMap: context.existing.evidenceMap ?? { why_i_fit: null, fact_ids: [], story_ids: [], top_experience_ids: [] },
-        user: signer, ctx, run, deps: params.deps?.letter, output, persist,
-        onStep: (s) => progress('cover_letter', `attempt ${s.attempt}: ${s.detail}`),
-      })
-      letter = { fullText: gen.letter.fullText, error: gen.letter.error, row: gen.row, documents: gen.documents, flagged: gen.flagged, errors: gen.errors }
-    }
-    errors.push(...letter.errors)
-    if (letter.documents) {
-      warnings.push(...letter.documents.warnings)
-      qa.cover_letter = letter.documents.qa
-    }
-    await updatePackage(pkg.id, {
-      cover_letter_id: letter.row?.id ?? null,
-      cover_docx_path: letter.documents?.docxPath ?? null, cover_pdf_path: letter.documents?.pdfPath ?? null,
-      cover_filename: letter.documents?.filenames.docx ?? null, qa: setQa(), cost_usd: costBase + run.costUsd(),
-    })
-    if (!letter.fullText) return fail(`cover letter: ${letter.error ?? 'no letter produced'}`)
-    if (letter.flagged) warnings.push('cover letter has grounding findings — review before finalizing')
-
-    // ─── Blocking QA stops here, visibly ───
-    const blocking = [...(qa.resume?.checks ?? []), ...(qa.cover_letter?.checks ?? [])].filter((c) => c.blocking && !c.pass)
-    if (blocking.length) return fail(`document QA failed: ${blocking.map((c) => `${c.name} (${c.detail})`).join('; ')}`)
-
-    await updatePackage(pkg.id, { status: 'ready_for_review', stage: 'documents', error: null })
-    let applicationState: ApplicationState | null = null
-    if (pkg.application_id) {
-      const moved = await transitionApplication(params.userId, pkg.application_id, 'READY_FOR_REVIEW', { actor: 'system', detail: { package_id: pkg.id } })
-      if (!moved.ok) warnings.push(`application: ${moved.error}`)
-      applicationState = moved.application?.state ?? null
-    }
-    await run.finish('succeeded', { package_id: pkg.id, shrink_attempts: resume.shrink_attempts, flagged_letter: letter.flagged }, null)
-    return {
-      packageId: pkg.id, status: 'ready_for_review', stage: 'documents', version: pkg.version, applicationId: pkg.application_id, applicationState,
-      resume: null, costUsd: Number((costBase + run.costUsd()).toFixed(4)), warnings, errors, error: null, migrationMissing: false,
     }
   } catch (e) {
     return fail(e instanceof Error ? e.message : String(e))

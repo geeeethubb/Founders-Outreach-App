@@ -73,6 +73,79 @@ export async function startCareerRun(params: {
   }
 }
 
+/**
+ * The same CareerRun, bound to a run row that ALREADY EXISTS.
+ *
+ * A durable scout is enqueued by one request and executed by another
+ * (app/api/career/scout/worker), so the row is created before the work starts.
+ * If the worker called `startCareerRun` it would open a SECOND row and the
+ * traces, the cost and the stats would land on a run the browser is not
+ * watching. Attaching keeps one row per run — which is the whole point of
+ * having a row.
+ *
+ * `finish` here deliberately does NOT write the run's status. The durable
+ * vocabulary has an outcome this one cannot express — 'partial', a run that
+ * produced real jobs and then ran out of time — and `finishScoutRun` is what
+ * decides it, guarded on the run still being active. If this wrote
+ * 'succeeded' first, that guard would find a terminal row and the worker's
+ * real verdict (and its stats) would be silently dropped. So this records what
+ * the run COST — stats, cost_usd, agent_calls, any error — and leaves the
+ * status to the one caller that owns it. `finishScoutRun` merges onto these
+ * stats, so a durable run's stats have the same shape as a legacy one's.
+ *
+ * `ownsStatus: true` restores the old behaviour for a caller that has no
+ * finishScoutRun after it.
+ */
+export async function attachCareerRun(params: {
+  userId: string
+  runId: string
+  kind: CareerRunKind
+  label?: string
+  mission?: unknown
+  budget?: unknown
+  careerMissionId?: string | null
+  /** Write the terminal status from `finish` too. Default false — see above. */
+  ownsStatus?: boolean
+}): Promise<CareerRun> {
+  let cost = 0
+  let calls = 0
+
+  // Best effort: a database predating migration 014 lacks `kind`, and the run
+  // still exists — it is just not distinguishable by kind. Never fatal.
+  const supabase = createServiceClient()
+  await supabase
+    .from('scouting_runs')
+    .update({
+      kind: params.kind,
+      ...(params.careerMissionId !== undefined ? { career_mission_id: params.careerMissionId } : {}),
+      ...(params.label !== undefined ? { label: params.label } : {}),
+      ...(params.mission !== undefined ? { mission: params.mission } : {}),
+      ...(params.budget !== undefined ? { budget: params.budget } : {}),
+    } as never)
+    .eq('id', params.runId)
+
+  return {
+    runId: params.runId,
+    migrationMissing: false,
+    async trace(result, refs = {}) {
+      cost += result.trace.cost_usd
+      calls += 1
+      const rec = await recordAgentRun(params.userId, params.runId, result, { inputRefs: refs })
+      return rec.agentRunId
+    },
+    costUsd: () => cost,
+    agentCalls: () => calls,
+    async finish(status, stats, error = null) {
+      const owns = params.ownsStatus === true
+      await updateScoutingRun(params.runId, {
+        ...(owns ? { status, completed: true } : {}),
+        stats: { ...stats, cost_usd: Number(cost.toFixed(4)), agent_calls: calls },
+        error,
+      })
+    },
+  }
+}
+
 /** Per-run budgets for Career OS agents. Every loop is bounded (ADR-016). */
 export interface CareerBudget {
   maxWebSearches: number

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { isDynamicUsage } from '@/lib/http/dynamic'
-import { listJobs, type JobListRow, type ListJobsFilters } from '@/lib/career/jobs/store'
+import { isMissingSchema, listJobs, type JobListRow, type ListJobsFilters } from '@/lib/career/jobs/store'
 import { fitBand, type FitBand } from '@/lib/career/fit/dimensions'
 import { APPLICATION_STATES, VERIFICATION_STATUSES, type ApplicationState, type Eligibility, type JobDisposition, type VerificationStatus } from '@/lib/career/types'
 
@@ -92,6 +92,48 @@ function sourceTypesOf(row: JobListRow): string[] {
   return [...out]
 }
 
+// ─── One run's jobs ──────────────────────────────────────────────────────────
+//
+// `?run=<id>` is a different question from the inbox's. The inbox curates —
+// verified-or-likely open, not dismissed — which is right for daily use and
+// wrong for "what did that run find?": an unverified or unranked posting from
+// the run is exactly what the founder wants to see. So this path applies NO
+// defaults, and the UI says so on screen.
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/**
+ * One run's jobs, from `listJobs({ runId })` — which unions `scouting_run_jobs`
+ * (migration 016, every job the run TOUCHED) with the legacy
+ * `discovery_run_id` (only the ones it inserted), applies none of the inbox's
+ * narrowing, orders by fit in the database over the whole set, and reports the
+ * exact count across pages. The ordering and counting belong there, not here:
+ * paging an id list in this route answered an arbitrary subset while the header
+ * counted everything, so the two numbers on screen disagreed.
+ */
+async function jobsForRun(userId: string, runId: string, limit: number, offset: number): Promise<NextResponse> {
+  if (!UUID.test(runId)) return NextResponse.json({ error: 'run must be a run id' }, { status: 400 })
+  const res = await listJobs(userId, { runId, limit, offset })
+  if (res.migrationMissing) return NextResponse.json({ error: 'Apply supabase/migrations/014_career_os.sql first', migrationMissing: true }, { status: 409 })
+  if (res.error) return NextResponse.json({ error: res.error }, { status: 500 })
+
+  const cards = res.jobs.map(toJobCard)
+  const touched = (res.total ?? cards.length) + (res.truncated ?? 0)
+  return NextResponse.json({
+    jobs: cards,
+    // Every job the run touched, not the size of this page.
+    total: touched,
+    filters: { role_families: [], tiers: [], statuses: [] },
+    run: {
+      id: runId,
+      ids: touched,
+      shown: cards.length,
+      /** Jobs beyond the id ceiling that were counted but not fetched. */
+      truncated: res.truncated ?? 0,
+    },
+  })
+}
+
 const FRESHNESS: Record<string, VerificationStatus[] | undefined> = {
   verified: ['VERIFIED_OPEN'],
   likely: ['VERIFIED_OPEN', 'LIKELY_OPEN'],
@@ -102,6 +144,10 @@ const FRESHNESS: Record<string, VerificationStatus[] | undefined> = {
  * GET ?status=&tier=&role_family=&disposition=&minFit=&search=&freshness=verified|likely|any
  *     &hasWarmPath=1&state=<application state>&sort=fit|recent|deadline&limit=&offset=
  * → { jobs: JobCard[], total, filters: { role_families, tiers, statuses } }
+ *
+ * GET ?run=<scouting run id>
+ * → { jobs: JobCard[], total, filters, run: { id, source, ids, note } } — every job that
+ *   run touched, with none of the inbox defaults applied.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -110,6 +156,11 @@ export async function GET(request: NextRequest) {
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const p = new URL(request.url).searchParams
+    const run = p.get('run')
+    if (run) {
+      return await jobsForRun(user.id, run, Math.min(200, Math.max(1, Number(p.get('limit')) || 200)), Math.max(0, Number(p.get('offset')) || 0))
+    }
+
     const list = (k: string) => (p.get(k) ?? '').split(',').map((s) => s.trim()).filter(Boolean)
     const filters: ListJobsFilters = {}
     const statuses = list('status').filter((s): s is VerificationStatus => VERIFICATION_STATUSES.includes(s as VerificationStatus))

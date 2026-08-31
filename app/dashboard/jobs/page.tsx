@@ -12,7 +12,8 @@ import { api } from '@/components/career/api'
 import InlineNotice, { MigrationNotice } from '@/components/career/InlineNotice'
 import JobCard, { type JobCardData } from './JobCard'
 import JobFilters, { DEFAULT_FILTERS, filtersToQuery, type JobFilterState } from './JobFilters'
-import ScoutPanel from './ScoutPanel'
+import ScoutPanel, { readScoutEnvironment } from './ScoutPanel'
+import RunResults from './RunResults'
 import AddByUrl from './AddByUrl'
 import DirectionCard, { type DirectionStatus } from './DirectionCard'
 import { directionDirty, directionPatch } from './direction'
@@ -41,8 +42,15 @@ export default function JobsPage() {
 
 function JobsView() {
   // `?search=` lets the watchlist link to one company's jobs; every other filter starts at its default.
-  const initialSearch = useSearchParams().get('search') ?? ''
+  // `?run=` is a different surface entirely: one run's results, uncurated (RunResults).
+  const searchParams = useSearchParams()
+  const initialSearch = searchParams.get('search') ?? ''
+  const runParam = searchParams.get('run')
   const [mission, setMission] = useState<CareerMission | null>(null)
+  /** A run still going when the page loaded — the monitor picks it back up, and it is cleared the moment that run lands. */
+  const [resumeRunId, setResumeRunId] = useState<string | null>(null)
+  /** Whether a scout run outlives its request, as the server said. null = not asked yet. */
+  const [scoutDurable, setScoutDurable] = useState<boolean | null>(null)
   const [filters, setFilters] = useState<JobFilterState>(initialSearch ? { ...DEFAULT_FILTERS, search: initialSearch } : DEFAULT_FILTERS)
   const [offset, setOffset] = useState(0)
   const [data, setData] = useState<JobsResponse | null>(null)
@@ -60,6 +68,11 @@ function JobsView() {
   const [directionStatus, setDirectionStatus] = useState<DirectionStatus | null>(null)
 
   const loadJobs = useCallback(async () => {
+    // In run view the list belongs to RunResults, which fetches it unfiltered.
+    if (runParam) {
+      setLoading(false)
+      return
+    }
     setLoading(true)
     const r = await api<JobsResponse>(`/api/career/jobs?${filtersToQuery(filters, PAGE, offset)}`)
     setLoading(false)
@@ -71,7 +84,7 @@ function JobsView() {
     }
     setError(null)
     setData(r.data)
-  }, [filters, offset])
+  }, [filters, offset, runParam])
 
   // Header counts and the "do you have a bank yet?" check. Cheap (limit=1
   // reads carry `total`), and independent of the current filters.
@@ -105,6 +118,25 @@ function JobsView() {
   useEffect(() => {
     loadContext()
   }, [loadContext])
+
+  // A run started in another tab — or before a refresh — is still the server's
+  // run. Pick it back up and open the monitor on it, so the founder never has
+  // to wonder whether pressing Scout again would double-spend. Only a run the
+  // server itself calls queued or running is resumed.
+  useEffect(() => {
+    if (runParam) return
+    let alive = true
+    readScoutEnvironment().then((env) => {
+      if (!alive) return
+      setScoutDurable(env.durable)
+      if (!env.activeRunId) return
+      setResumeRunId(env.activeRunId)
+      setScouting(true)
+    })
+    return () => {
+      alive = false
+    }
+  }, [runParam])
 
   function changeFilters(next: JobFilterState) {
     setOffset(0)
@@ -159,13 +191,14 @@ function JobsView() {
             <Link href="/dashboard/jobs/mission" className="text-indigo-600 hover:underline font-medium">
               {mission?.name ?? 'default'}
             </Link>
-            {counts && (
+            {counts && !runParam && (
               <>
                 {' '}
                 · <strong className="text-slate-700">{counts.open}</strong> open · <strong className="text-slate-700">{counts.saved}</strong> saved ·{' '}
                 <strong className="text-slate-700">{counts.warm}</strong> with a warm path
               </>
             )}
+            {runParam && ' · showing one scout run'}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -175,17 +208,27 @@ function JobsView() {
           <Link href="/dashboard/applications" className="text-sm text-slate-600 hover:text-slate-900">
             Applications
           </Link>
-          <button
-            type="button"
-            onClick={openScout}
-            disabled={migrationMissing || directionSaving}
-            className="px-3 py-1.5 rounded-md bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-50"
-          >
-            {directionSaving ? 'Saving…' : 'Scout now'}
-          </button>
+          {runParam ? (
+            <Link href="/dashboard/jobs" className="px-3 py-1.5 rounded-md border border-slate-300 text-slate-700 text-sm font-medium hover:bg-white">
+              Back to all jobs
+            </Link>
+          ) : (
+            <button
+              type="button"
+              onClick={openScout}
+              disabled={migrationMissing || directionSaving}
+              className="px-3 py-1.5 rounded-md bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-50"
+            >
+              {directionSaving ? 'Saving…' : 'Scout now'}
+            </button>
+          )}
         </div>
       </div>
 
+      {runParam && <RunResults runId={runParam} />}
+
+      {!runParam && (
+        <>
       {migrationMissing && (
         <div className="mb-4">
           <MigrationNotice />
@@ -229,11 +272,19 @@ function JobsView() {
           <ScoutPanel
             missionId={mission?.id ?? null}
             direction={mission?.preferences.direction}
+            initialRunId={resumeRunId}
+            durable={scoutDurable}
             onFinished={() => {
               loadJobs()
               loadContext()
+              // The resumed run has landed. Keeping its id would re-seed a
+              // remounted panel with a finished run instead of the start form.
+              setResumeRunId(null)
             }}
-            onClose={() => setScouting(false)}
+            onClose={() => {
+              setScouting(false)
+              setResumeRunId(null)
+            }}
           />
         </div>
       )}
@@ -285,6 +336,8 @@ function JobsView() {
               Next →
             </button>
           </div>
+        </>
+      )}
         </>
       )}
 

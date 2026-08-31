@@ -6,6 +6,215 @@ architecturally and why.
 
 ---
 
+## 2026-08-30 — Scout explores; the company list is memory, not the search universe
+
+**Type:** architecture · **Behavior change:** the planner and the scout can no longer create a
+preference. Every company they propose is a **suggestion** the founder promotes (or does not);
+a scout run is a durable row that survives a refresh and persists what it finds as it finds it;
+and a run's own results are a page rather than a claim. Migration `016`. ADR-039, ADR-040.
+
+### What was wrong
+
+`seedWatchlistFromPlan` wrote every planner-invented company as `watch_status: 'target'` — the
+value the Companies page defines as *"you want to work here — checked first, every scout run."*
+On the live database that was **160 targets, none of them the founder's**, and a loop that fed
+itself: guess → preference → priority → more results from that guess. Two smaller faults hid in
+the same column: a board check with an opening **overwrote** the user's intent with
+`opening_available`, and `watch_priority` was read descending by the store and the scout but
+ascending by the Companies page. Meanwhile the browser scout was one 300-second HTTP request:
+shallower than the CLI by construction, lost on a refresh, and — when it timed out — the panel
+said the jobs were "already in the list", where the inbox's default filters hid the unverified
+ones.
+
+### Intent, and only a person writes it
+
+`watch_status` now means **target · watching · suggested · ignored** and nothing else; openings
+live in `open_roles_count`. `lib/career/companies/intent.ts` holds the rule in one place —
+`resolveAgentIntent` lets an agent land exactly one value (`suggested`) and never touch a row
+the user owns, including `ignored`. Migration 016 demoted the 160 (plus one `watching` a board
+check had written, which the attribute learner was already reading as *"chose: Redwood
+Materials"*), leaving `watch_source = 'user'` rows alone — the only reliable record of a choice.
+`markCareersChecked` no longer writes intent at all. Priority is one direction everywhere,
+asserted by tests.
+
+Discovery is budgeted rather than list-driven: `selectCompaniesToCheck` takes every Target, then
+Watching, then a **rotating least-recently-checked sample** of Explore capped at a share of the
+run — and hands the unused slots back to market discovery instead of re-checking old guesses.
+The planner (prompt **1.2.0**) receives the four groups separately plus `learnCompanyAttributes`
+— the company types, industry tags and names behind the founder's own promotions and job
+verdicts — and is told seeds are exploration candidates that will be stored as suggestions, that
+Explore is its own earlier guessing and therefore weak evidence, and that a plan which only
+re-proposes known names has failed.
+
+### A run is a row
+
+`POST /api/career/scout` **enqueues** (`status='queued'`, params, a single-use claim token) and
+answers in about a second; `POST /api/career/scout/worker` claims by token — so a duplicate
+dispatch cannot spend twice — runs the same orchestrator the CLI runs, and writes `stage`,
+`heartbeat_at` and a bounded `progress` payload as it goes. `GET /api/career/scout/runs/[id]` is
+the only progress source, so the panel survives a refresh, a closed tab and a navigation. The
+worker takes Vercel's ceiling when deployed and the CLI's deadline when not, which is what makes
+a local browser run as deep as `npm run career:scout`.
+
+The orchestrator now **persists incrementally** — extract, cluster, verify and store after
+company-first and after each strategy — and records every job a run touched in
+`scouting_run_jobs`, including ones it re-saw, which `discovery_run_id` could never express. A
+run that dies keeps what it already paid for, finishes as `partial`, and links to it.
+`/dashboard/jobs?run=<id>` shows exactly that run **without the inbox's defaults**, beside the
+curated inbox rather than replacing it.
+
+**Death is detected, not assumed.** `isRunStale` calls a run dead only when it is *both* silent
+and past the deadline it was claimed with (one live planner call took 226 s — a pulse-only
+reaper would close healthy runs). A scout run with no pulse at all is judged on `started_at`
+instead, because a pre-016 row and a synchronous-fallback run whose request died will never
+heartbeat: without that, five real runs sat at `running` forever, one of them holding 11 jobs.
+The reaper runs on poll, on enqueue, and now in the daily cron, so a run that dies while nobody
+is watching still resolves.
+
+### Verified against the migrated database
+
+18/18 schema checks (no agent-written target survives, no `opening_available` row, openings
+preserved as state, `scouting_run_jobs` backfill complete, constraints reject invented values)
+and 24/24 live behaviour checks: the enqueue → claim → progress → partial lifecycle, a second
+claim refused, status surviving a fresh read, a run view showing two `UNVERIFIED` jobs the inbox
+hides, an agent's `target` write landing as `suggested`, and the reaper both leaving a quiet
+in-deadline run alone and closing a genuinely dead one. The five orphaned legacy runs were then
+reaped for real: one `partial` (11 jobs), four `failed`.
+
+20 offline suites pass (`test:career-companies`, `test:career-scout-run` and `test:career-tmp`
+are new); `tsc` clean; `next build` clean.
+
+---
+
+## 2026-08-30 — Documents build in a real runtime, and a failure says where it actually failed
+
+**Type:** bug fix + honesty pass (workstream W5 of the scout-durability redesign) · **Behavior
+change:** package document generation no longer depends on the repo being the working
+directory; a failed package reports the stage that was running and offers a retry that reuses
+what was already paid for. No prompt change, no migration, no schema read added.
+
+### Why
+
+`lib/career/documents/pdf.ts` exported `TMP_DIR = path.join('.career-out', 'tmp')` — a
+**relative** path — and `resume.ts` did `mkdirSync(path.join(TMP_DIR, 'pkg-…'))`. In any
+runtime whose working directory is not the repo that is `ENOENT: no such file or directory,
+mkdir '.career-out/tmp/pkg-…'`, raised *after* research and tailoring had been charged and the
+founder had approved the résumé changes. Two things then made it worse: the failure path wrote
+`stage: pkg.stage` — the stage read *before* the work started — so the UI said "failed during:
+Waiting for your review" about a mkdir inside document generation; and the raw ENOENT was the
+whole message, arriving one click after the approval, reading as though the approval caused it.
+
+### What changed
+
+- **One temp abstraction** (`lib/career/documents/tmp.ts`, already written; now the only
+  scratch path in the codebase). `TMP_DIR` is deleted from `pdf.ts`; the buffer-render path and
+  the package builders go through `withTempDir`. Absolute, under `os.tmpdir()` by default
+  (`CAREER_TMP_DIR` overrides), `mkdtemp` so two concurrent builds cannot collide, removed in a
+  `finally` on success and on a throw, and a cleanup failure is a warning — never a replacement
+  for the error that broke the build. Every `.career-out` hit in the repo was classified:
+  final CLI output (left alone), temporary workspace (moved), persistent web output (must go
+  through `documents/store.ts`).
+- **Durable finals, asserted.** Résumé and letter DOCX + PDF are stored through `saveDocument`,
+  and `assertDurablePath` (`isTempPath`, case-insensitive on Windows) refuses to let a temp
+  path be written into `application_packages`. The stray-path check runs *before* the row is
+  updated, not after.
+- **No renderer is a warning, not a corruption.** With neither Word nor LibreOffice the DOCX is
+  still built and stored, QA states the reason, `pdf_present` does not block, and no PDF is
+  invented. A renderer that *was* available and produced nothing still blocks — the two cases
+  are distinguished.
+- **Stage reporting tells the truth** (`lib/career/package/documents.ts`). The current stage is
+  a mutable variable, persisted *before* the risky work that belongs to it
+  (`resume_documents` → `cover_letter` → `documents`), and the failure path records the stage
+  that was running.
+- **Retry ≠ Redo.** `finishPackage` reaches the world through a `DocumentsIo` seam that
+  contains no intelligence run, no tailoring pipeline and no package insert, so a retry cannot
+  research, re-tailor or create a version; `planDocumentWork` decides what is reused (résumé
+  documents only when the failure was past them, the patch still `applied` and their QA not
+  blocking; an existing letter verbatim). `redoPackage` remains the only path to v2. Readiness
+  is computed from artifacts and QA that exist, so a half-uploaded package reads as failed.
+- **Sentences, not stack traces** (`package/status.ts`, `PackageFailure.tsx`). Workspace,
+  storage, master-résumé, renderer, QA and timeout each get their own headline, reassurance and
+  remedy; the raw error stays in a disclosure and in the run diagnostics. Two orderings matter
+  and are pinned by tests: the master-résumé case is tested *before* the storage case (its only
+  producer, "master résumé file is missing from storage — re-import it", contains the word
+  "storage", and offering `Retry documents` for it would fail identically for ever), and the
+  retry sentence is conditional — after a résumé-stage failure no letter exists yet, so the
+  screen says writing it is the one model call the retry still costs rather than promising
+  "nothing charged again".
+
+### Tests
+
+`npm run test:career-tmp` (new, offline, ~2 s): scratch is absolute and under
+`os.tmpdir()`/`CAREER_TMP_DIR` and never `.career-out/tmp`; creation works from a working
+directory with no `.career-out`; concurrent `makeTempDir` calls differ; `withTempDir` removes
+the directory after success and after a throw; a cleanup failure does not mask the original
+exception; `isTempPath` catches a case-differing OS temp path. `npm run test:career-package`
+adds 35 checks driving the real `finishPackage` through its io seam — a failed résumé build
+records `resume_documents` and keeps the approved changes, a retry re-runs neither research nor
+tailoring and creates no version, redo does, and no stored path is a temp path.
+`npm run test:career-documents` pins the renderer policy against the real `qa.ts` and watches
+the temp root while a buffer render is in flight, so the "no scratch is leaked" check cannot
+pass vacuously.
+
+---
+
+## 2026-08-30 — The surfaces: a run you can watch, a run you can open, a company list that speaks intent
+
+**Type:** UI + two read routes (workstream W4 of the scout-durability redesign) · **Behavior
+change:** the Scout panel shows real server state instead of a timer; `/dashboard/jobs?run=<id>`
+is a new surface; the Companies page is grouped by intent and sorts priority the right way.
+No prompt change, no migration (016 is W1's and is not applied to the live database yet).
+
+### Why
+
+Three untruths were on screen. The Scout panel animated a 25-second stage timer that had
+nothing to do with the run and told the founder "leave the tab open — a closed tab still spends
+the money". A finished run said "whatever it stored is already in the list", which is only true
+if you can find it. And the Companies page sorted `watch_priority` **ascending** while the
+store and the scout sorted it descending, so the page's "most important" was the system's
+least — on a list where 168 of 168 rows were agent guesses labelled as the founder's targets.
+
+### What changed
+
+- **ScoutPanel is a monitor** (`app/dashboard/jobs/ScoutPanel.tsx`). Press Run scout → `POST`
+  → `runId` → poll `GET /api/career/scout/runs/[id]` every 3 s and render what the server
+  said: queued, running (stage, the last progress lines, live counts), partial, succeeded,
+  failed. The fake timer and the tab warning are gone. It survives a refresh — on mount it
+  reads `GET /api/career/runs?active=1` and resumes the newest run **the server itself calls
+  queued or running**, trusting only `active` and only those two words verbatim (the `runs`
+  list carries a derived display status where a dead run reads `stalled`; resuming one of those
+  would open the monitor on a corpse). A second click while the first POST is in flight is
+  refused: one press, one paid run.
+- **Honest about durability.** Before migration 016 the route still executes the scout inside
+  the request. Both answers carry `durable`, the panel reads it before it says anything about
+  the tab, and it defaults to the pre-016 wording until the server says otherwise. It never
+  guesses that sentence in either direction.
+- **`/dashboard/jobs?run=<id>`** (`RunResults.tsx`, `app/api/career/jobs/route.ts`): the run's
+  status, six counts, a partial-run reason in plain English, and every job the run touched with
+  **none** of the inbox's freshness/disposition defaults. Ordering and counting moved into the
+  database over the whole id set — paging an id list in the route showed an arbitrary subset
+  while the header counted everything, so the two numbers on screen disagreed. The inbox keeps
+  its defaults and the two surfaces are deliberately different objects.
+- **Companies by intent** (`page.tsx`, `CompanyRow.tsx`, `company-view.ts`): Opening available
+  / Targets / Watching / Explore, plus a collapsed Ignored section so a rejection is reversible
+  — the list route returns ignored rows (`?include=active` opts out) so the undo survives a
+  reload. One-click Target / Watch / Ignore on Explore rows, origin in plain words from
+  `ORIGIN_LABEL`, and the priority sort is `byCheckOrder` everywhere. "Opening available" is
+  driven by `open_roles_count` alone — sectioning on stored postings put the whole Explore list
+  above the founder's own targets, on a page whose job is to keep them apart.
+- **Runs page** (`RunRow.tsx`): the persisted `partial` status and the stage a run reached; a
+  `job_scout` row links to its results.
+
+### Shape
+
+`run-view.ts` (parsing) and `run-copy.ts` (sentences) are pure and hold everything the two
+monitors share — poll interval, the failure budget, status vocabulary, the pre-016 fallback
+reader. `company-view.ts` is the same idea for the Companies page. That is what let the polling
+shapes be verified offline against synthetic payloads (`npm run test:career-ui-direction`,
+`npm run test:career-companies`) with no database, no keys and no paid run.
+
+---
+
 ## 2026-08-30 — Usability pass: one word per concept, no paid work without a click, docs that match the code
 
 **Type:** usability fixes across four workstreams · **Behavior change:** UI labels, copy,

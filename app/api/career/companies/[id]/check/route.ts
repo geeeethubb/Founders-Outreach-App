@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { isDynamicUsage } from '@/lib/http/dynamic'
 import { isMissingSchema, upsertJobs } from '@/lib/career/jobs/store'
+import { resolveStoredIntent } from '@/lib/career/companies/watchlist'
 import { clusterJobs } from '@/lib/career/jobs/dedupe'
 import { ensureDefaultMission } from '@/lib/career/missions/store'
 import { DEFAULT_PACKAGE_BUDGET, startCareerRun } from '@/lib/career/runs'
@@ -13,8 +14,14 @@ export const dynamic = 'force-dynamic'
 export const maxDuration = 120
 
 /**
- * POST → { openings, jobs_inserted, jobs_updated, rejected: [{reason,title,company}], board: {ats, identifier, board_url}|null, method, note, errors }
- * Re-checks one company's board now and stores the internship postings it lists.
+ * POST → { openings, open_roles_count, jobs_inserted, jobs_updated, rejected: [{reason,title,company}],
+ *         board: {ats, identifier, board_url}|null, method, note, intent, errors }
+ *
+ * Re-checks one company's board now and stores the internship postings it
+ * lists. It records openings as STATE (`open_roles_count`,
+ * `last_careers_check_at`) and never touches what the company means to the
+ * user: a check cannot promote a company, and cannot demote a target
+ * (migration 016).
  */
 export async function POST(_request: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -23,7 +30,7 @@ export async function POST(_request: NextRequest, { params }: { params: { id: st
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const db = createServiceClient()
-    const { data, error } = await db.from('companies').select('id, name, domain, careers_url, ats_type, ats_identifier, watch_status, watch_priority').eq('user_id', user.id).eq('id', params.id).maybeSingle()
+    const { data, error } = await db.from('companies').select('id, name, domain, careers_url, ats_type, ats_identifier, watch_status, watch_source, watch_priority').eq('user_id', user.id).eq('id', params.id).maybeSingle()
     if (error) {
       if (isMissingSchema(error.message)) return NextResponse.json({ error: 'Apply supabase/migrations/014_career_os.sql first', migrationMissing: true }, { status: 409 })
       return NextResponse.json({ error: error.message }, { status: 500 })
@@ -67,12 +74,17 @@ export async function POST(_request: NextRequest, { params }: { params: { id: st
 
     return NextResponse.json({
       openings: check.postings.length,
+      // What the watchlist now stores for this company. Intent is untouched.
+      open_roles_count: check.error ? null : check.postings.length,
       jobs_inserted: inserted,
       jobs_updated: updated,
       rejected,
       board: check.board ? { ats: check.board.ats, identifier: check.board.identifier, board_url: check.board.board_url ?? null } : null,
       method: check.method,
       note: check.note,
+      // Echoed so the page can prove the point: the check ran and the company
+      // means exactly what it meant before.
+      intent: resolveStoredIntent(company as unknown as Record<string, unknown>),
       errors,
     })
   } catch (error) {

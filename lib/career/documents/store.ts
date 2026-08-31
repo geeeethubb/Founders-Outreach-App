@@ -14,6 +14,7 @@
 import fs from 'fs'
 import path from 'path'
 import { createServiceClient } from '@/lib/supabase/server'
+import { isTempPath } from './tmp'
 
 export const CAREER_BUCKET = 'career-docs'
 
@@ -60,9 +61,24 @@ async function saveLocal(userId: string, relativePath: string, data: Buffer): Pr
   return { storage_path: `local:${rel}`, backend: 'local', byte_size: data.length }
 }
 
+/**
+ * A stored document must outlive the build that produced it. An OS temp path
+ * is scratch — it is deleted in a `finally` — so one reaching a DB row would
+ * be a document that is gone by the time the human clicks Download. This
+ * throws rather than storing it; the caller reports a document failure.
+ */
+export function assertDurablePath(storagePath: string, label: string): string {
+  if (isTempPath(storagePath)) throw new Error(`${label} resolved to a temporary path (${storagePath}); documents must be stored durably`)
+  return storagePath
+}
+
 export async function saveDocument(params: SaveDocumentParams): Promise<SaveDocumentResult> {
   const backend: StorageBackend = params.backend ?? (supabaseConfigured() ? 'supabase' : 'local')
-  if (backend === 'local') return saveLocal(params.userId, params.relativePath, params.data)
+  if (backend === 'local') {
+    const saved = await saveLocal(params.userId, params.relativePath, params.data)
+    assertDurablePath(saved.storage_path, params.relativePath)
+    return saved
+  }
 
   const object = path.posix.join(params.userId, safeRelative(params.relativePath))
   try {
@@ -71,12 +87,13 @@ export async function saveDocument(params: SaveDocumentParams): Promise<SaveDocu
       .from(CAREER_BUCKET)
       .upload(object, params.data, { contentType: params.contentType, upsert: false })
     if (error) throw new Error(error.message)
-    return { storage_path: `supabase:${CAREER_BUCKET}/${object}`, backend: 'supabase', byte_size: params.data.length }
+    return { storage_path: assertDurablePath(`supabase:${CAREER_BUCKET}/${object}`, params.relativePath), backend: 'supabase', byte_size: params.data.length }
   } catch (e) {
     // The bucket may not exist yet (migration 014 creates it, but the storage
     // schema can be unavailable) — degrade to local and SAY so.
     const message = e instanceof Error ? e.message : String(e)
     const local = await saveLocal(params.userId, params.relativePath, params.data)
+    assertDurablePath(local.storage_path, params.relativePath)
     return { ...local, warning: `Supabase Storage unavailable (${message.slice(0, 120)}); saved locally instead` }
   }
 }

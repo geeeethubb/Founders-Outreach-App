@@ -17,10 +17,11 @@ import { applyResumePatch, type BulletEdit, type ResumeDocumentPatch } from '../
 import { fontSizesUsed, fontsUsed, readDocx, sectPrOf, stripMarkdown } from '../documents/docx-read'
 import { resumeFilenames } from '../documents/filenames'
 import { fitToOnePage, shrinkStrategies } from '../documents/fit-page'
-import { NO_RENDERER_ERROR, TMP_DIR, renderDocxToPdf } from '../documents/pdf'
+import { NO_RENDERER_ERROR, renderDocxToPdf } from '../documents/pdf'
 import { pdfInfo, type PdfInfo } from '../documents/pdf-text'
 import { qaResumeDocument } from '../documents/qa'
-import { contentTypeFor, saveDocument, type StorageBackend } from '../documents/store'
+import { assertDurablePath, contentTypeFor, saveDocument, type StorageBackend } from '../documents/store'
+import { withTempDir } from '../documents/tmp'
 import { finalBulletsFor, type VerifiedChange } from '../tailor/pipeline'
 import type { DocumentQaReport, EvidenceBank, ResumeBullet } from '../types'
 
@@ -47,13 +48,10 @@ export async function writeOutput(output: DocumentOutput, filename: string, data
     contentType: contentTypeFor(filename),
     backend: output.backend,
   })
+  // Belt and braces: saveDocument asserts this too. A produced document that
+  // is only in scratch is gone before anyone downloads it.
+  assertDurablePath(saved.storage_path, filename)
   return { path: saved.storage_path, warning: saved.warning }
-}
-
-export function scratchDir(): string {
-  const dir = path.join(TMP_DIR, `pkg-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`)
-  fs.mkdirSync(dir, { recursive: true })
-  return dir
 }
 
 // ─── The patch ───────────────────────────────────────────────────────────────
@@ -188,8 +186,13 @@ export interface ResumeDocumentsResult {
   warnings: string[]
   /** The change-set that produced the document. */
   finalChanges: ChangeWithId[]
+  /** True when no PDF exists because no renderer is installed — NOT a document failure. */
+  pdfUnavailable: boolean
   error: string | null
 }
+
+/** Said the same way everywhere so the UI can distinguish it from a build failure. */
+export const PDF_UNAVAILABLE_WARNING = 'PDF unavailable: no PDF renderer is installed (Microsoft Word or LibreOffice). The DOCX was produced and stored; no PDF was.'
 
 function effectiveIds(changes: ChangeWithId[]): Set<string> {
   const ids = new Set<string>()
@@ -214,11 +217,24 @@ export function droppedByShrink(before: ChangeWithId[], after: ChangeWithId[]): 
 
 export async function generateResumeDocuments(params: ResumeDocumentsParams): Promise<ResumeDocumentsResult> {
   const warnings: string[] = []
+  // The scratch directory is OS-owned, absolute and unique per build. It used
+  // to be `.career-out/tmp/pkg-…` — RELATIVE — so `mkdirSync` threw ENOENT
+  // wherever the working directory is not the repo (every deployment), *after*
+  // research and tailoring had been paid for. It is removed on every path —
+  // success, failure and throw — and a cleanup failure is a warning, never the
+  // reported error.
+  return withTempDir(
+    'pkg-resume',
+    (tmp) => buildResumeDocuments(params, tmp, warnings),
+    (e) => warnings.push(`temporary workspace cleanup: ${e.message}`)
+  )
+}
+
+async function buildResumeDocuments(params: ResumeDocumentsParams, tmp: string, warnings: string[]): Promise<ResumeDocumentsResult> {
   const filenames = resumeFilenames(params.company)
   const approved = params.changes.filter((c) => live(c, true))
   const strategies = shrinkStrategies(approved)
   const expectedPages = params.expectedPages ?? params.bank.masterDocument?.page_count ?? 1
-  const tmp = scratchDir()
   let renderer: string | null = null
   let noRenderer = false
   let lastApplyWarnings: string[] = []
@@ -248,9 +264,9 @@ export async function generateResumeDocuments(params: ResumeDocumentsParams): Pr
   warnings.push(...lastApplyWarnings)
 
   if (!fit.docx) {
-    return { docxPath: null, pdfPath: null, filenames, qa: emptyQa(filenames.docx, renderer, fit.error ?? 'nothing rendered'), shrink_attempts: fit.shrink_attempts, droppedByShrink: [], renderer, warnings, finalChanges: usedSet, error: fit.error ?? 'nothing rendered' }
+    return { docxPath: null, pdfPath: null, filenames, qa: emptyQa(filenames.docx, renderer, fit.error ?? 'nothing rendered'), shrink_attempts: fit.shrink_attempts, droppedByShrink: [], renderer, warnings, finalChanges: usedSet, pdfUnavailable: noRenderer, error: fit.error ?? 'nothing rendered' }
   }
-  if (noRenderer) warnings.push(`${NO_RENDERER_ERROR}; DOCX produced, PDF skipped`)
+  if (noRenderer) warnings.push(PDF_UNAVAILABLE_WARNING)
   else if (!fit.ok) warnings.push(`page fit: ${fit.error ?? 'over the page budget'}`)
 
   const dropped = droppedByShrink(approved, usedSet)
@@ -294,9 +310,8 @@ export async function generateResumeDocuments(params: ResumeDocumentsParams): Pr
   }
   qa.docx_path = docx.path
   qa.pdf_path = pdfPath
-  fs.rmSync(tmp, { recursive: true, force: true })
 
-  return { docxPath: docx.path, pdfPath, filenames, qa, shrink_attempts: fit.shrink_attempts, droppedByShrink: dropped, renderer, warnings, finalChanges: usedSet, error: null }
+  return { docxPath: docx.path, pdfPath, filenames, qa, shrink_attempts: fit.shrink_attempts, droppedByShrink: dropped, renderer, warnings, finalChanges: usedSet, pdfUnavailable: noRenderer, error: null }
 }
 
 function emptyQa(filename: string, renderer: string | null, detail: string): DocumentQaReport {

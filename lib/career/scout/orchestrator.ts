@@ -1,51 +1,81 @@
 // The Job Scout orchestrator — one run of discovery, end to end.
 //
 //   mission + evidence → PLAN → seed watchlist → COMPANY-FIRST (code)
-//   → JOB-FIRST (scout sessions) → resolve → EXTRACT → cluster → VERIFY → upsert
+//   → JOB-FIRST (scout sessions) → resolve → [flush: EXTRACT → cluster →
+//   VERIFY → upsert] after every stage → RANK
 //
-// Everything with judgment is an agent call; everything else is here, as
-// code, and every agent call is traced against one scouting_runs row. The
-// deadline is checked at every stage boundary and inside every loop: past it
-// nothing new starts, but whatever was found is still clustered, verified as
-// far as the budget allows, and persisted. A run that hits the wall must not
-// throw away the jobs it already paid for.
+// Everything with judgment is an agent call; everything else is here, as code,
+// and every agent call is traced against one scouting_runs row. The two stages
+// themselves live in ./stages.ts, the batch tail in ./persist.ts and the store
+// in ./store.ts; this file is the shape of the run.
+//
+// Three rules shape it:
+//
+//   1. The company list is ONE INPUT to scouting, not the search universe, and
+//      it is not all the same kind of thing. A Target is the user saying "I
+//      want to work here"; an Explore row is the scout's own earlier guess.
+//      `selectCompaniesToCheck` checks the user's choices first and rotates a
+//      bounded sample of guesses, so a hundred old suggestions cannot starve
+//      fresh discovery. Nothing an agent writes is ever more than `suggested`
+//      (migration 016, ADR-039).
+//
+//   2. Whose choice a row was is read from `watch_source`, never from
+//      `watch_status` alone (`toWatched` → `resolveStoredIntent`). Migration
+//      016 is applied by hand; until it is, the table still holds 163 "targets"
+//      an agent wrote, and a run that trusted the column would tell the planner
+//      its own earlier guesses were the user's preferences.
+//
+//   3. A run that dies must not lose what it paid for. The batch tail
+//      (persist.ts) runs after company-first and after EVERY job-first
+//      strategy, so extracted, verified jobs are in the database before the
+//      next stage starts. The deadline is checked at every stage boundary and
+//      inside every loop: past it nothing new starts, whatever is in hand is
+//      still persisted, and `stats.deadline_hit` / `result.partial` tell the
+//      caller to finish the run as partial rather than succeeded.
 //
 // Every collaborator is injectable (JobScoutDeps) so the whole loop runs in
-// memory under test with stub agents and a stub store. Production callers
-// pass nothing and get the live modules.
+// memory under test with stub agents and a stub store. Production callers pass
+// nothing and get the live modules.
 
-import { runJobMissionPlanner, type JobMissionPlan, type JobMissionPlannerInput, type SearchStrategy } from '@/lib/agents/job-mission-planner'
-import { runJobScoutSession, postingKey, type JobScoutSessionParams, type JobScoutSessionResult } from '@/lib/agents/job-scout/session'
-import type { CompanyToCheck, FetchPageFn, LookupBoardFn } from '@/lib/agents/job-scout'
+import { runJobMissionPlanner, type SearchStrategy } from '@/lib/agents/job-mission-planner'
 import type { AgentResult, ToolContext } from '@/lib/agents/runtime/types'
-import { createServiceClient } from '@/lib/supabase/server'
-import { loadEvidenceBank } from '../evidence/store'
 import { renderPreferences, renderSkills } from '../evidence/render'
 import { getRelevantPersonalEvidence, renderRelevantEvidence } from '../evidence/retrieval'
-import { renderFeedbackHints, type FeedbackRow } from '../fit/feedback'
-import { clusterJobs } from '../jobs/dedupe'
-import { isInternshipLike } from '../jobs/filters'
+import { renderFeedbackHints } from '../fit/feedback'
 import { normalizeCompanyName, type NormalizedJob } from '../jobs/normalize'
-import { listJobs, listWatchlist, updateJobVerification, upsertJobs, type JobListRow, type ListJobsFilters, type UpsertJobsResult } from '../jobs/store'
-import type { VerifyResult } from '../jobs/verify'
-import { verifyWithAgent, type VerifierFn } from '../jobs/verify-batch'
-import { runIntelligenceBatch, type BatchResult } from '../intelligence/orchestrator'
-import { ensureDefaultMission, getMission, renderMission, sanitizeDirection } from '../missions/store'
-import { DEFAULT_SCOUT_BUDGET, startCareerRun, type CareerBudget, type CareerRun } from '../runs'
+import { runIntelligenceBatch } from '../intelligence/orchestrator'
+import { renderMission, sanitizeDirection } from '../missions/store'
+import { DEFAULT_SCOUT_BUDGET, type CareerBudget, type CareerRun } from '../runs'
 import { setAnthropicDeadline } from '@/lib/providers/anthropic/client'
 import { getPageFetcher } from '../sources/fetch'
 import { getSourceRegistry } from '../sources/registry'
-import type { PageFetcher, RawJobPosting, SourceRegistry } from '../sources/types'
-import type { CareerMission, EvidenceBank, VerificationStatus, WatchStatus } from '../types'
-import { checkCompanyForOpenings, liveCompanyFirstStore, runCompanyFirst, seedWatchlistFromPlan, type CompanyFirstStore, type WatchedCompany } from './company-first'
-import { extractAndNormalize, type ExtractorFn, type RejectedJob } from './extract'
-import { resolveScoutedPosting, type FetchBudget } from './resolve'
-import { bump, emptyStats, noteQuery, type ScoutStats } from './stats'
-import { createScoutTools } from './tools'
+import type { RawJobPosting } from '../sources/types'
+import type { CareerMission, VerificationStatus } from '../types'
+import { seedWatchlistFromPlan } from './company-first'
+import { fallbackStrategies, selectJobsToRank } from './direction'
+import type { RejectedJob } from './extract'
+import { ATS_SOURCES, persistBatch, type BatchContext } from './persist'
+import type { FetchBudget } from './resolve'
+import { runCompanyFirstStage, runJobFirstStage, type StageRun } from './stages'
+import { bump, emptyStats, noteQuery } from './stats'
+import { buildPlannerWatchlist, liveScoutStore, toWatched, type ScoutedWatchCompany, type ScoutStore } from './store'
+import type { JobScoutDeps, JobScoutParams, JobScoutResult, JobScoutResultJob, ScoutProgressCounts, ScoutRunStats } from './types'
 
-const ATS_SOURCES = new Set(['greenhouse', 'lever', 'ashby', 'smartrecruiters', 'workable'])
-const ACTIVE_WATCH: WatchStatus[] = ['target', 'watching', 'opening_available']
-const MAX_SCOUT_COMPANY_CHECKS = 10
+// These were part of this module's surface before it was split. Re-exported so
+// every existing import path keeps working.
+export { directionMatches, directionPhrases, directionTerms, fallbackStrategies, rankCandidatePriority, selectJobsToRank } from './direction'
+export { buildPlannerWatchlist, liveScoutStore, toWatched, type ScoutedWatchCompany, type ScoutStore } from './store'
+export { MAX_SCOUT_COMPANY_CHECKS } from './stages'
+export type { CompaniesSelected, JobScoutDeps, JobScoutParams, JobScoutResult, JobScoutResultJob, ScoutProgressCounts, ScoutRunStats } from './types'
+
+/**
+ * The share of the run's wall clock company-first may spend. The watchlist is
+ * an input to discovery, not the whole of it: a long list of companies used to
+ * be able to eat an entire run, and a run that only re-checks known companies
+ * can never surface anything new. What is left is the job-first floor, and the
+ * run says so in `stats.job_first_reserve_ms` when the cap bites.
+ */
+const COMPANY_FIRST_TIME_SHARE = 0.55
 // Post-scout ranking: how many of this run's jobs get a fit number before the
 // run returns, how many at once, and how much of the deadline must be left.
 // Research is skipped here (it is the slow stage); the package flow runs it.
@@ -54,279 +84,8 @@ const RANK_CONCURRENCY = 3
 const RANK_DEADLINE_RESERVE_MS = 20_000
 const RANK_MIN_WINDOW_MS = 30_000
 
-/**
- * Which of this run's stored jobs get a fit number first. Store order is
- * arrival order — whichever board answered first — and a large run left the
- * mission-targeted rows past the cap. Deterministic preference, most
- * promising first: extracted this run (a thin heuristic row is a weaker
- * candidate for the evaluator), then confirmed open, then the target season,
- * then the closest tier (unknown last), then an internship-shaped title.
- * Ties keep store order, so the choice is stable across runs.
- */
-/**
- * Content words of the stated direction, stemmed crudely (trailing s/es/ing
- * dropped), so "genomics research" matches "Genomic", "researcher". Empty when
- * there is no direction.
- */
-export function directionTerms(direction: string | null | undefined): Set<string> {
-  const out = new Set<string>()
-  for (const phrase of directionPhrases(direction)) {
-    for (const w of phrase.toLowerCase().split(/[^a-z0-9+]+/)) {
-      if (w.length < 4 || DIRECTION_STOP.has(w)) continue
-      out.add(w.replace(/(ing|ies|es|s)$/, (m) => (m === 'ies' ? 'y' : '')))
-    }
-  }
-  return out
-}
-
-const DIRECTION_STOP = new Set(['into', 'with', 'where', 'that', 'this', 'from', 'also', 'open', 'very', 'internship', 'internships', 'intern', 'summer', 'role', 'roles', 'experience', 'transfers', 'transferable', 'engineer', 'engineering'])
-
-/** How many direction terms the posting's title, company or description carries (0 when no direction). */
-export function directionMatches(job: Pick<NormalizedJob, 'title' | 'company_name' | 'description_text'>, terms: Set<string>): number {
-  if (terms.size === 0) return 0
-  const hay = `${job.title} ${job.company_name} ${(job.description_text ?? '').slice(0, 1_500)}`.toLowerCase()
-  let n = 0
-  for (const t of terms) if (hay.includes(t)) n++
-  return n
-}
-
-export function rankCandidatePriority(job: NormalizedJob, terms: Set<string> = new Set()): number {
-  const tier = job.location_tier ?? 4
-  // A posting that speaks the direction's language outranks an explicit
-  // Summer 2027 posting in the old industry (300 > 100), but never an
-  // unextracted or unverified one.
-  const direction = Math.min(directionMatches(job, terms), 2) * 300
-  return (
-    (job.extraction_version ? 10_000 : 0) +
-    (job.verification_status === 'VERIFIED_OPEN' ? 1_000 : 0) +
-    direction +
-    (job.season_relevance === 'summer_2027' ? 100 : 0) +
-    (4 - tier) * 10 +
-    (isInternshipLike(job) ? 1 : 0)
-  )
-}
-
-/**
- * The ids to rank, best first — direction-relevant postings before the rest
- * when a direction is stated. Falls back to store order when ids and jobs do
- * not line up (a partial upsert).
- */
-export function selectJobsToRank(jobs: NormalizedJob[], ids: string[], max: number, direction: string | null | undefined = null): string[] {
-  if (ids.length !== jobs.length) return ids.slice(0, max)
-  const terms = directionTerms(direction)
-  return jobs
-    .map((job, i) => ({ id: ids[i], i, priority: rankCandidatePriority(job, terms) }))
-    .sort((a, b) => b.priority - a.priority || a.i - b.i)
-    .slice(0, max)
-    .map((x) => x.id)
-}
-
-// ─── Store + deps ────────────────────────────────────────────────────────────
-
-export interface ScoutStore extends CompanyFirstStore {
-  getMission(userId: string, missionId: string | null): Promise<{ mission: CareerMission | null; error: string | null; migrationMissing: boolean }>
-  loadBank(userId: string): Promise<{ bank: EvidenceBank; migrationMissing: boolean; errors: string[] }>
-  recentFeedback(userId: string, limit: number): Promise<FeedbackRow[]>
-  startRun(params: Parameters<typeof startCareerRun>[0]): Promise<CareerRun>
-  listWatchlist(userId: string): Promise<{ companies: Record<string, unknown>[]; error: string | null; migrationMissing: boolean }>
-  listJobs(userId: string, filters: ListJobsFilters): Promise<{ jobs: JobListRow[]; error: string | null; migrationMissing: boolean }>
-  upsertJobs(userId: string, jobs: NormalizedJob[], opts: { runId?: string | null; missionId?: string | null }): Promise<UpsertJobsResult>
-  /**
-   * Optional: upsertJobs deliberately leaves verification columns alone on a
-   * re-seen row (that is the verifier's job), so a job listed on its ATS board
-   * THIS run is refreshed to VERIFIED_OPEN here — otherwise a row that went
-   * STALE would stay STALE while the board still shows it.
-   */
-  updateJobVerification?(userId: string, id: string, result: VerifyResult, now?: Date): Promise<{ error: string | null }>
-}
-
-export function liveScoutStore(): ScoutStore {
-  return {
-    ...liveCompanyFirstStore(),
-    async getMission(userId, missionId) {
-      if (missionId) {
-        const m = await getMission(userId, missionId)
-        return { mission: m, error: m ? null : 'mission not found', migrationMissing: false }
-      }
-      const r = await ensureDefaultMission(userId)
-      return { mission: r.mission, error: r.error, migrationMissing: !!r.error && /014_career_os/.test(r.error) }
-    },
-    loadBank: (userId) => loadEvidenceBank(userId, { approvedOnly: true }),
-    async recentFeedback(userId, limit) {
-      const db = createServiceClient()
-      const { data } = await db
-        .from('job_feedback')
-        .select('job_id, verdict, reasons, note, created_at, job:job_opportunities(role_family, industry, company_name, location_tier)')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false })
-        .limit(limit)
-      type Row = { job_id: string; verdict: FeedbackRow['verdict']; reasons: string[]; note: string | null; created_at: string; job: { role_family: string | null; industry: string | null; company_name: string | null; location_tier: number | null } | null }
-      return ((data ?? []) as unknown as Row[]).map((r) => ({
-        job_id: r.job_id, verdict: r.verdict, reasons: r.reasons ?? [], note: r.note, created_at: r.created_at,
-        role_family: r.job?.role_family ?? null, industry: r.job?.industry ?? null, company_name: r.job?.company_name ?? null, location_tier: r.job?.location_tier ?? null,
-      }))
-    },
-    startRun: startCareerRun,
-    listWatchlist,
-    listJobs: (userId, filters) => listJobs(userId, filters),
-    upsertJobs,
-    updateJobVerification,
-  }
-}
-
-export interface JobScoutDeps {
-  planner?: (input: JobMissionPlannerInput, ctx: ToolContext) => Promise<AgentResult<JobMissionPlan>>
-  session?: (params: JobScoutSessionParams, ctx: ToolContext) => Promise<JobScoutSessionResult>
-  extractor?: ExtractorFn
-  verifier?: VerifierFn
-  lookupBoard?: LookupBoardFn
-  fetchPage?: FetchPageFn
-  registry?: SourceRegistry
-  fetcher?: PageFetcher
-  store?: ScoutStore
-  /** Post-scout ranking. Defaults to the live intelligence batch; the offline test injects a stub. */
-  rank?: (userId: string, jobIds: string[], opts: { concurrency: number; deadlineMs: number; skip: { research: true }; label: string }) => Promise<BatchResult>
-}
-
-export interface JobScoutParams {
-  userId: string
-  missionId?: string | null
-  budget?: Partial<CareerBudget>
-  maxStrategies?: number
-  maxRoundsPerStrategy?: number
-  maxCompaniesFirst?: number
-  maxExtract?: number
-  concurrency?: number
-  verify?: boolean
-  /** False turns off post-scout ranking (the eval measures ranking separately). Default on. */
-  rank?: boolean
-  /**
-   * Replaces mission.preferences.direction IN MEMORY for this run only (the CLI's
-   * --direction). Never persisted; the stored mission is not touched. It reaches
-   * the planner, evidence retrieval and the fallback strategies; post-scout
-   * ranking is SKIPPED (with an error line) because fit rows persist against
-   * the stored mission and would otherwise be judged against a direction that
-   * was never saved.
-   */
-  directionOverride?: string | null
-  onProgress?: (stage: string, detail: string) => void
-  label?: string
-}
-
-export interface JobScoutResultJob {
-  id?: string
-  title: string
-  company_name: string
-  location_raw: string | null
-  location_tier: number | null
-  season_relevance: string
-  employment_type: string
-  verification_status: VerificationStatus
-  canonical_url: string | null
-  source_types: string[]
-}
-
-export interface JobScoutResult {
-  runId: string | null
-  mission: { id: string; name: string } | null
-  plan: { role_families: string[]; strategies: { name: string; kind: string; priority: number }[]; seed_companies_count: number; adjacent_categories: string[] } | null
-  stats: ScoutStats
-  jobs: JobScoutResultJob[]
-  rejected: RejectedJob[]
-  errors: string[]
-  costUsd: number
-  latencyMs: number
-  migrationMissing: boolean
-}
-
 export function scoutToolContext(userId: string, runId: string | null, budget: CareerBudget): ToolContext {
   return { user_id: userId, run_id: runId, budget: { maxCompanies: 0, maxPeoplePerCompany: 0, maxApolloCalls: 0, maxWebSearches: budget.maxWebSearches, maxAgentSteps: budget.maxAgentSteps } }
-}
-
-const DIRECTION_FILLER = /\b(?:i(?:'d| would)? (?:want|like|love|hope|plan|intend|am looking|'m looking) to|i want|i'd like|i would like|i am|i'm|pivot(?:ing)? (?:in)?to|move (?:in)?to|transition(?:ing)? (?:in)?to|break(?:ing)? into|go into|get into|looking for|interested in|something in|ideally|maybe|also open to|open to|my|me|as a)\b/gi
-const MAX_DIRECTION_PHRASES = 4
-
-/**
- * The direction's key phrases, deterministically: split on commas, slashes,
- * semicolons, " and " / " or ", drop filler ("pivot into", "I want"), keep the
- * first four. Used by the fallback strategy; no judgment, so no agent.
- */
-export function directionPhrases(direction: string | null | undefined): string[] {
-  if (!direction) return []
-  const out: string[] = []
-  for (const part of direction.split(/[,;\/\n]|\s+(?:and|or)\s+|\s+[—–-]\s+/i)) {
-    // A pivot statement often ends in a clause about the person ("— as a chemical
-    // engineer my experience transfers"); keep the target, not the credential.
-    const head = part.split(/\b(?:because|since|as a|as an|given|with my|my )\b/i)[0]
-    const phrase = head.replace(DIRECTION_FILLER, ' ').replace(/[^\w\s&+'.-]/g, ' ').replace(/\s+/g, ' ').trim()
-    // Two-letter acronyms people actually write as a direction (AI, ML, EV, VR)
-    // are kept; two-letter lowercase fragments are filler residue.
-    const minLength = /^[A-Z][A-Z0-9]$/.test(phrase) ? 2 : 3
-    if (phrase.length < minLength || phrase.split(' ').length > 6) continue
-    if (!out.some((p) => p.toLowerCase() === phrase.toLowerCase())) out.push(phrase)
-    if (out.length >= MAX_DIRECTION_PHRASES) break
-  }
-  return out
-}
-
-/**
- * Strategies built from the mission alone, used only when the planner fails.
- * Three surfaces at most: the stated direction (first, when there is one), the
- * keyless ATS boards (where a first-party posting is one hop away) and the
- * mission's own company types. No role inference — that is the planner's
- * judgment, and this is the deterministic floor beneath it.
- */
-export function fallbackStrategies(mission: Pick<CareerMission, 'preferences' | 'season'>): SearchStrategy[] {
-  const season = mission.season === 'summer_2027' ? 'Summer 2027' : mission.season.replace(/_/g, ' ')
-  const tier1 = mission.preferences.geo_tiers.find((t) => t.tier === 1)?.locations ?? []
-  const geo = tier1.length ? tier1 : ['United States']
-  const types = mission.preferences.company_types.slice(0, 3)
-  const phrases = directionPhrases(mission.preferences.direction)
-  const direction: SearchStrategy | null = phrases.length
-    ? {
-        name: 'fallback · stated direction',
-        kind: 'job_first',
-        rationale: 'deterministic fallback — the mission planner failed; queries built from the stated direction',
-        queries: phrases.flatMap((p, i) => [`${p} "${season}" internship`, `${p} intern "${season}" site:${['job-boards.greenhouse.io', 'jobs.lever.co', 'jobs.ashbyhq.com'][i % 3]}`]),
-        target_titles: phrases.map((p) => `${p} Intern`),
-        geo_focus: geo,
-        priority: 0.6,
-      }
-    : null
-  const boards: SearchStrategy = {
-    name: 'fallback · public ATS boards',
-    kind: 'job_first',
-    rationale: 'deterministic fallback — the mission planner failed',
-    queries: [
-      `"${season}" internship site:job-boards.greenhouse.io`,
-      `"${season}" intern site:jobs.lever.co`,
-      `"${season}" internship site:jobs.ashbyhq.com`,
-      `"${season}" engineering intern ${geo[0]}`,
-    ],
-    target_titles: ['Process Engineering Intern', 'Manufacturing Engineering Intern', 'Engineering Intern', 'Strategy Intern'],
-    geo_focus: geo,
-    priority: 0.5,
-  }
-  const byType: SearchStrategy = {
-    name: 'fallback · mission company types',
-    kind: 'job_first',
-    rationale: 'deterministic fallback — the mission planner failed',
-    queries: types.length
-      ? types.map((t) => `${t} "${season}" internship ${geo[0]}`)
-      : [`"${season}" internship ${geo[0]}`, `"${season}" intern ${geo[geo.length - 1]}`],
-    target_titles: ['Intern'],
-    geo_focus: geo,
-    priority: 0.4,
-  }
-  return direction ? [direction, boards, byType] : [boards, byType]
-}
-
-function toWatched(row: Record<string, unknown>): WatchedCompany {
-  return {
-    id: String(row.id), name: String(row.name), domain: (row.domain as string | null) ?? null, careers_url: (row.careers_url as string | null) ?? null,
-    ats_type: (row.ats_type as string | null) ?? null, ats_identifier: (row.ats_identifier as string | null) ?? null,
-    watch_status: (row.watch_status as WatchStatus | null) ?? null, watch_priority: (row.watch_priority as number | null) ?? null,
-  }
 }
 
 // ─── The run ─────────────────────────────────────────────────────────────────
@@ -341,10 +100,21 @@ export async function runJobScout(params: JobScoutParams, deps: JobScoutDeps = {
   // The API client stops retrying past this point too (see setAnthropicDeadline):
   // a run that has already given up must not sit inside a retry storm.
   setAnthropicDeadline(deadline)
-  const stats = emptyStats()
+  const stats: ScoutRunStats = { ...emptyStats(), companies_selected: { target: 0, watching: 0, suggested: 0, skipped: 0 }, job_first_reserve_ms: 0 }
   const errors: string[] = []
-  let rejected: RejectedJob[] = []
-  const progress = (stage: string, detail: string) => params.onProgress?.(stage, detail)
+  const rejected: RejectedJob[] = []
+  const counts: ScoutProgressCounts = { discovered: 0, companies_checked: 0, jobs_extracted: 0, jobs: 0, inserted: 0, verified_open: 0, likely_open: 0, closed: 0, ranked: 0, rejected: 0 }
+  let postingsFound = 0
+  const progress = (stage: string, detail: string) => {
+    // Derived counters are read from the stats they mirror, so they can only
+    // ever move forward — a UI reading these never sees a number go backwards.
+    counts.companies_checked = stats.companies_checked
+    counts.discovered = postingsFound
+    counts.jobs_extracted = stats.jobs_extracted
+    counts.ranked = stats.jobs_ranked
+    counts.rejected = rejected.length
+    params.onProgress?.(stage, detail, { ...counts })
+  }
   const pastDeadline = (stage: string): boolean => {
     if (Date.now() <= deadline) return false
     if (!stats.deadline_hit) errors.push(`deadline reached before ${stage}`)
@@ -352,7 +122,7 @@ export async function runJobScout(params: JobScoutParams, deps: JobScoutDeps = {
     return true
   }
   const fail = (message: string, migrationMissing = false): JobScoutResult => ({
-    runId: null, mission: null, plan: null, stats, jobs: [], rejected: [], errors: [...errors, message], costUsd: 0, latencyMs: Date.now() - started, migrationMissing,
+    runId: null, mission: null, plan: null, stats, jobs: [], rejected: [], errors: [...errors, message], costUsd: 0, latencyMs: Date.now() - started, migrationMissing, partial: stats.deadline_hit,
   })
 
   // (a) Inputs.
@@ -372,69 +142,169 @@ export async function runJobScout(params: JobScoutParams, deps: JobScoutDeps = {
   const watch = await store.listWatchlist(params.userId)
   if (watch.migrationMissing) return fail('migration 014_career_os.sql has not been applied', true)
   if (watch.error) errors.push(`watchlist: ${watch.error}`)
+  // toWatched resolves intent from watch_source, so an agent's `target` is read
+  // as the suggestion it is — before migration 016 as well as after it.
   const watchlist = watch.companies.map(toWatched)
   const feedback = await store.recentFeedback(params.userId, 30)
+  // Companies the user rejected: never scouted, but the planner must know not
+  // to propose them again. A store that cannot answer simply says nothing.
+  let ignoredCompanies: ScoutedWatchCompany[] = []
+  if (store.listIgnoredCompanies) {
+    const ig = await store.listIgnoredCompanies(params.userId)
+    if (ig.error) errors.push(`ignored companies: ${ig.error}`)
+    ignoredCompanies = ig.companies.map(toWatched)
+  }
 
   // (b) The run row. Agent traces attach to it from here on.
   const run = await store.startRun({ userId: params.userId, kind: 'job_scout', label: params.label ?? `job scout · ${mission.name}`, mission: { name: mission.name, objective: mission.objective }, budget, careerMissionId: mission.id })
   const ctx = scoutToolContext(params.userId, run.runId, budget)
-  const traced = async <T>(res: AgentResult<T>, refs: Record<string, unknown>) => {
+  const traced = async (res: AgentResult<unknown>, refs: Record<string, unknown>) => {
     stats.model_calls++
     stats.web_searches += res.trace.web_searches
-    await run.trace(res as AgentResult<unknown>, refs)
+    await run.trace(res, refs)
   }
 
-  // (c) Plan.
+  // (c) Plan. The company list is one input, and the planner is told whose
+  // choice each part of it was.
   progress('plan', direction ? `planning from your direction: ${direction.slice(0, 100)}${direction.length > 100 ? '…' : ''}` : 'planning from the evidence (no direction stated)')
   progress('plan', 'asking the mission planner')
   const planner = deps.planner ?? runJobMissionPlanner
   const planRes = await planner(
-    { mission: missionText, evidenceSummaries: renderRelevantEvidence(getRelevantPersonalEvidence({ bank: bankRes.bank, mission: missionText, target: { kind: 'generic' }, maxExperiences: 8, maxFacts: 16 }), { style: 'compact' }), skills: renderSkills(bankRes.bank), preferences: renderPreferences(bankRes.bank), watchlist: watchlist.map((w) => w.name), recentFeedback: renderFeedbackHints(feedback) },
+    {
+      mission: missionText,
+      evidenceSummaries: renderRelevantEvidence(getRelevantPersonalEvidence({ bank: bankRes.bank, mission: missionText, target: { kind: 'generic' }, maxExperiences: 8, maxFacts: 16 }), { style: 'compact' }),
+      skills: renderSkills(bankRes.bank),
+      preferences: renderPreferences(bankRes.bank),
+      watchlist: buildPlannerWatchlist(watchlist, ignoredCompanies, feedback),
+      recentFeedback: renderFeedbackHints(feedback),
+    },
     ctx
   )
-  await traced(planRes, { mission_id: mission.id })
+  await traced(planRes as AgentResult<unknown>, { mission_id: mission.id })
   const plan = planRes.output
   if (!plan) errors.push(`planner ${planRes.status}: ${planRes.error ?? 'no plan'} — company-first only`)
   else {
     for (const s of plan.strategies) for (const q of s.queries) noteQuery(stats, q)
-    const seeded = await seedWatchlistFromPlan(params.userId, plan.seed_companies, watchlist.map((w) => w.name), { store })
+    // Seeds are EXPLORATION CANDIDATES. seedWatchlistFromPlan writes them as
+    // suggestions with a planner origin — never as targets; only the user
+    // promotes a company (ADR-039).
+    const seeded = await seedWatchlistFromPlan(params.userId, plan.seed_companies, [...watchlist.map((w) => w.name), ...ignoredCompanies.map((c) => c.name)], { store })
     if (seeded.migrationMissing) return finish(run, 'failed', 'migration 014_career_os.sql has not been applied', true)
     errors.push(...seeded.errors)
-    progress('plan', `${plan.strategies.length} strategies, ${plan.seed_companies.length} seeds (${seeded.added} new on the watchlist)`)
+    progress('plan', `${plan.strategies.length} strategies, ${plan.seed_companies.length} seeds (${seeded.added} new to explore)`)
     if (seeded.added) {
       const again = await store.listWatchlist(params.userId)
       if (!again.error) watchlist.splice(0, watchlist.length, ...again.companies.map(toWatched))
     }
   }
 
-  // (d) Company-first over the watchlist.
-  const raws: RawJobPosting[] = []
+  // The batch tail, shared by every flush point below.
+  const fetchBudget: FetchBudget = { left: budget.maxPageFetches }
   const atsListedUrls = new Set<string>()
-  const rawByUrl = new Map<string, RawJobPosting>()
+  const extractBudget = { left: params.maxExtract ?? 40 }
+  const persistedJobs: NormalizedJob[] = []
+  const idByJob = new Map<NormalizedJob, string>()
+  // Stored ROWS, not sightings: a posting two stages both found is one row.
+  const persistedIds = new Set<string>()
+  const statusById = new Map<string, VerificationStatus>()
+  const statusWithoutId: VerificationStatus[] = []
+  let insertedRows = 0
+  const batch: BatchContext = {
+    userId: params.userId, mission, ctx, run, store, stats, registry, fetcher,
+    extractor: deps.extractor, verifier: deps.verifier,
+    deadline, concurrency: params.concurrency ?? 4, verify: params.verify !== false,
+    fetchBudget, atsListedUrls,
+    domainFor: (name) => {
+      const key = normalizeCompanyName(name) ?? name.toLowerCase()
+      return watchlist.find((w) => w.domain && (normalizeCompanyName(w.name) ?? w.name.toLowerCase()) === key)?.domain ?? null
+    },
+    pastDeadline,
+    onProgress: (d) => progress('extract', d),
+  }
+
+  const pending: RawJobPosting[] = []
   const keepRaw = (p: RawJobPosting) => {
-    raws.push(p)
+    pending.push(p)
+    postingsFound++
     if (p.source_type && ATS_SOURCES.has(p.source_type)) atsListedUrls.add(p.canonical_url ?? p.source_url)
     bump(stats.sources_consulted, p.source_type)
   }
-  const cfStore: CompanyFirstStore = store
-  if (!pastDeadline('company-first')) {
-    const targets = watchlist
-      .filter((w) => w.watch_status && ACTIVE_WATCH.includes(w.watch_status))
-      .sort((a, b) => (b.watch_priority ?? 0) - (a.watch_priority ?? 0))
-    const cf = await runCompanyFirst(params.userId, targets, { concurrency: params.concurrency ?? 4, deadline, maxCompanies: params.maxCompaniesFirst ?? 25, onProgress: (d) => progress('company-first', d) }, { registry, fetcher, store: cfStore })
-    stats.companies_checked += cf.checked
-    stats.companies_with_openings += cf.withOpenings
-    stats.postings_seen += cf.postings.length
-    stats.postings_resolved += cf.postings.length
-    for (const p of cf.postings) keepRaw(p)
-    for (const c of cf.outcomes) noteQuery(stats, `lookup: ${c.name}`)
-    errors.push(...cf.errors)
-    if (cf.deadlineHit) pastDeadline('company-first (remaining companies)')
+
+  /**
+   * Checkpoint: everything gathered since the last flush is extracted,
+   * clustered, verified and STORED before the next stage starts. Returns false
+   * only when the schema is missing, which is fatal for the run.
+   */
+  const flush = async (label: string): Promise<boolean> => {
+    if (pending.length === 0) return true
+    const raws = pending.splice(0, pending.length)
+    progress('extract', `${raws.length} raw postings from ${label}`)
+    const out = await persistBatch(raws, batch, extractBudget)
+    rejected.push(...out.rejected)
+    errors.push(...out.errors)
+    if (out.migrationMissing) return false
+    for (let i = 0; i < out.jobs.length; i++) {
+      const job = out.jobs[i]
+      persistedJobs.push(job)
+      const id = out.ids[i]
+      if (id) {
+        idByJob.set(job, id)
+        persistedIds.add(id)
+        // Keyed by stored id, so the same posting seen twice is one row with
+        // one verdict rather than two sightings counted twice.
+        statusById.set(id, job.verification_status)
+      } else statusWithoutId.push(job.verification_status)
+    }
+    insertedRows += out.inserted
+    countStored()
+    progress('persist', `${label}: ${out.inserted} new, ${out.updated} updated (${persistedJobs.length} this run)`)
+    return true
   }
 
-  // (e) Job-first: one scout session per strategy, budgets shared.
-  const fetchBudget: FetchBudget = { left: budget.maxPageFetches }
-  const companiesToCheck: CompanyToCheck[] = []
+  /** Recompute the stored-row counts from the distinct rows this run holds. */
+  function countStored(): void {
+    counts.jobs = persistedIds.size + statusWithoutId.length
+    counts.inserted = insertedRows
+    let open = 0
+    let likely = 0
+    let closed = 0
+    for (const s of [...statusById.values(), ...statusWithoutId]) {
+      if (s === 'VERIFIED_OPEN') open++
+      else if (s === 'LIKELY_OPEN') likely++
+      else if (s === 'CLOSED') closed++
+    }
+    counts.verified_open = open
+    counts.likely_open = likely
+    counts.closed = closed
+  }
+
+  // Everything the two stages share with this run.
+  const stageRun: StageRun = {
+    userId: params.userId, ctx, store, registry, fetcher, stats, errors,
+    deadline, concurrency: params.concurrency ?? 4,
+    progress, keepRaw, flush, pastDeadline, traced,
+  }
+
+  // (d) Company-first, by INTENT: every Target, then Watching, then a rotating
+  //     least-recently-checked sample of Explore. The watchlist is an input to
+  //     the run, never its ceiling — hence both the explore cap inside
+  //     selectCompaniesToCheck and the wall-clock floor kept for job-first.
+  const cfReserveMs = Math.max(0, budget.deadlineMs - Math.floor(budget.deadlineMs * COMPANY_FIRST_TIME_SHARE))
+  stats.job_first_reserve_ms = cfReserveMs
+  if (!pastDeadline('company-first')) {
+    const cf = await runCompanyFirstStage(stageRun, {
+      watchlist,
+      budget: params.maxCompaniesFirst ?? 25,
+      reserveMs: cfReserveMs,
+      stageDeadline: Math.min(deadline, started + budget.deadlineMs - cfReserveMs),
+    })
+    stats.companies_selected = { ...cf.selection.counts, skipped: cf.selection.skipped }
+    if (!cf.ok) return finish(run, 'failed', 'migration 014_career_os.sql has not been applied', true)
+  }
+
+  // (e) Job-first: one scout session per strategy, budgets shared, persisted
+  //     after each one.
+  //
   // A failed planner must not take job-first discovery down with it. The eval
   // saw exactly that: one schema-invalid plan, and a $4.71 run found nothing.
   // Without a plan the strategies are built deterministically from the mission —
@@ -442,148 +312,53 @@ export async function runJobScout(params: JobScoutParams, deps: JobScoutDeps = {
   const strategySource: SearchStrategy[] = plan ? plan.strategies : fallbackStrategies(mission)
   if (!plan && strategySource.length) errors.push(`job-first ran on ${strategySource.length} deterministic fallback strategies (planner failed)`)
   if (strategySource.length && !pastDeadline('job-first')) {
-    const maxStrategies = params.maxStrategies ?? 3
-    const strategies: SearchStrategy[] = [...strategySource].sort((a, b) => b.priority - a.priority).slice(0, maxStrategies)
-    const existing = await store.listJobs(params.userId, { canonicalOnly: false, limit: 500, sort: 'recent' })
-    if (existing.migrationMissing) return finish(run, 'failed', 'migration 014_career_os.sql has not been applied', true)
-    const alreadyFound = new Set<string>()
-    for (const j of existing.jobs) {
-      if (j.canonical_url) alreadyFound.add(j.canonical_url)
-      alreadyFound.add(postingKey(j))
-    }
-    for (const p of raws) alreadyFound.add(p.canonical_url ?? p.source_url)
-
-    const tools = { lookupBoard: deps.lookupBoard, fetchPage: deps.fetchPage }
-    const live = createScoutTools({ registry, fetcher, stats, rawByUrl })
-    const perSessionLookups = Math.max(2, Math.floor(budget.maxAtsLookups / Math.max(1, strategies.length)))
-    const perSessionFetches = Math.max(2, Math.floor(budget.maxPageFetches / 2 / Math.max(1, strategies.length)))
-    const session = deps.session ?? runJobScoutSession
-
-    for (const strategy of strategies) {
-      if (pastDeadline(`strategy "${strategy.name}"`)) break
-      progress('job-first', `strategy: ${strategy.name}`)
-      let res: JobScoutSessionResult
-      try {
-        res = await session(
-          {
-            strategy, mission: missionText, alreadyFound: [...alreadyFound], maxRounds: params.maxRoundsPerStrategy ?? 2, targetCount: 12, deadline,
-            tools: { lookupBoard: tools.lookupBoard ?? live.lookupBoard, fetchPage: tools.fetchPage ?? live.fetchPage, maxLookups: perSessionLookups, maxFetches: perSessionFetches },
-            onRound: (h) => { noteQuery(stats, h.query_used); progress('job-first', `${strategy.name} r${h.round}: ${h.postings_kept} kept · ${h.diagnosis} → ${h.action}`) },
-          },
-          ctx
-        )
-      } catch (e) {
-        errors.push(`strategy "${strategy.name}": ${e instanceof Error ? e.message : String(e)}`)
-        continue
-      }
-      for (const r of res.agentResults) await traced(r, { strategy: strategy.name })
-      for (const h of res.history) noteQuery(stats, h.query_used)
-      errors.push(...res.errors)
-      fetchBudget.left -= res.toolLog.filter((e) => e.tool === 'fetch_page').length
-      for (const p of res.postings) {
-        if (pastDeadline('resolving postings')) break
-        const resolved = await resolveScoutedPosting(p, { registry, fetcher, stats, fetchBudget, companiesToCheck, rawByUrl })
-        if (resolved.posting) {
-          keepRaw(resolved.posting)
-          alreadyFound.add(resolved.posting.canonical_url ?? resolved.posting.source_url)
-          alreadyFound.add(postingKey(p))
-        } else if (resolved.outcome === 'failed') errors.push(`resolve ${p.url}: ${resolved.note}`)
-      }
-      companiesToCheck.push(...res.companiesToCheck)
-    }
-
-    // Companies the scout flagged: watch them and check them, a bounded number per run.
-    const known = new Set(watchlist.map((w) => normalizeCompanyName(w.name) ?? w.name.toLowerCase()))
-    let checks = 0
-    for (const c of companiesToCheck) {
-      const key = normalizeCompanyName(c.name) ?? c.name.toLowerCase()
-      if (known.has(key) || checks >= MAX_SCOUT_COMPANY_CHECKS || pastDeadline('scout company checks')) continue
-      known.add(key)
-      const w = await store.upsertWatch(params.userId, { name: c.name, domain: c.domain, watch_status: 'target', watch_source: 'scout', watch_note: c.why.slice(0, 300) })
-      if (!w.id) { if (w.error) errors.push(`watch ${c.name}: ${w.error}`); continue }
-      checks++
-      const r = await checkCompanyForOpenings(params.userId, { id: w.id, name: c.name, domain: c.domain, careers_url: null, ats_type: null, ats_identifier: null }, {}, { registry, fetcher, store: cfStore })
-      stats.companies_checked++
-      if (r.postings.length) stats.companies_with_openings++
-      stats.postings_seen += r.postings.length
-      stats.postings_resolved += r.postings.length
-      for (const p of r.postings) keepRaw(p)
-      progress('company-first', `${c.name} (from scout): ${r.postings.length} openings`)
-    }
+    const jf = await runJobFirstStage(stageRun, {
+      missionText,
+      strategies: strategySource,
+      maxStrategies: params.maxStrategies ?? 3,
+      maxRounds: params.maxRoundsPerStrategy ?? 2,
+      maxAtsLookups: budget.maxAtsLookups,
+      maxPageFetches: budget.maxPageFetches,
+      fetchBudget,
+      known: new Set([...watchlist, ...ignoredCompanies].map((w) => normalizeCompanyName(w.name) ?? w.name.toLowerCase())),
+      persistedJobs,
+      session: deps.session,
+      lookupBoard: deps.lookupBoard,
+      fetchPage: deps.fetchPage,
+    })
+    if (!jf.ok) return finish(run, 'failed', 'migration 014_career_os.sql has not been applied', true)
   }
 
-  // (f) Extract + normalize + hard constraints.
-  progress('extract', `${raws.length} raw postings`)
-  const ex = await extractAndNormalize(raws, { mission, ctx, run, maxExtract: params.maxExtract ?? 40, concurrency: params.concurrency ?? 4, deadline, stats, extractor: deps.extractor, onProgress: (d) => progress('extract', d) })
-  rejected = ex.rejected
-  errors.push(...ex.errors)
-  if (ex.deadlineHit) pastDeadline('extraction (remaining postings)')
+  // (f) Anything still in hand — a deadline can cut a stage between keepRaw and
+  //     its flush. Nothing this run paid for is discarded.
+  if (!(await flush('final'))) return finish(run, 'failed', 'migration 014_career_os.sql has not been applied', true)
 
-  // (g) Cluster.
-  const clustered = clusterJobs(ex.jobs)
-  stats.clusters = clustered.clusters.length
-  stats.duplicates_removed = ex.jobs.length - clustered.merged.length
-  const jobs = clustered.merged
-
-  // (h) Verify. ATS-listed this run ⇒ open by construction; the rest go through the page.
-  const now = new Date().toISOString()
-  const listedThisRun = new Set<NormalizedJob>()
-  for (const job of jobs) {
-    const listed = job.sources.some((s) => ATS_SOURCES.has(s.source_type) && atsListedUrls.has(s.canonical_url ?? s.source_url))
-    if (listed) {
-      listedThisRun.add(job)
-      job.verification_status = 'VERIFIED_OPEN'
-      job.last_verified_at = now
-      job.verification_method = 'ats_listing'
-      job.verification_note = 'listed on the company ATS board this run'
-    } else if (params.verify !== false && !job.canonical_url) {
-      job.verification_note = 'aggregator lead without a first-party URL'
-    } else if (params.verify !== false && fetchBudget.left > 0 && !pastDeadline('verification')) {
-      fetchBudget.left--
-      const v = await verifyWithAgent(job, { registry, fetcher, ctx, verifier: deps.verifier, run, onModelCall: () => stats.model_calls++ })
-      job.verification_status = v.status === 'AMBIGUOUS' ? 'UNVERIFIED' : v.status
-      job.last_verified_at = now
-      job.verification_method = v.method
-      job.verification_note = v.note
-    }
-    stats.verification[job.verification_status]++
-  }
-
-  // (i) Persist, stamping domains the watchlist already knows.
-  const domainByName = new Map(watchlist.filter((w) => w.domain).map((w) => [normalizeCompanyName(w.name) ?? w.name.toLowerCase(), w.domain as string]))
-  for (const job of jobs) {
-    if (!job.company_domain) {
-      const d = domainByName.get(normalizeCompanyName(job.company_name) ?? job.company_name.toLowerCase())
-      if (d) { job.company_domain = d; job.company_key = `d:${d}` }
-    }
-  }
-  const up = await store.upsertJobs(params.userId, jobs, { runId: run.runId, missionId: mission.id })
-  if (up.migrationMissing) return finish(run, 'failed', 'migration 014_career_os.sql has not been applied', true)
-  errors.push(...up.errors)
-  stats.jobs_inserted = up.inserted
-  stats.jobs_updated = up.updated
-  const idFor = (i: number) => (up.ids.length === jobs.length ? up.ids[i] : undefined)
-
-  // upsertJobs never touches verification on a re-seen row; a board listing
-  // this run is the strongest open signal we have, so refresh those rows.
-  // Only when some rows were updated (inserts already carry the status) and
-  // only when ids line up one-to-one with jobs (a partial failure loses that).
-  if (up.updated > 0 && up.ids.length === jobs.length && store.updateJobVerification) {
-    // verification_method is free text in the schema; 'ats_listing' is what the insert path writes.
-    const refresh: VerifyResult = { status: 'VERIFIED_OPEN', note: 'listed on the company ATS board this run', method: 'ats_listing' as unknown as VerifyResult['method'], closedSignals: [] }
-    for (let i = 0; i < jobs.length; i++) {
-      if (!listedThisRun.has(jobs[i])) continue
-      const r = await store.updateJobVerification(params.userId, up.ids[i], refresh)
-      if (r.error) errors.push(`refresh ${jobs[i].title}: ${r.error}`)
-    }
-  }
-
-  // (j) Rank what was just stored, so the list the user gets back has fit
+  // (g) Rank what was just stored, so the list the user gets back has fit
   // numbers on it. Stored evaluations at the current prompt version are reused
   // inside the batch, so only jobs without one cost anything. Bounded by count,
   // by concurrency and by what is left of the deadline; a batch that cannot
   // start is reported, never silently skipped.
-  if (up.ids.length > 0 && params.rank !== false) {
+  // One entry per STORED row. Two stages can see the same posting — the store
+  // matched the second sighting to the first row — so it is ranked and
+  // reported once, under the id the store gave it.
+  const rankJobs: NormalizedJob[] = []
+  const rankIds: string[] = []
+  const resultJobs: JobScoutResultJob[] = []
+  const seenIds = new Set<string>()
+  for (const job of persistedJobs) {
+    const id = idByJob.get(job)
+    if (id) {
+      if (seenIds.has(id)) continue
+      seenIds.add(id)
+      rankJobs.push(job)
+      rankIds.push(id)
+    }
+    resultJobs.push({
+      id, title: job.title, company_name: job.company_name, location_raw: job.location_raw, location_tier: job.location_tier, season_relevance: job.season_relevance,
+      employment_type: job.employment_type, verification_status: job.verification_status, canonical_url: job.canonical_url, source_types: [...new Set(job.sources.map((s) => s.source_type))],
+    })
+  }
+  if (rankIds.length > 0 && params.rank !== false) {
     const window = deadline - Date.now() - RANK_DEADLINE_RESERVE_MS
     if (params.directionOverride !== undefined) {
       // Fit rows are persisted under the stored mission's id and reused at the
@@ -596,10 +371,10 @@ export async function runJobScout(params: JobScoutParams, deps: JobScoutDeps = {
     } else if (window < RANK_MIN_WINDOW_MS) {
       errors.push(`ranking skipped: ${Math.max(0, Math.round(window / 1000))}s left of the deadline`)
     } else {
-      progress('rank', `${Math.min(MAX_RANK_JOBS, up.ids.length)} jobs`)
+      progress('rank', `${Math.min(MAX_RANK_JOBS, rankIds.length)} jobs`)
       const rank = deps.rank ?? runIntelligenceBatch
       try {
-        const r = await rank(params.userId, selectJobsToRank(jobs, up.ids, MAX_RANK_JOBS, mission.preferences.direction), { concurrency: RANK_CONCURRENCY, deadlineMs: window, skip: { research: true }, label: `post-scout ranking · ${mission.name}` })
+        const r = await rank(params.userId, selectJobsToRank(rankJobs, rankIds, MAX_RANK_JOBS, mission.preferences.direction), { concurrency: RANK_CONCURRENCY, deadlineMs: window, skip: { research: true }, label: `post-scout ranking · ${mission.name}` })
         stats.jobs_ranked = Object.values(r.results).filter((x) => x.fit !== null).length
         stats.rank_cost_usd = Number(r.costUsd.toFixed(4))
         if (r.skipped.length) errors.push(`ranking: ${r.skipped.length} job(s) not started before the deadline`)
@@ -610,10 +385,7 @@ export async function runJobScout(params: JobScoutParams, deps: JobScoutDeps = {
     }
   }
 
-  return finish(run, 'succeeded', null, false, jobs.map((j, i) => ({
-    id: idFor(i), title: j.title, company_name: j.company_name, location_raw: j.location_raw, location_tier: j.location_tier, season_relevance: j.season_relevance,
-    employment_type: j.employment_type, verification_status: j.verification_status, canonical_url: j.canonical_url, source_types: [...new Set(j.sources.map((s) => s.source_type))],
-  })))
+  return finish(run, 'succeeded', null, false, resultJobs)
 
   async function finish(r: CareerRun, status: 'succeeded' | 'failed', error: string | null, migrationMissing: boolean, out: JobScoutResultJob[] = []): Promise<JobScoutResult> {
     // The deadline belongs to this run only; a later call in the same process
@@ -623,12 +395,16 @@ export async function runJobScout(params: JobScoutParams, deps: JobScoutDeps = {
     // The ranking batch runs under its own run row; its cost is added here so the scout's number is what the whole call cost.
     stats.cost_usd = Number((r.costUsd() + stats.rank_cost_usd).toFixed(4))
     stats.latency_ms = Date.now() - started
+    progress('done', `${out.length} jobs · ${stats.jobs_inserted} new`)
     await r.finish(status, { ...stats }, error)
     return {
       runId: r.runId,
       mission: { id: mission.id, name: mission.name },
       plan: plan ? { role_families: plan.role_families.map((f) => f.name), strategies: plan.strategies.map((s) => ({ name: s.name, kind: s.kind, priority: s.priority })), seed_companies_count: plan.seed_companies.length, adjacent_categories: plan.adjacent_categories } : null,
       stats, jobs: out, rejected, errors, costUsd: stats.cost_usd, latencyMs: stats.latency_ms, migrationMissing,
+      // A run that ran out of clock still succeeded at what it managed; the
+      // caller records it as `partial` so nobody reads it as a full sweep.
+      partial: stats.deadline_hit && status === 'succeeded',
     }
   }
 }
