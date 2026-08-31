@@ -128,6 +128,18 @@ docs, and disqualifying for resume-to-posting matching.
 
 ## A-bis. More free, no-auth ATS endpoints worth adapting
 
+**Twenty-three ATS platforms were probed live on 2026-08-31 — the full results,
+with the exact endpoint, the response shape and the gotcha for each, are in
+[ATS_ENDPOINTS.md](ATS_ENDPOINTS.md).** Headline: **thirteen** answer an
+unauthenticated request, five of them returning the full description in one
+call. Two widely-repeated write-ups are wrong — Taleo needs a `tz` header rather
+than the CSRF dance everyone describes, and all three commonly-cited Phenom
+endpoints 500 or 303. **Oracle ORC is the biggest single unlock for industrial
+employers**: site discovery is itself public, and one probed tenant held 2,147
+requisitions. Dayforce, JazzHR, ApplicantPro and Handshake are closed and are
+not to be attempted.
+
+
 Verified patterns (Cavuno, 2026-04-03) beyond the six already implemented:
 
 | ATS | Endpoint | Auth |
