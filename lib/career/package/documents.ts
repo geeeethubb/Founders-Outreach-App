@@ -14,8 +14,8 @@
 //
 // Retrying documents is NOT a redo. It reuses the package that already exists
 // — same version, same research, same approved changes, same recorded cost —
-// and restarts at the stage that failed. `redoPackage` is the only thing that
-// creates v2 (redo.ts).
+// and restarts at the stage that failed. The redo route is the only thing that
+// creates v2 (resolveRedoTarget in redo.ts + generateCompletePackage).
 
 import { loadDocument } from '../documents/store'
 import { isTempPath } from '../documents/tmp'
@@ -255,7 +255,19 @@ export async function finishPackage(params: FinishPackageParams): Promise<Packag
       cover_docx_path: letter.documents?.docxPath ?? null, cover_pdf_path: letter.documents?.pdfPath ?? null,
       cover_filename: letter.documents?.filenames.docx ?? null, qa: setQa(), cost_usd: costBase + run.costUsd(),
     })
-    if (!letter.fullText) return fail(`cover letter: ${letter.error ?? 'no letter produced'}`)
+    // A LETTER FAILURE IS NOT A PACKAGE FAILURE.
+    //
+    // This used to `fail(...)`, and a live batch proved what that costs: the
+    // cover-letter writer stopped without calling submit_result, and a package
+    // whose résumé DOCX was already built, stored and passing every QA check
+    // was recorded as `failed`. The founder had a usable tailored résumé and no
+    // way to see it. Most applications do not require a cover letter at all.
+    //
+    // So the résumé survives on its own. The letter's absence is an error the
+    // caller reports and `assessPackage` turns into an attention item — the
+    // package is not READY, but it is not destroyed either.
+    const letterFailed = !letter.fullText
+    if (letterFailed) errors.push(`cover letter: ${letter.error ?? 'no letter produced'}`)
     if (letter.flagged) warnings.push('cover letter has grounding findings — review before finalizing')
 
     // ─── Everything that must exist, checked against what does ───
@@ -263,8 +275,12 @@ export async function finishPackage(params: FinishPackageParams): Promise<Packag
     await io.updatePackage(pkg.id, { stage })
     const missing = missingArtifacts({
       resumeDocxPath, resumeQaPresent: qa.resume !== null,
-      coverDocxPath: letter.documents?.docxPath ?? null, coverQaPresent: qa.cover_letter !== null,
+      coverDocxPath: letter.documents?.docxPath ?? null,
+      coverQaPresent: qa.cover_letter !== null,
       coverLetterText: letter.fullText,
+      // With no letter there is nothing to require of one; requiring its DOCX
+      // here would reinstate the total failure this block just removed.
+      letterExpected: !letterFailed,
     })
     if (missing.length) return fail(`the package is incomplete — missing ${missing.join(', ')}`)
 

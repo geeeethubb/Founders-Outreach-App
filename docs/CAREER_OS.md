@@ -239,6 +239,51 @@ applications            state machine · job_snapshot_id · locked after APPLIED
        └─ cover_letters                            paragraphs · claim map · grounding result
 ```
 
+**One click, and two outcomes.** `POST /api/career/packages { job_id }` →
+`lib/career/package/auto.ts` `generateCompletePackage` runs the whole thing: extraction and
+research if the job needs them, evidence matching, tailoring, fact verification, auto-approval
+of every change the gates passed, the DOCX, the cover letter and its grounding gate, document
+QA, and finalisation. The answer is **READY TO APPLY** or **NEEDS ATTENTION**.
+
+It used to stop at `resume_review` and need four more clicks — approve the safe changes, build
+the documents, approve the letter, finalize — every one of which confirmed a decision code had
+already made. `safeToApprove` was always a deterministic predicate (`pending` **and**
+`SUPPORTED` **and** edit level ≤ 3), not a judgement, so pressing it was ceremony.
+
+**Nothing was relaxed.** The Fact Verifier still rules on every rewritten bullet, the precheck
+still blocks invented quantities, tools and keyword stuffing, `gateCoverLetter` still gates the
+letter, blocking document QA still fails the package, and a **Level-4 new bullet still requires
+a human yes** — it is now *surfaced* as an attention item instead of sitting `pending` where
+nobody was asked.
+
+`assessPackage` (`lib/career/package/assessment.ts`) is the pure decision, and it is the reason
+the screen and the server cannot disagree: the API finalises from it and the package UI imports
+the same function. It reads from the **saved rows**, never from a run's in-memory result. Its
+attention codes: `generation_failed` · `resume_missing` · `resume_qa_failed` ·
+`letter_unsupported_claim` · `letter_qa_failed` · `letter_row_missing` ·
+`change_needs_your_yes` · `no_apply_url`. Each carries what/why/**what to do**.
+
+**Graceful degradation, not total failure.** One rejected bullet keeps its original text and
+the package continues. A missing PDF is not a failure. A letter that fails grounding leaves the
+résumé intact and flags only the letter.
+
+**DOCX is the output.** `renderPdf` opts a PDF in; it is off by default because it costs ~106 s
+of Word COM per document. That disarmed the one-page gate, which was keyed on a rendered page
+count — so QA gained `one_page_safe`, an argument that survives without a renderer: QA has
+already proved fonts, sizes and `sectPr` are identical to the one-page master, so a body no
+**longer** than the master cannot need more pages. It blocks when the text grew and nothing
+rendered.
+
+**Batch.** `runPackageBatch` (`lib/career/package/batch.ts`), `npm run career:package-batch --
+--jobs a,b,c`. Concurrency 2, hard cap 25 jobs, duplicates collapsed before the cap is checked.
+One job failing never stops the rest. It produces documents and **never submits anything**.
+
+**The queue.** `bestOpportunities` (`lib/career/jobs/queue.ts`) is what is worth acting on:
+open, not dismissed, not already applied, ranked by fit with freshness as a bounded tiebreak
+(≤ +0.06, under half the narrowest fit band, so it can reorder near-ties and never outrank a
+better fit). Every excluded row increments exactly one counter — the list never shrinks
+silently. `?view=best` on the jobs API; **Best opportunities** in the filter bar.
+
 **Immutability after submission.** `applications.locked = true` is set when the state reaches
 `APPLIED`. A locked application's package is `locked` too; a later redo creates a new version
 and never overwrites the files that were submitted. Storage paths carry the package version, so
@@ -246,9 +291,12 @@ nothing can be written over.
 
 **Redo.** "Redo package (new version)" on the job's Package tab (and "Redo package" on every
 Applications row, which opens that tab with the confirm box) calls
-`POST /api/career/packages/[id]/redo` → `lib/career/package/redo.ts` `redoPackage`: the normal
-generate path for the job — intelligence reused when fresh, the résumé re-tailored, stop at
-review — as version N+1. The old version becomes `superseded` unless it is `locked`, in which
+`POST /api/career/packages/[id]/redo`, which runs the same COMPLETE flow as a first generation
+— intelligence reused when fresh, the résumé re-tailored, documents built, letter written,
+finalised — as version N+1. (`resolveRedoTarget` in `lib/career/package/redo.ts` owns the
+guards.) There is deliberately no stepwise redo — a second path that stopped at review would
+quietly reintroduce the four clicks. A redo must not quietly
+drop the founder back into the four-click walk the one-click flow replaced. The old version becomes `superseded` unless it is `locked`, in which
 case it stays exactly as submitted with the new version beside it. "Redo letter only" on the
 letter panel rewrites just the letter for the current package. `clonePackageVersion` is the
 no-model sibling: version N+1 carrying the old package's reviewed résumé patch and snapshots,

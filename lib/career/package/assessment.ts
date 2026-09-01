@@ -44,6 +44,7 @@ export interface AttentionItem {
     | 'letter_unsupported_claim'
     | 'letter_qa_failed'
     | 'letter_row_missing'
+    | 'letter_failed'
     | 'change_needs_your_yes'
     | 'no_apply_url'
   what: string
@@ -71,6 +72,8 @@ export interface PackageAssessmentInput {
    * decide was the one nobody was being asked about.
    */
   pendingChanges?: number
+  /** The writer produced no letter at all. The résumé is unaffected. */
+  letterFailed?: boolean
   /**
    * A cover-letter DOCX exists but its row could not be read. The row is where
    * the grounding verdict lives, so without it the letter's factual gate has
@@ -157,6 +160,15 @@ export function assessPackage(input: PackageAssessmentInput): PackageAssessment 
         action: 'Regenerate the cover letter, or apply with the résumé only.',
       })
     }
+  }
+
+  if (input.letterFailed) {
+    attention.push({
+      code: 'letter_failed',
+      what: 'The cover letter could not be written.',
+      why: 'The writer stopped before producing one. Your tailored résumé is complete and unaffected.',
+      action: 'Most applications do not need a cover letter — apply with the résumé, or regenerate to try the letter again.',
+    })
   }
 
   if (input.letterRowMissing) {

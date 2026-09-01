@@ -172,6 +172,9 @@ export async function generateCompletePackage(params: AutoPackageParams): Promis
     resumeQa: (pkg?.qa as { resume?: DocumentQaReport } | null)?.resume ?? null,
     letter: letter ? { blockingGrounding: letterBlocking, qa: letterQa } : null,
     letterRowMissing,
+    // The résumé exists and passed QA; only the letter is missing. Reported as
+    // its own attention item rather than as a failed package.
+    letterFailed: !letter && !pkg?.cover_docx_path && errors.some((e) => e.startsWith('cover letter:')),
     pendingChanges: pending,
     applyUrl,
   })

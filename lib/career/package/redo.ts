@@ -5,7 +5,11 @@
 // overwritten); a redo of any package therefore always inserts a new version
 // and leaves the old row and its files exactly where they are.
 //
-//   redoPackage          the founder's "Redo package (new version)": the full
+//   resolveRedoTarget    the guards + the job a redo is OF. The route pairs it
+//                        with generateCompletePackage, so a redo runs the same
+//                        one-click flow as a first generation. There is no
+//                        stepwise redo: a second path that stops at review
+//                        would quietly reintroduce the four clicks.
 //                        path — intelligence (cached when fresh), tailoring,
 //                        stop at résumé review. Costs what a package costs.
 //   clonePackageVersion  a new version that reuses the OLD package's reviewed
@@ -51,14 +55,6 @@ export async function resolveRedoTarget(userId: string, packageId: string): Prom
     return { jobId: null, fromStatus, error: 'package is still generating — wait for it to finish', migrationMissing: false }
   }
   return { jobId: got.pkg.job_id, fromStatus, error: null, migrationMissing: false }
-}
-
-export async function redoPackage(params: { userId: string; packageId: string }): Promise<RedoResult> {
-  const target = await resolveRedoTarget(params.userId, params.packageId)
-  const base = { fromPackageId: params.packageId, fromStatus: target.fromStatus }
-  if (!target.jobId) return { ...emptyResult(target.error ?? 'package not found', target.migrationMissing), ...base }
-  const r = await generatePackage({ userId: params.userId, jobId: target.jobId })
-  return { ...r, ...base }
 }
 
 export interface CloneResult {

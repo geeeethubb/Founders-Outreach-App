@@ -6,6 +6,92 @@ architecturally and why.
 
 ---
 
+## 2026-09-01 — One click from a job to a ready-to-submit package
+
+**Type:** productization · **Behavior change:** the package flow stops asking permission for
+decisions code has already made.
+
+### What was actually wrong
+
+Every safety check already ran automatically. What did not run was ACTING on the result. The
+flow stopped at `resume_review` and needed four more clicks:
+
+```
+Generate → Approve all safe → Approve résumé & build documents → Approve letter → Finalize
+```
+
+`safeToApprove` is `pending && SUPPORTED && edit_level <= 3` — a deterministic predicate, not a
+judgement. Pressing it was ceremony. Same for finalize, which mostly checked that a letter which
+had already passed `gateCoverLetter` had also been clicked.
+
+### What changed
+
+`generateCompletePackage` runs the lot and answers **READY TO APPLY** or **NEEDS ATTENTION**.
+`assessPackage` is the pure decision, read from the SAVED rows rather than a run's return value,
+and the package UI imports the same function so the badge cannot disagree with the status.
+
+**Nothing was relaxed.** Fact Verifier, precheck, grounding gate, blocking document QA, and the
+human yes for a Level-4 new bullet all still decide. Four clicks removed, zero checks removed.
+
+### An adversarial review of this change found four holes; all are fixed
+
+1. **The one-page gate was keyed on a rendered page count**, so a DOCX-only run disarmed it end
+   to end *and* QA reported "passed". Fixed with an argument that survives without a renderer:
+   QA already proves fonts, sizes and `sectPr` are identical to the one-page master, so a body
+   no LONGER than the master cannot need more pages. `one_page_safe` blocks when the text grew
+   and nothing rendered.
+2. **A Level-4 bullet that passed every gate stayed `pending` for ever** — uncounted, invisible
+   in a finished package, and unapprovable once the status moved on. The one class automation
+   may not decide was the one class nobody was asked about. Now `change_needs_your_yes`.
+3. **A letter DOCX can exist while its row does not.** The read error was dropped and a missing
+   row read as "no letter", so the grounding verdict was never consulted. Now
+   `letter_row_missing`.
+4. **Per-change persist failures** went to `r.errors` while `r.error` stayed null, so the
+   summary could claim changes the document does not contain.
+
+### And the live run found a fifth
+
+A five-job batch produced a Solid Power package whose résumé DOCX was built, stored and passing
+every QA check, and whose cover-letter writer then stopped without calling `submit_result`. The
+package was recorded **`failed`** and the usable résumé was unreachable. Most applications do
+not require a cover letter at all. A letter failure is now `letter_failed` — an attention item
+beside an intact résumé — and `missingArtifacts` takes `letterExpected`.
+
+Re-run after the fix: **READY TO APPLY in 92.7 s for $0.43** (intelligence was cached).
+
+### Measured — five real jobs, batch, concurrency 2
+
+```
+3 ready automatically · 2 needed attention · 0 failed        $5.7577 · 825 s wall
+  Kairos Power   Nuclear Engineering Intern   READY   $1.12  325 s
+  Solid Power    R&D Intern (Catholyte)       letter writer died → fixed, now READY
+  Freeform       Process Engineering Intern   1 new bullet needs a yes  (correct)
+  Solcoa         Metallurgical Eng Intern     READY   $0.56  163 s
+  Anduril        2027 Manufacturing Eng       READY   $1.19  325 s
+
+approval clicks on a successful package: 0
+unsupported claims in final documents:   0
+blocking DOCX QA failures:               0
+```
+
+Freeform is the interesting one: the tailor produced a **Level-4 new bullet that passed
+verification** — the first `new` change seen in production — and before finding #2 it would have
+vanished silently into a package marked ready.
+
+### Also
+
+DOCX is the default output (`renderPdf` opts a PDF in). Batch generation at concurrency 2 with a
+hard cap of 25. A **Best opportunities** view — open, not dismissed, not already applied, fit
+first with freshness a bounded tiebreak. `redoPackage` was deleted rather than left as a second
+path that would quietly reintroduce the four clicks. The `READY_TO_APPLY` audit event records
+actor `system` on this path, because no user pressed anything.
+
+**External applications are still never submitted. The last action is still a link.**
+
+`tsc` clean · `test:career` 36/36 · `next build` clean.
+
+---
+
 ## 2026-08-31 — Résumé tailoring: the objective reverses
 
 **Type:** agent behaviour (prompt 2.0.0) + migration 018 + eval rename ·

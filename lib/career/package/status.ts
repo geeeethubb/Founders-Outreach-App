@@ -114,6 +114,12 @@ export interface PackageArtifacts {
   coverDocxPath: string | null
   coverQaPresent: boolean
   coverLetterText: string | null
+  /**
+   * False when the letter could not be written at all. A letter failure must
+   * not destroy a package whose résumé is complete — most applications do not
+   * require one — so with no letter expected there is nothing to miss.
+   */
+  letterExpected?: boolean
 }
 
 /**
@@ -125,8 +131,10 @@ export function missingArtifacts(a: PackageArtifacts): string[] {
   const missing: string[] = []
   if (!a.resumeDocxPath) missing.push('résumé DOCX')
   if (!a.resumeQaPresent) missing.push('résumé QA report')
-  if (!a.coverLetterText) missing.push('cover letter text')
-  if (!a.coverDocxPath) missing.push('cover letter DOCX')
-  if (!a.coverQaPresent) missing.push('cover letter QA report')
+  if (a.letterExpected !== false) {
+    if (!a.coverLetterText) missing.push('cover letter text')
+    if (!a.coverDocxPath) missing.push('cover letter DOCX')
+    if (!a.coverQaPresent) missing.push('cover letter QA report')
+  }
   return missing
 }
