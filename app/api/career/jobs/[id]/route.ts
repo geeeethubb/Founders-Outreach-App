@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { recoverStalePackages } from '@/lib/career/package/recover'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { isDynamicUsage } from '@/lib/http/dynamic'
 import { getJob } from '@/lib/career/jobs/store'
@@ -43,12 +44,29 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
         return { ...w, contact: c ? { id: c.id, name: c.name, title: c.role, company: c.company, email: c.email, linkedin_url: c.linkedin_url } : null }
       })
 
-    const { data: packages } = await db
-      .from('application_packages')
-      .select('id, version, status, stage, resume_filename, cover_filename, resume_docx_path, resume_pdf_path, cover_docx_path, cover_pdf_path, qa, error, created_at, updated_at')
-      .eq('user_id', user.id)
-      .eq('job_id', params.id)
-      .order('version', { ascending: false })
+    // Recover before reading. A package whose worker died is finalised HERE, on
+    // the request that is about to render it, rather than waiting for a cron
+    // that may not fire — which is exactly how a Rondo Energy package showed
+    // "Generating…" for a day. Best-effort: a sweep that fails must never stop
+    // the page from loading.
+    try {
+      await recoverStalePackages(user.id, { jobId: params.id })
+    } catch {
+      // The row stays non-terminal and the next read tries again.
+    }
+
+    // Migrations here are applied BY HAND, so there is always a window where the
+    // code knows a column the database lacks. Asking for the liveness columns
+    // and failing would black out the whole Package tab over a nice-to-have.
+    const loadPackages = async (select: string) =>
+      db
+        .from('application_packages')
+        .select(select)
+        .eq('user_id', user.id)
+        .eq('job_id', params.id)
+        .order('version', { ascending: false })
+    let { data: packages, error: pkgErr } = await loadPackages('id, version, status, stage, resume_filename, cover_filename, resume_docx_path, resume_pdf_path, cover_docx_path, cover_pdf_path, qa, error, created_at, updated_at, generation_started_at, generation_deadline_at, last_heartbeat_at')
+    if (pkgErr) ({ data: packages } = await loadPackages('id, version, status, stage, resume_filename, cover_filename, resume_docx_path, resume_pdf_path, cover_docx_path, cover_pdf_path, qa, error, created_at, updated_at'))
 
     return NextResponse.json({
       job,

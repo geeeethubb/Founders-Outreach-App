@@ -23,6 +23,7 @@ import { DEFAULT_PACKAGE_BUDGET, startCareerRun } from '../runs'
 import { runTailoringPipeline } from '../tailor/pipeline'
 import { jobTermsFor, tailorJobFromOpportunity } from '../tailor/render'
 import type { ToolContext } from '@/lib/agents/runtime/types'
+import type { GenerationDeadline } from './deadline'
 import type { ApplicationPackage, ApplicationState, PackageStatus } from '../types'
 import { ensureJobSnapshot, getCoverLetter, getPackage, insertPackage, insertResumePatch, nextPackageVersion, supersedePackages, updatePackage } from './persist'
 import { bankIsUsable, failed, MIGRATION, tailorMapFrom, type PackageDeps, type PackageResult, type PackageStage } from './shared'
@@ -41,6 +42,8 @@ export async function generatePackage(params: {
   jobId: string
   ctx?: ToolContext
   deps?: PackageDeps
+  /** The package's shared clock, so intelligence stages are bound by it too. */
+  deadline?: GenerationDeadline
   onProgress?: (stage: PackageStage | IntelligenceStage, detail: string) => void
 }): Promise<PackageResult> {
   const progress = params.onProgress ?? (() => {})
@@ -95,7 +98,7 @@ export async function generatePackage(params: {
     stage = 'intelligence'
     progress('intelligence', context.job.company_name)
     await updatePackage(pkg.id, { stage })
-    const intel = await runJobIntelligence({ userId: params.userId, jobId: params.jobId, ctx, run, context, onProgress: progress })
+    const intel = await runJobIntelligence({ userId: params.userId, jobId: params.jobId, ctx, run, context, deadline: params.deadline, onProgress: progress })
     errors.push(...intel.errors)
     await updatePackage(pkg.id, {
       company_research_snapshot: intel.research ? (intel.research as unknown as Record<string, unknown>) : null,

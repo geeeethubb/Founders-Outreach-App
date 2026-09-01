@@ -23,6 +23,7 @@ import { runEvidenceMatcher, evidenceMatcherPrompt, type EvidenceMatch } from '@
 import { runNetworkPathfinder, type JudgedPath } from '@/lib/agents/network-pathfinder'
 import type { ToolContext } from '@/lib/agents/runtime/types'
 import { mapWithConcurrency } from '@/lib/scouting/concurrency'
+import { GenerationDeadline, withDeadline } from '../package/deadline'
 import { renderPreferences, renderSkills, renderStories } from '../evidence/render'
 import { getRelevantPersonalEvidence, renderRelevantEvidence } from '../evidence/retrieval'
 import { retrievalTargetForJob } from '../evidence/retrieval-targets'
@@ -77,6 +78,16 @@ export interface IntelligenceParams {
    * the evals run the same agents through the same code this way.
    */
   noDb?: boolean
+  /**
+   * The package's shared clock. When present, each intelligence stage is bound
+   * by what is left rather than by its own patience, and a stage that runs out
+   * DEGRADES rather than blocking: research is enrichment, and the fit
+   * evaluator, the matcher and the letter all already handle its absence
+   * (`renderCompanyResearchForPrompt` returns "(no research yet)").
+   *
+   * Absent — the CLI, the evals, the batch helper — behaviour is unchanged.
+   */
+  deadline?: GenerationDeadline
   onProgress?: (stage: IntelligenceStage, detail: string) => void
 }
 
@@ -239,20 +250,38 @@ export async function runJobIntelligence(params: IntelligenceParams): Promise<In
   } else if (!research) {
     progress('research', job.company_name)
     try {
-      const res = await runCompanyResearcher(researchInputFrom(job, company, mission), ctx)
-      const agentRunId = await run.trace(res, { job_id: job.id, company_id: company?.id ?? null })
-      if (res.output) {
-        research = res.output
+      // THE CRITICAL PATH, AND THE ONE THAT CAN HANG. Company research is a
+      // 7-step agent with web search; measured cold runs take 126–304s, which
+      // on its own can exhaust a 5-minute package. Bounded here and allowed to
+      // return nothing: a package built from the job description alone is worth
+      // far more than one that never arrives.
+      const researchBudget = params.deadline ? params.deadline.budgetFor('research') : 0
+      const res = params.deadline
+        ? await withDeadline(
+            'company research',
+            researchBudget,
+            () => runCompanyResearcher(researchInputFrom(job, company, mission), ctx),
+            { onTimeout: () => null }
+          )
+        : await runCompanyResearcher(researchInputFrom(job, company, mission), ctx)
+      if (res === null) {
+        errors.push(`research: no result within ${Math.round(researchBudget / 1000)}s — continuing from the job description and any stored company data`)
+      } else {
+      const done = res
+      const agentRunId = await run.trace(done, { job_id: job.id, company_id: company?.id ?? null })
+      if (done.output) {
+        research = done.output
         if (company && !noDb) {
           const w = await persistCompanyResearch({
             userId: params.userId, runId: run.runId, companyId: company.id, companyName: job.company_name,
-            agentRunId, research, promptVersion: res.trace.prompt_version,
+            agentRunId, research, promptVersion: done.trace.prompt_version,
           })
           if (w.error) errors.push(`research persist: ${w.error}`)
           if (w.rejected) errors.push(`research: ${w.rejected} unsourced claim(s) rejected by the database`)
         }
       } else {
-        errors.push(`research ${res.status}: ${res.error ?? 'no output'}`)
+        errors.push(`research ${done.status}: ${done.error ?? 'no output'}`)
+      }
       }
     } catch (e) {
       errors.push(`research: ${e instanceof Error ? e.message : String(e)}`)

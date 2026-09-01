@@ -36,6 +36,16 @@ export const STALE_DISPLAY_MS = 120_000
 /** A progress `detail` is a sentence for a human, not a payload. */
 export const MAX_DETAIL = 300
 
+/**
+ * A package run's own SLA — five minutes, the same promise the package row
+ * carries. Deliberately not `scoutDeadlineMs()`: a scout run may legitimately
+ * take twenty minutes, and borrowing its patience is what let a dead package
+ * run look alive for a day.
+ */
+export const PACKAGE_RUN_DEADLINE_MS = 5 * 60 * 1000
+/** Slack for a worker finishing just past the wall before it writes its result. */
+export const PACKAGE_RUN_GRACE_MS = 60_000
+
 export interface ScoutRunProgressEvent {
   at: string
   stage: string
@@ -152,6 +162,17 @@ export function isRunStale(
   if (row.status !== 'running') return false
   const beat = Date.parse(String(row.heartbeat_at ?? ''))
   if (!Number.isFinite(beat)) {
+    // A PACKAGE run has a hard 5-minute SLA and, before this, never
+    // heartbeated — which is precisely how a Rondo Energy package's run row sat
+    // at 'running' for a day: `kind !== 'job_scout'` returned false here, so it
+    // could never be declared stale, so nothing ever reaped it. A pulseless
+    // package run is judged on `started_at` against its own much shorter
+    // deadline, not the scout's.
+    if (row.kind === 'package') {
+      const startedPkg = Date.parse(String(row.started_at ?? ''))
+      if (!Number.isFinite(startedPkg)) return false
+      return now - startedPkg > PACKAGE_RUN_DEADLINE_MS + PACKAGE_RUN_GRACE_MS
+    }
     if (row.kind !== 'job_scout') return false
     const started = Date.parse(String(row.started_at ?? ''))
     if (!Number.isFinite(started)) return false

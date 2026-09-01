@@ -88,7 +88,8 @@
     "test:career-batch": "tsx scripts/test-career-batch.ts",
     "test:career-queue": "tsx scripts/test-career-queue.ts",
     "career:package-batch": "tsx scripts/career-package-batch.ts",
-    "test:career-status-letter": "tsx scripts/test-career-status-letter.ts"
+    "test:career-status-letter": "tsx scripts/test-career-status-letter.ts",
+    "test:career-deadline": "tsx scripts/test-career-deadline.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.116.0",

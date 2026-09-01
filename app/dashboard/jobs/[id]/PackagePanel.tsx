@@ -206,7 +206,7 @@ export default function PackagePanel({ jobId, job, packages, view, application, 
         </div>
       )}
 
-      {generating && <PackageProgress stage={stage} />}
+      {generating && <PackageProgress stage={stage} startedAt={latest?.created_at ?? null} />}
       {busy === 'resume' && <PackageProgress stage={null} phase="documents" />}
 
       {latest && view && !generating && (

@@ -266,7 +266,15 @@ async function testReaper() {
   db.seed({ id: 'run-done', user_id: USER, status: 'succeeded', heartbeat_at: ago(600_000) })
   // Package and verify runs share this table and never heartbeat — the reaper
   // must not touch them, whatever their age.
+  // THE RONDO ROW: kind='package', no heartbeat, an hour old. This used to be
+  // seeded to prove package runs were skipped — which is the bug, not a feature:
+  // the skip is why a dead package run sat at 'running' for a day.
   db.seed({ id: 'run-package', user_id: USER, kind: 'package', status: 'running', started_at: ago(3_600_000) })
+  // A package run that started twenty seconds ago is doing its job. Reaping it
+  // would be the opposite failure, so it is asserted too.
+  db.seed({ id: 'run-package-fresh', user_id: USER, kind: 'package', status: 'running', started_at: ago(20_000) })
+  // A verify run stays nobody's business: short, synchronous, no user-visible row.
+  db.seed({ id: 'run-verify', user_id: USER, kind: 'verify', status: 'running', started_at: ago(3_600_000) })
   db.seed({ id: 'run-no-pulse', user_id: USER, status: 'running', started_at: ago(3_600_000) })
   // THE ONE THAT MATTERS: a healthy local run, silent for 301s inside a 1200s
   // deadline. A scout is legitimately quiet for minutes (one live planner call
@@ -280,13 +288,15 @@ async function testReaper() {
   const r1 = await reapStaleRuns(USER, { db, now, staleMs: 300_000 })
   check('a quiet run still inside its own deadline is NOT reaped', db.rows.get('run-quiet-working')!.status === 'running')
   check('a run past its deadline and silent IS reaped', db.rows.get('run-overdue')!.status === 'failed', db.rows.get('run-overdue')!.status)
-  check('three dead runs are reaped', r1.reaped.length === 3, r1.reaped.map((x) => `${x.runId}:${x.status}`).join(', '))
+  check('four dead runs are reaped, the stale package run among them', r1.reaped.length === 4, r1.reaped.map((x) => `${x.runId}:${x.status}`).join(', '))
   check("a dead run that stored jobs is 'partial'", db.rows.get('run-dead-jobs')!.status === 'partial')
   check("a dead run that stored nothing is 'failed'", db.rows.get('run-dead-empty')!.status === 'failed')
   check('the error says the worker stopped responding', /stopped responding/.test(String(db.rows.get('run-dead-empty')!.error)))
   check('a live run is untouched', db.rows.get('run-alive')!.status === 'running')
   check('a finished run is untouched', db.rows.get('run-done')!.status === 'succeeded')
-  check('a package run is untouched (different kind)', db.rows.get('run-package')!.status === 'running')
+  check('a stale PACKAGE run is reaped — it has a 5-minute SLA of its own', db.rows.get('run-package')!.status === 'failed', db.rows.get('run-package')!.status)
+  check('a package run inside its SLA is untouched', db.rows.get('run-package-fresh')!.status === 'running', db.rows.get('run-package-fresh')!.status)
+  check('a verify run is still nobody’s business', db.rows.get('run-verify')!.status === 'running', db.rows.get('run-verify')!.status)
   check('a run that never heartbeat is untouched', db.rows.get('run-no-pulse')!.kind !== 'job_scout' || true)
 
   // A SCOUT run with no pulse is a different animal: a row from before durable

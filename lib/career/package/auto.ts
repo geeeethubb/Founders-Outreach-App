@@ -16,6 +16,12 @@
 // The ready/needs-attention DECISION lives in ./assessment — pure, and
 // importable by the UI so the screen and the server cannot disagree.
 
+import {
+  GenerationDeadline,
+  emptyMetrics,
+  logStage,
+  type GenerationMetrics,
+} from './deadline'
 import type { PackageStage } from './shared'
 import type { DocumentQaReport, JobOpportunity, PackageStatus } from '../types'
 import {
@@ -63,6 +69,13 @@ export interface AutoPackageParams {
    * did not run — see PDF_SKIPPED_WARNING.
    */
   renderPdf?: boolean
+  /**
+   * The shared clock. Tests inject one with a two-second budget to exercise the
+   * timeout paths without waiting five minutes.
+   */
+  deadline?: GenerationDeadline
+  /** Shorthand for a custom total budget when no deadline object is supplied. */
+  totalMs?: number
   onProgress?: (stage: string, detail: string) => void
   /** Test seam. Production passes nothing. */
   deps?: {
@@ -82,7 +95,12 @@ export interface AutoPackageParams {
  * package row with its résumé patch, and the assessment reports what is missing
  * instead of throwing away the work already paid for.
  */
-export async function generateCompletePackage(params: AutoPackageParams): Promise<AutoPackageResult> {
+async function runGeneration(
+  params: AutoPackageParams,
+  deadline: GenerationDeadline,
+  metrics: GenerationMetrics,
+  claim: (packageId: string) => void
+): Promise<AutoPackageResult> {
   const started = nowMs()
   const progress = params.onProgress ?? (() => {})
   const { generatePackage, finishPackage, finalizePackage } = await import('./orchestrator')
@@ -99,6 +117,10 @@ export async function generateCompletePackage(params: AutoPackageParams): Promis
   const errors: string[] = []
   let costUsd = 0
 
+  // ONE clock for the whole generation. Every stage asks it what is left; no
+  // stage gets its own five minutes. See deadline.ts for why this is absolute
+  // rather than per-stage.
+
   const bail = (error: string, extra: Partial<AutoPackageResult> = {}): AutoPackageResult => ({
     packageId: null, outcome: 'needs_attention', status: null, stage: null, version: null, applicationId: null,
     attention: assessPackage({ hardError: error, resumeDocxPath: null, resumeQa: null, letter: null, applyUrl: null }).attention,
@@ -111,12 +133,18 @@ export async function generateCompletePackage(params: AutoPackageParams): Promis
 
   // 1 — intelligence + tailoring + fact verification.
   progress('generate', 'research, evidence match, tailoring and fact verification')
-  const g = await gen({ userId: params.userId, jobId: params.jobId, onProgress: (s, d) => progress(s, d) })
+  const g = await gen({ userId: params.userId, jobId: params.jobId, deadline, onProgress: (s, d) => progress(s, d) })
   costUsd += g.costUsd
   warnings.push(...g.warnings)
   errors.push(...g.errors)
   if (g.migrationMissing) return { ...bail(g.error ?? 'migration missing'), migrationMissing: true }
   if (!g.packageId) return bail(g.error ?? 'package generation produced no package')
+  // From here the wrapper's `finally` can finalise this row even if we never
+  // return normally. This is the line that makes "never stuck at generating"
+  // true rather than aspirational.
+  claim(g.packageId)
+  await beat(g.packageId, 'tailoring', deadline, metrics)
+  logStage(g.packageId, 'generate', deadline, metrics, g.stage ?? '')
 
   // 2 — approve everything the gates already passed. Deterministic: pending AND
   // SUPPORTED. Nothing here is a judgement about a bullet's quality.
@@ -135,7 +163,33 @@ export async function generateCompletePackage(params: AutoPackageParams): Promis
   const counts: AutoPackageCounts = { proposed, applied, rejected, pending }
 
   // 3 — documents and the letter.
+  //
+  // Checked against the clock BEFORE starting: document generation plus a cover
+  // letter is the most expensive remaining step, and beginning it with thirty
+  // seconds left produces nothing except a package that blows the deadline. The
+  // résumé patch is already saved, so stopping here loses no paid work — the
+  // package lands in resume_review and a retry finishes it for the price of the
+  // documents alone.
+  if (deadline.remainingMs() < MIN_DOCUMENTS_MS) {
+    const detail = `only ${Math.round(deadline.remainingMs() / 1000)}s left; documents were not started`
+    logStage(g.packageId, 'documents_skipped', deadline, metrics, detail)
+    errors.push(`documents: ${detail} — the résumé changes are saved; retry to build the documents`)
+    return {
+      packageId: g.packageId, outcome: 'needs_attention', status: 'resume_review', stage: 'resume_review',
+      version: g.version ?? null, applicationId: g.applicationId ?? null,
+      attention: assessPackage({
+        hardError: null, resumeDocxPath: null, resumeQa: null, letter: null,
+        applyUrl: 'pending', pendingChanges: counts.pending ?? 0,
+      }).attention,
+      resume: { ...counts, summary: resumeChangeSummary(counts), noChangeReason: g.resume?.noChangeReason ?? null },
+      letter: null,
+      documents: { resumeDocx: null, resumePdf: null, coverDocx: null, coverPdf: null },
+      applyUrl: null, costUsd: Number(costUsd.toFixed(4)), elapsedMs: deadline.elapsedMs(),
+      warnings, errors, migrationMissing: false,
+    }
+  }
   progress('documents', 'building the DOCX and writing the cover letter')
+  await beat(g.packageId, 'documents', deadline, metrics)
   const f = await finish({ userId: params.userId, packageId: g.packageId, skipPdf: params.renderPdf !== true, onProgress: (s, d) => progress(s, d) })
   costUsd += f.costUsd
   warnings.push(...f.warnings)
@@ -228,4 +282,169 @@ export async function generateCompletePackage(params: AutoPackageParams): Promis
 /** Wall clock, isolated so the rest of this module stays testable. */
 function nowMs(): number {
   return Date.now()
+}
+
+
+// ─── Heartbeats ──────────────────────────────────────────────────────────────
+
+/**
+ * Documents plus a cover letter need roughly this long. Starting them with less
+ * left produces nothing and blows the deadline; stopping instead keeps the
+ * résumé patch, which is already paid for and saved.
+ */
+const MIN_DOCUMENTS_MS = 60_000
+
+/**
+ * "I am still here, and this is what I am doing."
+ *
+ * Best-effort by design: a heartbeat that throws must never be the reason a
+ * generation fails. A pre-019 database simply has nowhere to put it, and the
+ * reaper falls back to judging such rows on `updated_at`.
+ */
+async function beat(packageId: string, stage: string, deadline: GenerationDeadline, metrics: GenerationMetrics): Promise<void> {
+  try {
+    const { updatePackage } = await import('./persist')
+    const now = new Date(deadline.now()).toISOString()
+    await updatePackage(packageId, {
+      last_heartbeat_at: now,
+      stage_started_at: now,
+      generation_started_at: new Date(deadline.startedAt).toISOString(),
+      generation_deadline_at: new Date(deadline.deadlineAt).toISOString(),
+      generation_metrics: { ...metrics, ...deadline.snapshot() },
+    } as never)
+  } catch {
+    // Liveness is an optimisation of recovery, never a precondition for work.
+  }
+}
+
+// ─── The guarantee ───────────────────────────────────────────────────────────
+
+/**
+ * Generate a complete package, and ALWAYS reach a terminal state.
+ *
+ * This wrapper is the whole point of the incident fix. `runGeneration` above is
+ * the happy path and its degradations; this is what happens when the happy path
+ * does not return — a throw from a stage that has no try/catch of its own, an
+ * unhandled rejection deep in a provider, a deadline blown past.
+ *
+ * Three properties it guarantees, in order of how badly they were missing:
+ *
+ *   1. THE ROW NEVER STAYS 'generating'. Whatever happens — return, throw, or
+ *      deadline — the `finally` writes a terminal status. Before this, the only
+ *      thing that could move a generating package was the process generating it.
+ *   2. THE DEADLINE IS ABSOLUTE. `Promise.race` against the clock means a stage
+ *      that hangs cannot hold the pipeline past five minutes, even though the
+ *      hung work itself cannot be cancelled (see withDeadline's caveat).
+ *   3. THE FAILURE IS LEGIBLE. The real error is captured and persisted, not
+ *      swallowed into a spinner.
+ *
+ * What it deliberately does NOT do is kill the underlying work. JavaScript
+ * cannot abandon an `await`. If a provider call is genuinely wedged, this
+ * returns on time and the orphaned work finishes into a void — which is why the
+ * database-level reaper in ./recover.ts exists as the backstop.
+ */
+export async function generateCompletePackage(params: AutoPackageParams): Promise<AutoPackageResult> {
+  const deadline = params.deadline ?? new GenerationDeadline({ totalMs: params.totalMs })
+  const metrics = emptyMetrics()
+  const startedIso = new Date(deadline.startedAt).toISOString()
+
+  // Captured the moment the row exists, so the `finally` can finalise a package
+  // whose id never made it back to us through a normal return.
+  let ownedPackageId: string | null = null
+  const claim = (id: string) => {
+    ownedPackageId = id
+  }
+
+  let result: AutoPackageResult | null = null
+  let thrown: unknown = null
+  let timedOut = false
+
+  // ARM THE PROVIDER'S OWN DEADLINE. This is the single most important line for
+  // the five-minute guarantee, and it was the one genuinely missing piece.
+  //
+  // anthropic/client.ts already retries a failed call four times at a 120s
+  // timeout each — and a timeout throws with `status === undefined`, which its
+  // retry policy treats as "transient, keep going". So ONE logical LLM call is
+  // worth up to 8.2 minutes, and a package makes up to 76 of them: a measured
+  // worst case of ten and a half hours, against a route that promises 300s.
+  //
+  // The client has always had a deadline check that turns a retry into a clean
+  // error — `setAnthropicDeadline` — but its ONLY caller was the scout
+  // orchestrator. The package path never armed it, so `pastRunDeadline()`
+  // always returned false and the retries were unbounded. Arming it here is
+  // what makes every downstream call give up when this generation is out of
+  // time, instead of politely retrying past it.
+  const { withAnthropicDeadline } = await import('@/lib/providers/anthropic/client')
+
+  try {
+    result = await Promise.race([
+      withAnthropicDeadline(deadline.deadlineAt, () => runGeneration(params, deadline, metrics, claim)),
+      new Promise<never>((_, reject) => {
+        const t = setTimeout(() => {
+          timedOut = true
+          reject(new Error(`package generation exceeded its ${Math.round(deadline.totalMs / 1000)}s deadline`))
+        }, deadline.remainingMs())
+        // Never hold the process open for the deadline timer alone.
+        if (typeof (t as unknown as { unref?: () => void }).unref === 'function') (t as unknown as { unref: () => void }).unref()
+      }),
+    ])
+    return result
+  } catch (e) {
+    thrown = e
+    const message = e instanceof Error ? e.message : String(e)
+    logStage(ownedPackageId ?? 'unknown', timedOut ? 'timed_out' : 'crashed', deadline, metrics, message)
+    return {
+      packageId: ownedPackageId,
+      outcome: 'needs_attention',
+      status: 'failed',
+      stage: null,
+      version: null,
+      applicationId: null,
+      attention: assessPackage({
+        hardError: timedOut
+          ? `Generation ran past its ${Math.round(deadline.totalMs / 1000)}-second limit and was stopped. Anything already finished was saved.`
+          : message,
+        resumeDocxPath: null,
+        resumeQa: null,
+        letter: null,
+        applyUrl: null,
+      }).attention,
+      resume: { proposed: 0, applied: 0, rejected: 0, summary: '', noChangeReason: null },
+      letter: null,
+      documents: { resumeDocx: null, resumePdf: null, coverDocx: null, coverPdf: null },
+      applyUrl: null,
+      costUsd: 0,
+      elapsedMs: deadline.elapsedMs(),
+      warnings: [],
+      errors: [message],
+      migrationMissing: false,
+    }
+  } finally {
+    // THE INVARIANT. Nothing below may throw — a failure to record the failure
+    // must not become a second failure — so every write is best-effort and the
+    // whole block is wrapped.
+    try {
+      const id = ownedPackageId
+      const stillRunning = thrown !== null || (result !== null && result.status === 'generating')
+      if (id && stillRunning) {
+        const { updatePackage } = await import('./persist')
+        const message = timedOut
+          ? `Generation ran past its ${Math.round(deadline.totalMs / 1000)}-second limit and was stopped before finishing.`
+          : thrown instanceof Error
+            ? thrown.message
+            : 'Generation stopped unexpectedly.'
+        await updatePackage(id, {
+          status: 'failed',
+          error: message,
+          last_error: message,
+          generation_started_at: startedIso,
+          generation_finished_at: new Date(deadline.now()).toISOString(),
+          generation_metrics: { ...metrics, ...deadline.snapshot() },
+        } as never)
+      }
+    } catch {
+      // Deliberately silent: the caller already has the real error, and the
+      // reaper will finalise the row on the next read if this write failed.
+    }
+  }
 }

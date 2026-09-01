@@ -48,9 +48,15 @@ export async function reapStaleRuns(
 
   const reaped: ReapResult['reaped'] = []
   for (const row of rows) {
-    // Scout runs only. A package or verify run in the same table has no
-    // heartbeat and is nobody's business here.
-    if (row.kind && row.kind !== 'job_scout') continue
+    // Scout runs AND package runs. Verify runs are still nobody's business
+    // here — they are short, synchronous and leave no user-visible row.
+    //
+    // Package runs were excluded on the reasoning that they "have no heartbeat
+    // and are nobody's business". They have no heartbeat precisely because
+    // nothing made them send one, and the result was a run row stuck at
+    // 'running' for a day behind a package stuck at 'generating'. `isRunStale`
+    // now judges them on their own five-minute deadline.
+    if (row.kind && row.kind !== 'job_scout' && row.kind !== 'package') continue
     if (!isRunStale(row, staleMs, now, { deadlineMs: opts.deadlineMs })) continue
     const { counts } = await db.countJobs(row.id, userId)
     const status: 'partial' | 'failed' = counts.total > 0 ? 'partial' : 'failed'

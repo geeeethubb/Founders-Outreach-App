@@ -103,14 +103,42 @@ let callBudget = Number(process.env.ANTHROPIC_MAX_CALLS_PER_RUN ?? 500)
 // that would retry after it returns an error instead, and the run degrades
 // the way every other failure does.
 
-let runDeadlineMs: number | null = null
+// A SET of active deadlines, not one slot. The single slot was a bug the moment
+// two runs overlapped: batch generation runs two packages at once, and whichever
+// finished first called setAnthropicDeadline(null) and stripped the deadline
+// from the one still working — restoring exactly the unbounded retries this
+// mechanism exists to prevent.
+//
+// `pastRunDeadline` compares against the EARLIEST active deadline. Across
+// independent runs that is deliberately conservative: it can only make retries
+// stop sooner, never later. Stopping sooner degrades gracefully — the caller
+// sees a failed call and handles it like any other — while stopping later is
+// the failure mode being fixed. A shared retry budget is worth that.
+const activeDeadlines = new Set<number>()
 
 export function setAnthropicDeadline(epochMs: number | null): void {
-  runDeadlineMs = epochMs
+  if (epochMs === null) activeDeadlines.clear()
+  else activeDeadlines.add(epochMs)
+}
+
+/**
+ * Arm a deadline for the duration of `fn` and remove exactly that one
+ * afterwards, leaving any concurrent run's deadline in place.
+ */
+export async function withAnthropicDeadline<T>(epochMs: number, fn: () => Promise<T>): Promise<T> {
+  activeDeadlines.add(epochMs)
+  try {
+    return await fn()
+  } finally {
+    activeDeadlines.delete(epochMs)
+  }
 }
 
 function pastRunDeadline(): boolean {
-  return runDeadlineMs !== null && Date.now() > runDeadlineMs
+  if (activeDeadlines.size === 0) return false
+  let earliest = Infinity
+  for (const d of activeDeadlines) if (d < earliest) earliest = d
+  return Date.now() > earliest
 }
 
 export function setAnthropicBudget(n: number): void {
@@ -328,6 +356,15 @@ export async function anthropicStructured<T>(params: StructuredParams<T>): Promi
       // A transport error will not be fixed by asking again in the same way;
       // only schema-validation failures are worth another attempt.
       if (result.error && !/schema validation|no .* tool call/i.test(result.error)) break
+      // TRUNCATION IS NOT A VALIDATION FAILURE. `no ... tool call
+      // (stop_reason=max_tokens)` matches the pattern above, so a reply that ran
+      // out of tokens used to be re-sent VERBATIM — the same prompt, the same
+      // ceiling, the same truncation, three times, at up to 8 minutes each. The
+      // agent loop learned this lesson (loop.ts handles max_tokens separately);
+      // this path never did. Retrying identically cannot help, so stop.
+      if (result.error && /max_tokens/i.test(result.error)) break
+      // Nor is there any point starting another attempt past the run's deadline.
+      if (pastRunDeadline()) break
     }
     return last!
   }
