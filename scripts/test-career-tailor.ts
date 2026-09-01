@@ -189,8 +189,19 @@ async function main() {
   }
 
   {
+    // Illegal bold is NEUTRALISED, not fatal. The rule's purpose — the résumé
+    // gains no emphasis it never had — is served by removing the markers; the
+    // sentence itself is a separate question the verifier answers. A live V2
+    // run lost its only rewrite to the old behaviour: a change that correctly
+    // added "butyric acid" from the facts was discarded whole for bolding it.
     const r = precheckChange(reword(CS_ORIGINAL.replace('Built and piloted', '**Built and piloted**')), pool, CS_ORIGINAL)
-    check('precheck blocks bold on a non-metric span', r.blocking.some((f) => f.kind === 'emphasis'), JSON.stringify(r.blocking))
+    check('bold on a non-metric span does not block the change', r.ok && !r.blocking.some((f) => f.kind === 'emphasis'), JSON.stringify(r.blocking))
+    check('bold on a non-metric span is warned about', r.warnings.some((f) => f.kind === 'emphasis'), JSON.stringify(r.warnings))
+    check('the offending bold is stripped, the wording untouched',
+      r.sanitizedText === CS_ORIGINAL && !(r.sanitizedText ?? '').includes('**'), r.sanitizedText ?? '(null)')
+    // A legal bold — a metric — is left exactly as the tailor wrote it.
+    const metric = precheckChange(reword(CS_ORIGINAL.replace('$4M+', '**$4M+**')), pool, CS_ORIGINAL)
+    check('a bolded metric is not stripped', metric.ok && metric.sanitizedText === null, JSON.stringify(metric.warnings))
     const ok = precheckChange(reword(CS_ORIGINAL.replace('$4M+', '**$4M+**')), pool, CS_ORIGINAL)
     check('precheck allows bold on a metric', ok.ok, JSON.stringify(ok.blocking))
   }

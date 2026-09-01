@@ -119,6 +119,13 @@ export interface FinishPackageParams {
    */
   letterFromStored?: StoredLetterText | null
   onProgress?: (stage: PackageStage, detail: string) => void
+  /**
+   * Produce the DOCX and no PDF. The DOCX is the canonical résumé; a PDF costs
+   * ~106 s of Word COM per render on this machine. Skipping it also skips the
+   * one-page verification, which is why it is opt-in rather than the default —
+   * see PDF_SKIPPED_WARNING.
+   */
+  skipPdf?: boolean
   /** Test seam. Production passes nothing. */
   io?: Partial<DocumentsIo>
 }
@@ -190,7 +197,7 @@ export async function finishPackage(params: FinishPackageParams): Promise<Packag
       progress('resume_documents', context.job.company_name)
       await io.updatePackage(pkg.id, { stage, error: null })
       const changes = changesFromRows(patch.patch.changes)
-      const resume = await io.generateResumeDocuments({ bank: context.bank, masterBuffer: master, changes, company: context.job.company_name, output })
+      const resume = await io.generateResumeDocuments({ bank: context.bank, masterBuffer: master, changes, company: context.job.company_name, output, skipPdf: params.skipPdf })
       warnings.push(...resume.warnings)
       if (resume.droppedByShrink.length) warnings.push(`dropped to fit one page: ${resume.droppedByShrink.join(', ')}`)
       qa.resume = resume.qa
@@ -265,8 +272,15 @@ export async function finishPackage(params: FinishPackageParams): Promise<Packag
     const blocking = [...(qa.resume?.checks ?? []), ...(qa.cover_letter?.checks ?? [])].filter((c) => c.blocking && !c.pass)
     if (blocking.length) return fail(`document QA failed: ${blocking.map((c) => `${c.name} (${c.detail})`).join('; ')}`)
 
-    if (!resumePdfPath || !letter.documents?.pdfPath) {
+    // "Install Word" is only true when a PDF was WANTED and could not be made.
+    // With --no-pdf the résumé PDF is absent by request, and telling someone to
+    // install software they already have — to fix a thing they asked for — is
+    // how a warning list stops being read.
+    const missingPdf = !resumePdfPath || !letter.documents?.pdfPath
+    if (missingPdf && !params.skipPdf) {
       warnings.push('one or more PDFs were not produced — the DOCX files are complete and stored. Install Microsoft Word or LibreOffice on the server to get PDFs.')
+    } else if (missingPdf && params.skipPdf && !letter.documents?.pdfPath) {
+      warnings.push('the cover-letter PDF was not produced — its DOCX is complete and stored.')
     }
 
     await io.updatePackage(pkg.id, { status: 'ready_for_review', stage: 'documents', error: null })

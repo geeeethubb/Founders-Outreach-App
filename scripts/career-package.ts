@@ -30,6 +30,11 @@ function opt(name: string): string | undefined {
   return i >= 0 ? process.argv[i + 1] : undefined
 }
 
+/** --no-pdf: DOCX only. Faster, and the one-page check is skipped — QA says so. */
+function noPdf(): boolean {
+  return process.argv.includes('--no-pdf')
+}
+
 function money(n: number): string {
   return `$${n.toFixed(4)}`
 }
@@ -69,7 +74,7 @@ async function dbMode(jobId: string): Promise<void> {
   console.log(`review: ${review.updated} approved as safe${review.error ? ` — ${review.error}` : ''}`)
   for (const c of review.changes) console.log(`  ${c.review_status.padEnd(13)} ${c.change_type} L${c.edit_level} ${c.verification_result}: ${(c.final_text ?? c.original_text ?? '').slice(0, 90)}`)
 
-  const fin = await finishPackage({ userId, packageId: gen.packageId, onProgress: (stage, detail) => console.log(`  [${stage}] ${detail}`) })
+  const fin = await finishPackage({ userId, packageId: gen.packageId, skipPdf: noPdf(), onProgress: (stage, detail) => console.log(`  [${stage}] ${detail}`) })
   console.log(`\nfinish: status=${fin.status} stage=${fin.stage} cost=${money(fin.costUsd)}${fin.error ? ` error=${fin.error}` : ''}`)
   for (const w of fin.warnings) console.log(`  warn: ${w}`)
 

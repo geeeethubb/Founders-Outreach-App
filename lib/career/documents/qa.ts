@@ -140,6 +140,12 @@ export interface ResumeQaInput {
   filename: string
   company: string
   renderer: string | null
+  /**
+   * The caller asked for no PDF. Distinct from `renderer === null`, which means
+   * one was wanted and none exists — the detail line must not tell someone to
+   * install Word when nobody asked for a PDF in the first place.
+   */
+  pdfSkipped?: boolean
   docxPath?: string | null
 }
 
@@ -186,7 +192,10 @@ export async function qaResumeDocument(input: ResumeQaInput): Promise<DocumentQa
   const { info, error: pdfError } = await loadPdf(input.pdfPath, input.pdfInfo)
   const rendererAvailable = input.renderer !== null
   if (!info) {
-    checks.push(check('pdf_present', false, pdfError ?? (rendererAvailable ? 'no PDF produced' : 'no PDF renderer available'), rendererAvailable))
+    const why = input.pdfSkipped
+      ? 'not requested — DOCX only; the one-page guarantee was not checked'
+      : pdfError ?? (rendererAvailable ? 'no PDF produced' : 'no PDF renderer available')
+    checks.push(check('pdf_present', false, why, rendererAvailable && !input.pdfSkipped))
   } else {
     rest.page_count = info.pageCount
     checks.push(check('pdf_present', true, `${info.pageCount} page(s) via ${info.method}${info.fonts.length ? `; fonts ${info.fonts.join(', ')}` : ''}`))

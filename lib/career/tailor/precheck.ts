@@ -39,6 +39,19 @@ export interface PrecheckResult {
   ok: boolean
   blocking: Finding[]
   warnings: Finding[]
+  /**
+   * The proposal with any illegal bold markers removed, when that was the only
+   * thing wrong with them. Null when nothing needed neutralising.
+   *
+   * Bold is typography. Stripping `**` cannot make a claim less true, so an
+   * otherwise-supported rewrite must not be DISCARDED for bolding the wrong
+   * span — the first live V2 run lost its only rewrite that way: a change that
+   * correctly added "butyric acid" from the facts was thrown out whole because
+   * it also bolded the term. Neutralise the emphasis, keep the sentence, and
+   * record a warning. Every other blocking kind is about the CLAIM and stays
+   * blocking.
+   */
+  sanitizedText: string | null
 }
 
 /**
@@ -150,6 +163,20 @@ function illegalEmphasis(original: string | null, proposedRaw: string): string[]
   return boldSpans(proposedRaw).filter((span) => !allowed.has(norm(span)) && !/[\d$%]/.test(span))
 }
 
+/**
+ * Remove the `**` around exactly these spans, leaving every other bold pair
+ * intact. Text-only: nothing between the markers changes, so a sanitized
+ * proposal makes precisely the claims the original proposal made.
+ */
+export function unbold(text: string, spans: string[]): string {
+  let out = text
+  for (const span of spans) {
+    const escaped = span.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    out = out.replace(new RegExp(`\\*\\*\\s*(${escaped})\\s*\\*\\*`, 'g'), '$1')
+  }
+  return out
+}
+
 /** True when the proposal differs from the original only in `**` markers. */
 export function isEmphasisOnly(original: string | null, proposed: string | null): boolean {
   if (!original || !proposed) return false
@@ -255,7 +282,7 @@ export function precheckChange(
   const proposed = stripMarkdown(change.proposed_text ?? '').trim()
   // Nothing to check for a reorder or remove; a swap carries its source text
   // and is checked like any other, since the source is in the pool anyway.
-  if (!proposed) return { ok: true, blocking, warnings }
+  if (!proposed) return { ok: true, blocking, warnings, sanitizedText: null }
 
   const pool_ = poolText(pool)
   const originalPlain = stripMarkdown(original ?? '')
@@ -308,9 +335,18 @@ export function precheckChange(
     blocking.push({ kind: 'superlative', span: s, reason: `"${s}" is a ranking claim that no evidence for this experience makes.` })
   }
 
-  // 6. Emphasis: bold only what was bold or is a number.
-  for (const span of illegalEmphasis(original, change.proposed_text ?? '')) {
-    blocking.push({ kind: 'emphasis', span, reason: `"${span}" is bolded but is neither a metric nor bold in the original.` })
+  // 6. Emphasis: bold only what was bold or is a number. Neutralised, not fatal.
+  let sanitizedText: string | null = null
+  const badBold = illegalEmphasis(original, change.proposed_text ?? '')
+  if (badBold.length) {
+    sanitizedText = unbold(change.proposed_text ?? '', badBold)
+    for (const span of badBold) {
+      warnings.push({
+        kind: 'emphasis',
+        span,
+        reason: `"${span}" is bolded but is neither a metric nor bold in the original; the bold was removed and the wording kept.`,
+      })
+    }
   }
 
   // 7. Ownership escalation — warn, name the pair, let the verifier decide.
@@ -324,7 +360,7 @@ export function precheckChange(
     }
   }
 
-  return { ok: blocking.length === 0, blocking, warnings }
+  return { ok: blocking.length === 0, blocking, warnings, sanitizedText }
 }
 
 /** One line for notes and the UI. */

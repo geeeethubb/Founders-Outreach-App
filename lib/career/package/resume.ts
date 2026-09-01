@@ -172,6 +172,16 @@ export interface ResumeDocumentsParams {
   output: DocumentOutput
   /** Default: masterDocument.page_count ?? 1. */
   expectedPages?: number
+  /**
+   * Do not render a PDF at all. The DOCX is the canonical résumé output; a PDF
+   * is a convenience, and on this machine it costs ~106 s of Word COM per
+   * render. Evals and batch runs skip it.
+   *
+   * The cost is real and is reported, not hidden: page fit is verified by
+   * counting rendered pages, so with no render there is no one-page guarantee.
+   * QA says so rather than quietly passing.
+   */
+  skipPdf?: boolean
 }
 
 export interface ResumeDocumentsResult {
@@ -190,6 +200,17 @@ export interface ResumeDocumentsResult {
   pdfUnavailable: boolean
   error: string | null
 }
+
+/** The `toPdf` error when a caller asked for no PDF. Not a failure. */
+export const PDF_SKIPPED = 'pdf skipped by request'
+
+/**
+ * Said in full, because "no PDF" has three causes and they are not the same
+ * event: nobody asked for one, no renderer is installed, or a renderer tried
+ * and failed. Only this one is a choice.
+ */
+export const PDF_SKIPPED_WARNING =
+  'No PDF was rendered: this run asked for the DOCX only. The DOCX is the canonical résumé and was produced and stored. Page fit is verified by counting rendered pages, so the one-page guarantee was NOT checked for this document.'
 
 /** Said the same way everywhere so the UI can distinguish it from a build failure. */
 export const PDF_UNAVAILABLE_WARNING = 'PDF unavailable: no PDF renderer is installed (Microsoft Word or LibreOffice). The DOCX was produced and stored; no PDF was.'
@@ -274,6 +295,9 @@ async function buildResumeDocuments(params: ResumeDocumentsParams, tmp: string, 
       return { docx: r.docx }
     },
     toPdf: async (docx, attempt) => {
+      // A null page count ends the fit loop after attempt 0 and hands the DOCX
+      // straight back — exactly the "no way to judge" path, reached on purpose.
+      if (params.skipPdf) return { ok: false, pageCount: null, pdfPath: null, error: PDF_SKIPPED, ms: 0 }
       const pdfPath = path.join(tmp, `attempt-${attempt}.pdf`)
       const r = await renderDocxToPdf(docx, pdfPath)
       renderer = r.renderer
@@ -291,7 +315,8 @@ async function buildResumeDocuments(params: ResumeDocumentsParams, tmp: string, 
   if (!fit.docx) {
     return { docxPath: null, pdfPath: null, filenames, qa: emptyQa(filenames.docx, renderer, fit.error ?? 'nothing rendered'), shrink_attempts: fit.shrink_attempts, droppedByShrink: [], renderer, warnings, finalChanges: usedSet, pdfUnavailable: noRenderer, error: fit.error ?? 'nothing rendered' }
   }
-  if (noRenderer) warnings.push(PDF_UNAVAILABLE_WARNING)
+  if (params.skipPdf) warnings.push(PDF_SKIPPED_WARNING)
+  else if (noRenderer) warnings.push(PDF_UNAVAILABLE_WARNING)
   else if (render.failure) warnings.push(pdfRenderFailedWarning(render.failure.outcome, render.failure.detail))
   else if (!fit.ok) warnings.push(`page fit: ${fit.error ?? 'over the page budget'}`)
 
@@ -330,7 +355,8 @@ async function buildResumeDocuments(params: ResumeDocumentsParams, tmp: string, 
     masterParagraphCount: masterFile.body.paragraphs.length,
     filename: filenames.docx,
     company: params.company,
-    renderer: noRenderer ? null : renderer,
+    renderer: params.skipPdf || noRenderer ? null : renderer,
+    pdfSkipped: params.skipPdf === true,
   })
   qa.shrink_attempts = fit.shrink_attempts
 

@@ -144,6 +144,14 @@ export async function verifyChange(
     return rejectedChange(change, 'UNSUPPORTED', `Blocked before verification — ${summarizeFindings(pre.blocking)}. Verifier skipped.`, findings)
   }
 
+  // Illegal bold is neutralised, not fatal: the markers come off and the
+  // sentence stands. From here on the sanitized text IS the change — it is what
+  // the verifier audits and what reaches the document, so the two can never
+  // disagree about which words were checked.
+  if (pre.sanitizedText !== null && pre.sanitizedText !== change.proposed_text) {
+    change = { ...change, proposed_text: pre.sanitizedText }
+  }
+
   // Emphasis only: the words are the original's, and the pre-check has just
   // confirmed the bold sits on a metric. There is nothing for a verifier to
   // audit, and the first live run spent three verifier calls confirming that.
