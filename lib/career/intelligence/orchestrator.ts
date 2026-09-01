@@ -238,206 +238,234 @@ export async function runJobIntelligence(params: IntelligenceParams): Promise<In
     }
   }
 
-  // ─── (a) Company research ───
+  // Declared out here because the three branches below write them concurrently
+  // and the return statement reads them after. Each is written by exactly ONE
+  // branch, so there is no interleaving to reason about.
   let research: CompanyResearch | null = null
   let researchFromCache = false
-  if (!force.research && researchIsFresh(company)) {
-    research = researchFromStored(context.existing.research.summary, company, context.existing.research.facts)
-    researchFromCache = research !== null
-  }
-  if (!research && params.skip?.research) {
-    // Stored research is still used when fresh; only a NEW researcher call is skipped.
-  } else if (!research) {
-    progress('research', job.company_name)
-    try {
-      // THE CRITICAL PATH, AND THE ONE THAT CAN HANG. Company research is a
-      // 7-step agent with web search; measured cold runs take 126–304s, which
-      // on its own can exhaust a 5-minute package. Bounded here and allowed to
-      // return nothing: a package built from the job description alone is worth
-      // far more than one that never arrives.
-      const researchBudget = params.deadline ? params.deadline.budgetFor('research') : 0
-      const res = params.deadline
-        ? await withDeadline(
-            'company research',
-            researchBudget,
-            () => runCompanyResearcher(researchInputFrom(job, company, mission), ctx),
-            { onTimeout: () => null }
-          )
-        : await runCompanyResearcher(researchInputFrom(job, company, mission), ctx)
-      if (res === null) {
-        errors.push(`research: no result within ${Math.round(researchBudget / 1000)}s — continuing from the job description and any stored company data`)
-      } else {
-      const done = res
-      const agentRunId = await run.trace(done, { job_id: job.id, company_id: company?.id ?? null })
-      if (done.output) {
-        research = done.output
-        if (company && !noDb) {
-          const w = await persistCompanyResearch({
-            userId: params.userId, runId: run.runId, companyId: company.id, companyName: job.company_name,
-            agentRunId, research, promptVersion: done.trace.prompt_version,
-          })
-          if (w.error) errors.push(`research persist: ${w.error}`)
-          if (w.rejected) errors.push(`research: ${w.rejected} unsourced claim(s) rejected by the database`)
-        }
-      } else {
-        errors.push(`research ${done.status}: ${done.error ?? 'no output'}`)
-      }
-      }
-    } catch (e) {
-      errors.push(`research: ${e instanceof Error ? e.message : String(e)}`)
-    }
-  }
-
-  // ─── (b) Fit ───
   let fit: IntelligenceResult['fit'] = null
   let fitFromStore = false
-  const feedbackRows = params.feedbackRows ?? (noDb ? [] : (await loadFeedbackRows(params.userId)).rows)
-  const adjustment = computeFeedbackAdjustment(
-    { id: job.id, role_family: job.role_family, industry: job.industry, company_name: job.company_name, location_tier: job.location_tier, company_type: company?.company_type ?? null },
-    feedbackRows
-  )
-  // Discovery rejects these before storing; a manual add keeps them with a warning. Either way the rank must show it.
-  const hardConstraintFailures = applyHardConstraints(job, mission.hard_constraints).failed.map((f) => f.label)
-  const stored = context.existing.fit
-  const judgmentVersion = fitJudgmentVersion(mission)
-  if (!force.fit && stored && stored.prompt_version === judgmentVersion) {
-    const judgment = judgmentFromRow(stored)
-    fit = { judgment, evaluation: evaluateFit({ judgment, weights: mission.fit_weights, feedbackAdjustment: adjustment.adjustment, hardConstraintFailures }), row: stored }
-    fitFromStore = true
-  } else {
-    progress('fit', job.title)
-    try {
-      const jobInput = fitJobInputFrom(job)
-      // Retrieval, not the whole bank: the six experiences that plausibly
-      // matter for THIS posting, compact (principle 5).
-      const relevant = getRelevantPersonalEvidence({ bank, mission: renderMission(mission), target: retrievalTargetForJob(job), maxExperiences: 6, maxFacts: 16 })
-      const res = await runFitEvaluator(
-        {
-          mission: renderMission(mission),
-          job: jobInput,
-          companyResearch: renderCompanyResearchForPrompt(research),
-          evidenceSummaries: renderRelevantEvidence(relevant, { style: 'compact' }),
-          preferences: renderPreferences(bank),
-          feedbackContext: renderFeedbackHints(feedbackRows),
-        },
-        ctx,
-        {
-          cacheKeyParts: {
-            job_id: job.id,
-            description_sha: descriptionSha(job.description_text),
-            research_version: research ? `${companyResearcherPrompt.version}:${research.summary.slice(0, 80)}` : 'none',
-            evidence_version: evidenceVersion(bank),
-            mission_id: mission.id,
-            judgment_version: judgmentVersion,
-          },
-        }
-      )
-      const agentRunId = await run.trace(res, { job_id: job.id, mission_id: mission.id })
-      if (res.output) {
-        const evaluation = evaluateFit({ judgment: res.output, weights: mission.fit_weights, feedbackAdjustment: adjustment.adjustment, hardConstraintFailures })
-        const row = buildFitEvaluationRow({
-          userId: params.userId, jobId: job.id, missionId: mission.id, judgment: res.output, evaluation,
-          promptVersion: judgmentVersion, agentRunId,
-        })
-        let persisted: JobFitEvaluation | null = null
-        if (!noDb) {
-          const w = await upsertFitEvaluation(row)
-          if (w.error) errors.push(`fit persist: ${w.error}`)
-          persisted = w.row
-        }
-        fit = { judgment: res.output, evaluation, row: persisted }
-      } else {
-        errors.push(`fit ${res.status}: ${res.error ?? 'no output'}`)
-      }
-    } catch (e) {
-      errors.push(`fit: ${e instanceof Error ? e.message : String(e)}`)
-    }
-  }
-
-  // ─── (c) Evidence map ───
   let evidenceMap: EvidenceMatch | null = null
   let evidenceMapRow: JobEvidenceMap | null = null
-  const storedMap = context.existing.evidenceMap
-  if (!force.match && storedMap && storedMap.prompt_version === evidenceMatcherPrompt.version) {
-    evidenceMap = matchFromRow(storedMap)
-    evidenceMapRow = storedMap
-  } else if (bank.experiences.length === 0) {
-    errors.push('match: the Evidence Bank has no approved experiences')
-  } else {
-    progress('match', job.title)
-    try {
-      const relevant = getRelevantPersonalEvidence({ bank, mission: renderMission(mission), target: retrievalTargetForJob(job), maxExperiences: 6, maxFacts: 16, includeStories: true })
-      const res = await runEvidenceMatcher(
-        {
-          job: fitJobInputFrom(job),
-          evidenceSummaries: renderRelevantEvidence(relevant, { style: 'compact' }),
-          detail: renderRelevantEvidence(relevant, { style: 'detailed', maxFactsPerExperience: 8 }),
-          skills: renderSkills(bank),
-          stories: renderStories(bank),
-          validIds: {
-            experience_ids: bank.experiences.map((e) => e.id),
-            fact_ids: bank.facts.map((f) => f.id),
-            metric_ids: bank.metrics.map((m) => m.id),
-            skill_ids: bank.skills.map((s) => s.id),
-            story_ids: bank.stories.map((s) => s.id),
-          },
-        },
-        ctx,
-        { cacheKeyParts: { job_id: job.id, description_sha: descriptionSha(job.description_text), evidence_version: evidenceVersion(bank) } }
-      )
-      const agentRunId = await run.trace(res, { job_id: job.id })
-      if (res.output) {
-        evidenceMap = res.output
-        if (!noDb) {
-          const w = await upsertEvidenceMap({ userId: params.userId, jobId: job.id, match: res.output, promptVersion: res.trace.prompt_version, agentRunId })
-          if (w.error) errors.push(`match persist: ${w.error}`)
-          evidenceMapRow = w.row
-        }
-      } else {
-        errors.push(`match ${res.status}: ${res.error ?? 'no output'}`)
-      }
-    } catch (e) {
-      errors.push(`match: ${e instanceof Error ? e.message : String(e)}`)
-    }
-  }
-
-  // ─── (d) Warm paths ───
   let warmPaths: JudgedPath[] = []
   let warmPathRows: WarmPath[] = []
-  if (noDb) {
-    // Warm paths read the network tables; there is no in-memory network.
-  } else if (!force.paths && context.existing.warmPaths.length) {
-    warmPathRows = context.existing.warmPaths
-    warmPaths = warmPathRows.map((w) => ({
-      contact_id: w.contact_id, relationship: w.relationship, strength: Number(w.strength), why_relevant: w.why_relevant ?? '',
-      suggested_action: w.suggested_action ?? '', existing_history: w.existing_history,
-    }))
-  } else {
-    progress('paths', job.company_name)
-    try {
-      const slate = await findWarmPathCandidates(params.userId, {
-        companyName: job.company_name, companyId: company?.id ?? null, domain: company?.domain ?? null, industry: job.industry, jobTitle: job.title,
-      })
-      if (slate.candidates.length > 0) {
-        const res = await runNetworkPathfinder(
-          { company: { name: job.company_name, domain: company?.domain ?? null, industry: job.industry }, job_title: job.title, candidates: slate.candidates },
-          ctx,
-          { cacheKeyParts: { company: job.company_name, job_id: job.id, contact_ids: slate.candidates.map((c) => c.contact_id).sort() } }
-        )
-        const agentRunId = await run.trace(res, { job_id: job.id, company_id: company?.id ?? null })
-        if (res.output) {
-          warmPaths = res.output.paths
-          const w = await replaceWarmPaths({ userId: params.userId, jobId: job.id, companyId: company?.id ?? null, paths: warmPaths, candidates: slate.candidates, agentRunId })
-          if (w.error) errors.push(`paths persist: ${w.error}`)
-          warmPathRows = w.rows
-        } else {
-          errors.push(`paths ${res.status}: ${res.error ?? 'no output'}`)
-        }
-      }
-    } catch (e) {
-      errors.push(`paths: ${e instanceof Error ? e.message : String(e)}`)
+
+  // ─── (a)-(d) run as THREE CONCURRENT BRANCHES ───
+  //
+  // The stages were sequenced, not dependent. Only one data edge is real:
+  // fit reads the research summary. The evidence matcher takes the job and
+  // the bank; warm paths take the company and a DB-computed slate; neither
+  // touches research or fit, and their cache keys say so — no research term
+  // in either. Their writes are disjoint too (job_evidence_maps, warm_paths).
+  //
+  // Serially they cost their full wall clock on the critical path of a
+  // 5-minute budget whose slowest stage — company research — is already
+  // 105s of it. Concurrently they cost almost nothing, and the critical
+  // path becomes exactly one thing: research, then fit.
+  //
+  // `errors` is pushed to from all three; array push is safe, and the run
+  // tracer is already driven concurrently by the batch path.
+  await Promise.all([
+    (async () => {
+    // ─── (a) Company research ───
+    if (!force.research && researchIsFresh(company)) {
+      research = researchFromStored(context.existing.research.summary, company, context.existing.research.facts)
+      researchFromCache = research !== null
     }
-  }
+    if (!research && params.skip?.research) {
+      // Stored research is still used when fresh; only a NEW researcher call is skipped.
+    } else if (!research) {
+      progress('research', job.company_name)
+      try {
+        // THE CRITICAL PATH, AND THE ONE THAT CAN HANG. Company research is a
+        // 7-step agent with web search; measured cold runs take 126–304s, which
+        // on its own can exhaust a 5-minute package. Bounded here and allowed to
+        // return nothing: a package built from the job description alone is worth
+        // far more than one that never arrives.
+        const researchBudget = params.deadline ? params.deadline.budgetFor('research') : 0
+        const res = params.deadline
+          ? await withDeadline(
+              'company research',
+              researchBudget,
+              () => runCompanyResearcher(researchInputFrom(job, company, mission), ctx),
+              { onTimeout: () => null }
+            )
+          : await runCompanyResearcher(researchInputFrom(job, company, mission), ctx)
+        if (res === null) {
+          errors.push(`research: no result within ${Math.round(researchBudget / 1000)}s — continuing from the job description and any stored company data`)
+        } else {
+        const done = res
+        const agentRunId = await run.trace(done, { job_id: job.id, company_id: company?.id ?? null })
+        if (done.output) {
+          research = done.output
+          if (company && !noDb) {
+            const w = await persistCompanyResearch({
+              userId: params.userId, runId: run.runId, companyId: company.id, companyName: job.company_name,
+              agentRunId, research, promptVersion: done.trace.prompt_version,
+            })
+            if (w.error) errors.push(`research persist: ${w.error}`)
+            if (w.rejected) errors.push(`research: ${w.rejected} unsourced claim(s) rejected by the database`)
+          }
+        } else {
+          errors.push(`research ${done.status}: ${done.error ?? 'no output'}`)
+        }
+        }
+      } catch (e) {
+        errors.push(`research: ${e instanceof Error ? e.message : String(e)}`)
+      }
+    }
+
+    // ─── (b) Fit ───
+    const feedbackRows = params.feedbackRows ?? (noDb ? [] : (await loadFeedbackRows(params.userId)).rows)
+    const adjustment = computeFeedbackAdjustment(
+      { id: job.id, role_family: job.role_family, industry: job.industry, company_name: job.company_name, location_tier: job.location_tier, company_type: company?.company_type ?? null },
+      feedbackRows
+    )
+    // Discovery rejects these before storing; a manual add keeps them with a warning. Either way the rank must show it.
+    const hardConstraintFailures = applyHardConstraints(job, mission.hard_constraints).failed.map((f) => f.label)
+    const stored = context.existing.fit
+    const judgmentVersion = fitJudgmentVersion(mission)
+    if (!force.fit && stored && stored.prompt_version === judgmentVersion) {
+      const judgment = judgmentFromRow(stored)
+      fit = { judgment, evaluation: evaluateFit({ judgment, weights: mission.fit_weights, feedbackAdjustment: adjustment.adjustment, hardConstraintFailures }), row: stored }
+      fitFromStore = true
+    } else {
+      progress('fit', job.title)
+      try {
+        const jobInput = fitJobInputFrom(job)
+        // Retrieval, not the whole bank: the six experiences that plausibly
+        // matter for THIS posting, compact (principle 5).
+        const relevant = getRelevantPersonalEvidence({ bank, mission: renderMission(mission), target: retrievalTargetForJob(job), maxExperiences: 6, maxFacts: 16 })
+        const res = await runFitEvaluator(
+          {
+            mission: renderMission(mission),
+            job: jobInput,
+            companyResearch: renderCompanyResearchForPrompt(research),
+            evidenceSummaries: renderRelevantEvidence(relevant, { style: 'compact' }),
+            preferences: renderPreferences(bank),
+            feedbackContext: renderFeedbackHints(feedbackRows),
+          },
+          ctx,
+          {
+            cacheKeyParts: {
+              job_id: job.id,
+              description_sha: descriptionSha(job.description_text),
+              research_version: research ? `${companyResearcherPrompt.version}:${research.summary.slice(0, 80)}` : 'none',
+              evidence_version: evidenceVersion(bank),
+              mission_id: mission.id,
+              judgment_version: judgmentVersion,
+            },
+          }
+        )
+        const agentRunId = await run.trace(res, { job_id: job.id, mission_id: mission.id })
+        if (res.output) {
+          const evaluation = evaluateFit({ judgment: res.output, weights: mission.fit_weights, feedbackAdjustment: adjustment.adjustment, hardConstraintFailures })
+          const row = buildFitEvaluationRow({
+            userId: params.userId, jobId: job.id, missionId: mission.id, judgment: res.output, evaluation,
+            promptVersion: judgmentVersion, agentRunId,
+          })
+          let persisted: JobFitEvaluation | null = null
+          if (!noDb) {
+            const w = await upsertFitEvaluation(row)
+            if (w.error) errors.push(`fit persist: ${w.error}`)
+            persisted = w.row
+          }
+          fit = { judgment: res.output, evaluation, row: persisted }
+        } else {
+          errors.push(`fit ${res.status}: ${res.error ?? 'no output'}`)
+        }
+      } catch (e) {
+        errors.push(`fit: ${e instanceof Error ? e.message : String(e)}`)
+      }
+    }
+
+    })(),
+    (async () => {
+    // ─── (c) Evidence map ───
+    const storedMap = context.existing.evidenceMap
+    if (!force.match && storedMap && storedMap.prompt_version === evidenceMatcherPrompt.version) {
+      evidenceMap = matchFromRow(storedMap)
+      evidenceMapRow = storedMap
+    } else if (bank.experiences.length === 0) {
+      errors.push('match: the Evidence Bank has no approved experiences')
+    } else {
+      progress('match', job.title)
+      try {
+        const relevant = getRelevantPersonalEvidence({ bank, mission: renderMission(mission), target: retrievalTargetForJob(job), maxExperiences: 6, maxFacts: 16, includeStories: true })
+        const res = await runEvidenceMatcher(
+          {
+            job: fitJobInputFrom(job),
+            evidenceSummaries: renderRelevantEvidence(relevant, { style: 'compact' }),
+            detail: renderRelevantEvidence(relevant, { style: 'detailed', maxFactsPerExperience: 8 }),
+            skills: renderSkills(bank),
+            stories: renderStories(bank),
+            validIds: {
+              experience_ids: bank.experiences.map((e) => e.id),
+              fact_ids: bank.facts.map((f) => f.id),
+              metric_ids: bank.metrics.map((m) => m.id),
+              skill_ids: bank.skills.map((s) => s.id),
+              story_ids: bank.stories.map((s) => s.id),
+            },
+          },
+          ctx,
+          { cacheKeyParts: { job_id: job.id, description_sha: descriptionSha(job.description_text), evidence_version: evidenceVersion(bank) } }
+        )
+        const agentRunId = await run.trace(res, { job_id: job.id })
+        if (res.output) {
+          evidenceMap = res.output
+          if (!noDb) {
+            const w = await upsertEvidenceMap({ userId: params.userId, jobId: job.id, match: res.output, promptVersion: res.trace.prompt_version, agentRunId })
+            if (w.error) errors.push(`match persist: ${w.error}`)
+            evidenceMapRow = w.row
+          }
+        } else {
+          errors.push(`match ${res.status}: ${res.error ?? 'no output'}`)
+        }
+      } catch (e) {
+        errors.push(`match: ${e instanceof Error ? e.message : String(e)}`)
+      }
+    }
+
+    })(),
+    (async () => {
+    // ─── (d) Warm paths ───
+    if (noDb) {
+      // Warm paths read the network tables; there is no in-memory network.
+    } else if (!force.paths && context.existing.warmPaths.length) {
+      warmPathRows = context.existing.warmPaths
+      warmPaths = warmPathRows.map((w) => ({
+        contact_id: w.contact_id, relationship: w.relationship, strength: Number(w.strength), why_relevant: w.why_relevant ?? '',
+        suggested_action: w.suggested_action ?? '', existing_history: w.existing_history,
+      }))
+    } else {
+      progress('paths', job.company_name)
+      try {
+        const slate = await findWarmPathCandidates(params.userId, {
+          companyName: job.company_name, companyId: company?.id ?? null, domain: company?.domain ?? null, industry: job.industry, jobTitle: job.title,
+        })
+        if (slate.candidates.length > 0) {
+          const res = await runNetworkPathfinder(
+            { company: { name: job.company_name, domain: company?.domain ?? null, industry: job.industry }, job_title: job.title, candidates: slate.candidates },
+            ctx,
+            { cacheKeyParts: { company: job.company_name, job_id: job.id, contact_ids: slate.candidates.map((c) => c.contact_id).sort() } }
+          )
+          const agentRunId = await run.trace(res, { job_id: job.id, company_id: company?.id ?? null })
+          if (res.output) {
+            warmPaths = res.output.paths
+            const w = await replaceWarmPaths({ userId: params.userId, jobId: job.id, companyId: company?.id ?? null, paths: warmPaths, candidates: slate.candidates, agentRunId })
+            if (w.error) errors.push(`paths persist: ${w.error}`)
+            warmPathRows = w.rows
+          } else {
+            errors.push(`paths ${res.status}: ${res.error ?? 'no output'}`)
+          }
+        }
+      } catch (e) {
+        errors.push(`paths: ${e instanceof Error ? e.message : String(e)}`)
+      }
+    }
+
+    })(),
+  ])
 
   const costUsd = Number((run.costUsd() - costBefore).toFixed(4))
   if (ownRun) {

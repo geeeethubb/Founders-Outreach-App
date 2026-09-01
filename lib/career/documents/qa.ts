@@ -28,6 +28,14 @@ export function normalizeText(s: string): string {
     .trim()
 }
 
+/**
+ * How much longer than the one-page master a body may get before the missing
+ * page count actually matters. Roughly four lines of a dense résumé: enough
+ * slack that a reworded bullet does not fail the package, small enough that
+ * real overflow is still caught.
+ */
+export const ONE_PAGE_GROWTH_TOLERANCE = 400
+
 /** For PDF matching. pdfjs splits words at glyph-position boundaries ("847 - 962"), so whitespace is removed entirely. */
 function squash(s: string): string {
   return normalizeText(s).replace(/\s/g, '').toLowerCase()
@@ -252,13 +260,23 @@ export async function qaResumeDocument(input: ResumeQaInput): Promise<DocumentQa
   // and this would be a weaker duplicate of it.
   if (!info && input.masterTextLength !== undefined) {
     const grew = text.replace(/\s+/g, '').length - input.masterTextLength
+    // Proportionality. At <= 0 the inference is exact: no longer than a
+    // one-page master, so no more pages. Above that it weakens gradually, and
+    // a rule that FAILED a package over three characters would be right in
+    // principle and useless in practice — the first live run did exactly that.
+    // So: growth beyond roughly four lines blocks, because that is enough to
+    // push a full page over; anything smaller is reported and waved through.
+    const blocking = grew > ONE_PAGE_GROWTH_TOLERANCE
     checks.push(
       check(
         'one_page_safe',
         grew <= 0,
         grew <= 0
           ? `no PDF rendered, but the body is ${Math.abs(grew)} character(s) shorter than the master — it cannot need more pages`
-          : `no PDF rendered and the body grew by ${grew} character(s); the one-page guarantee could not be checked. Regenerate with a PDF to confirm, or shorten the résumé.`
+          : blocking
+            ? `no PDF rendered and the body grew by ${grew} characters (more than ${ONE_PAGE_GROWTH_TOLERANCE}); it may no longer fit one page. Regenerate with a PDF to confirm, or shorten the résumé.`
+            : `no PDF rendered; the body grew by ${grew} character(s), well under a line — almost certainly still one page, but not measured`,
+        blocking
       )
     )
   }

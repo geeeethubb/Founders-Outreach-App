@@ -6,6 +6,64 @@ architecturally and why.
 
 ---
 
+## 2026-09-01 — Package generation always terminates
+
+**Type:** incident fix · **Behavior change:** a hard 5-minute SLA, enforced at four levels.
+
+### The incident
+
+A Rondo Energy package read `status='generating'`, `stage='intelligence'`,
+`cost_usd=$0` for over a day. Its run row: `kind='package'`, `status='running'`,
+`heartbeat_at=NULL`, `completed_at=NULL`. Four sibling packages started in the same minute
+finished in ~4 minutes.
+
+### Three root causes, all real, all needed
+
+1. **Package runs could never be reaped.** `run-reaper.ts:53` skipped every run whose
+   `kind !== 'job_scout'`, and `run-record.ts:155` returned `false` for a pulseless non-scout
+   run. A dead package run was *structurally invisible* to the only recovery mechanism.
+2. **The package row had no liveness.** No heartbeat, no deadline, no attempt count.
+   `'generating'` was only ever changed by the process that set it.
+3. **The declared deadline was never enforced.** `DEFAULT_PACKAGE_BUDGET.deadlineMs` was
+   already 280 s — read only by the scout orchestrator.
+
+And the multiplier that turned "slow" into "days": `anthropic/client.ts` retries a failed call
+**4×** at a 120 s timeout, and an SDK timeout throws with `status === undefined`, which its
+policy treats as transient. One logical LLM call is worth **8.2 minutes**; a package makes up
+to 76 of them. Measured worst case: **10.5 hours**, against a route promising 300 s. The client
+*has* a deadline check — `setAnthropicDeadline` — whose only caller was the scout.
+
+### The fix, at four levels
+
+| level | what it bounds |
+|---|---|
+| `deadline.ts` | one absolute clock; per-stage ceilings; a finalize reserve; a 60 s floor under optional retries |
+| `auto.ts` | `try/catch/finally` — a terminal status is written on **every** exit path; arms the provider deadline |
+| `client.ts` | the deadline is a **set**, not a slot (batch runs were clearing each other's); truncation is no longer retried identically |
+| `liveness.ts` / `recover.ts` | a stale package is finalised **on read**, not only by a cron |
+
+Research is bounded at 105 s and **degrades to the job description** rather than blocking.
+Documents are not started under 60 s left — the résumé patch is saved and a retry finishes it.
+Intelligence's three branches (research→fit ∥ match ∥ paths) now run concurrently: only one
+data edge is real, and their cache keys and writes are disjoint.
+
+### Measured
+
+```
+5 stuck packages recovered, Rondo among them
+Rondo cold      stopped at exactly 300.0s, NEEDS ATTENTION   (was: 3 days)
+Rondo warm      READY TO APPLY in 20.3s
+Medtronic cold  292.9s -> 271.8s after parallelisation, complete package
+Abbott cold     244.9s, resume saved, documents deferred with 55s left
+```
+
+Intelligence fell from 292 s to 213 s on the same cold shape. The test that asserted
+*"a package run is untouched (different kind)"* was asserting the bug; it now asserts the fix.
+
+`tsc` clean · `test:career` 37/37 · `check:sql` clean · `next build` clean.
+
+---
+
 ## 2026-09-01 — One click from a job to a ready-to-submit package
 
 **Type:** productization · **Behavior change:** the package flow stops asking permission for
