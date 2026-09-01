@@ -6,6 +6,70 @@ architecturally and why.
 
 ---
 
+## 2026-09-01 — A queued scouting run can no longer wait forever
+
+**Type:** incident fix · **Behavior change:** 60s to act, 180s hard ceiling, then a real error.
+
+### The incident
+
+A run sat at `status='queued'` for 328 minutes. The row said what happened:
+
+```
+claim_token       set          <- written by the ENQUEUE
+heartbeat_at      17:18:45.997 <- the enqueue instant, 73ms before started_at
+worker_started_at NULL         <- no worker ever claimed it
+```
+
+### Four failures, all of which had to hold
+
+1. **`queued` was an absorbing state.** `isRunStale` opens
+   `if (row.status !== 'running') return false`, and `run-reaper` selects
+   `listRuns(userId, ['running'])`. A queued run was never *looked at*.
+2. **The only retry needed a browser.** The redispatch lives in the run-detail GET,
+   while the UI says "you can close this tab".
+3. **The crons are daily** (`0 11 * * *`, `0 13 * * *`) and neither reads queued runs.
+4. **Dispatch lied** — the proximate cause, found by audit:
+   - the 1500 ms race timer resolved `true`, so "in flight" and "accepted" were one answer;
+   - `.then(() => true)` never inspected the `Response`, so 401/404/500 all reported
+     `dispatched: true, error: null`;
+   - `dispatchError` was returned in the 202 body with **no consumer anywhere**.
+
+A fifth, which doubled the damage: a stuck queued run counts as *active*, so
+`activeJobScoutRun` returned **409 to every later Scout now**. One lost dispatch disabled
+scouting until someone edited the database.
+
+### The fix
+
+`queue-health.ts` — one pure verdict for queued and running, reading columns that exist
+**today**, so the already-stuck rows recover without waiting for a migration. 30 s slow,
+60 s act, **180 s hard ceiling**. `queue-watchdog.ts` — ask again twice, then fail with a
+message written for a person; every write conditional on still being queued, so a worker
+claiming mid-sweep wins. Dispatch now reports `accepted | pending | failed`, inspects
+`res.ok`, and names Deployment Protection on a 401. The sweep runs from Scout now, the
+run-detail route and the cron. Cancel: queued cancels outright; running sets a flag the
+worker reads on the progress write it was already making.
+
+### Two bugs of my own, both caught by running it rather than by a test
+
+- **Deciding on attempts alone was the same bug with extra steps.** Sweeping the real run
+  three times reported "attempt 1" every time — pre-020 there is no `attempt_count`, so the
+  counter never persisted. Hence the hard ceiling: the clock is always available.
+- **Adding the 020 columns to the shared `COLUMNS` broke enqueue outright** on a pre-020
+  database — the insert succeeded and the select of it failed, so Scout now returned a null
+  run id. Every read now has a two-shape fallback; the insert selects the base set only.
+
+### Measured
+
+```
+the real 347-minute run   -> failed, with a readable reason
+enqueue                   156 ms
+queue wait (claimed)      1.8 s   (10.2 s on the first hit, incl. route compile)
+```
+
+`tsc` clean · `test:career` 38/38 (51 in the new suite) · `check:sql` clean · build clean.
+
+---
+
 ## 2026-09-01 — Package generation always terminates
 
 **Type:** incident fix · **Behavior change:** a hard 5-minute SLA, enforced at four levels.

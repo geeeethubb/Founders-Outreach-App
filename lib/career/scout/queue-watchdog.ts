@@ -190,7 +190,9 @@ export async function cancelScoutRun(
   const now = opts.now ?? Date.now()
   const iso = new Date(now).toISOString()
 
-  const { row, error } = await db.getRun(userId, runId)
+  // getRun takes the ID first. Passing these the wrong way round looked up a
+  // run whose id was the user id, found nothing, and reported an empty message.
+  const { row, error } = await db.getRun(runId, userId)
   if (error) return { cancelled: false, requested: false, status: null, message: '', error }
   if (!row) return { cancelled: false, requested: false, status: null, message: '', error: 'run not found' }
 

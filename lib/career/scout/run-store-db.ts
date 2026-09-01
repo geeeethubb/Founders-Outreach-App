@@ -27,13 +27,26 @@ export interface RunStoreDb {
   countJobs(runId: string, userId: string): Promise<{ counts: RunJobCounts; error: string | null }>
 }
 
-const COLUMNS =
+// Migration 020's columns are appended in a SECOND list. They are selected when
+// the database has them and silently dropped when it does not, because the queue
+// watchdog has to work on the pre-020 rows that are stuck right now — asking for
+// a column that does not exist fails the whole select, which would blind the
+// watchdog to exactly the runs it exists to rescue.
+const BASE_COLUMNS =
   'id, user_id, kind, label, status, stage, progress, params, claim_token, heartbeat_at, worker_started_at, started_at, completed_at, stats, error, career_mission_id'
+const QUEUE_COLUMNS = 'queued_at, claimed_at, attempt_count, last_dispatch_at, worker_id, lease_expires_at, cancel_requested, last_error'
+const COLUMNS = `${BASE_COLUMNS}, ${QUEUE_COLUMNS}`
 
 export function liveRunStoreDb(db = createServiceClient()): RunStoreDb {
   return {
     async insertRun(row) {
-      const { data, error } = await db.from('scouting_runs').insert(row as never).select(COLUMNS).single()
+      // BASE_COLUMNS deliberately, not COLUMNS. A fresh row's 020 fields are all
+      // defaults the caller does not read, and selecting them here would fail the
+      // whole insert on a pre-020 database — which broke "Scout now" outright
+      // until the acceptance run caught it. There is no safe retry either: the
+      // id is server-generated, so a failed select cannot be turned into a
+      // lookup, and re-inserting would duplicate the run.
+      const { data, error } = await db.from('scouting_runs').insert(row as never).select(BASE_COLUMNS).single()
       if (error) return { row: null, error: error.message }
       return { row: data as unknown as ScoutRunRow, error: null }
     },
@@ -44,25 +57,45 @@ export function liveRunStoreDb(db = createServiceClient()): RunStoreDb {
         else if (Array.isArray(v)) q = q.in(k, v as string[])
         else q = q.eq(k, v as string)
       }
-      const { data, error } = await q.select(COLUMNS)
+      let { data, error } = await q.select(COLUMNS)
+      if (error) {
+        // Re-run the guarded update returning only the base columns. The update
+        // itself is idempotent, so repeating it is safe; what must not happen is
+        // a caller reading `rows: []` — that means "somebody else got there
+        // first" and would make a live run look claimed by another worker.
+        let retry = db.from('scouting_runs').update(patch as never).eq('id', id)
+        for (const [k, v] of Object.entries(guard)) {
+          if (v === null) retry = retry.is(k, null)
+          else if (Array.isArray(v)) retry = retry.in(k, v as string[])
+          else retry = retry.eq(k, v as string)
+        }
+        ;({ data, error } = await retry.select(BASE_COLUMNS))
+      }
       if (error) return { rows: [], error: error.message }
       return { rows: (data ?? []) as unknown as ScoutRunRow[], error: null }
     },
     async getRun(id, userId = null) {
-      let q = db.from('scouting_runs').select(COLUMNS).eq('id', id)
-      if (userId) q = q.eq('user_id', userId)
-      const { data, error } = await q.maybeSingle()
+      const read = async (cols: string) => {
+        let q = db.from('scouting_runs').select(cols).eq('id', id)
+        if (userId) q = q.eq('user_id', userId)
+        return q.maybeSingle()
+      }
+      let { data, error } = await read(COLUMNS)
+      if (error) ({ data, error } = await read(BASE_COLUMNS))
       if (error) return { row: null, error: error.message }
       return { row: (data as unknown as ScoutRunRow | null) ?? null, error: null }
     },
     async listRuns(userId, statuses, limit) {
-      const { data, error } = await db
-        .from('scouting_runs')
-        .select(COLUMNS)
-        .eq('user_id', userId)
-        .in('status', statuses)
-        .order('started_at', { ascending: false })
-        .limit(limit)
+      const read = (cols: string) =>
+        db
+          .from('scouting_runs')
+          .select(cols)
+          .eq('user_id', userId)
+          .in('status', statuses)
+          .order('started_at', { ascending: false })
+          .limit(limit)
+      let { data, error } = await read(COLUMNS)
+      if (error) ({ data, error } = await read(BASE_COLUMNS))
       if (error) return { rows: [], error: error.message }
       return { rows: (data ?? []) as unknown as ScoutRunRow[], error: null }
     },
