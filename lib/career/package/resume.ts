@@ -14,7 +14,7 @@
 import fs from 'fs'
 import path from 'path'
 import { applyResumePatch, type BulletEdit, type ResumeDocumentPatch } from '../documents/docx'
-import { fontSizesUsed, fontsUsed, readDocx, sectPrOf, stripMarkdown } from '../documents/docx-read'
+import { documentText, fontSizesUsed, fontsUsed, readDocx, sectPrOf, stripMarkdown } from '../documents/docx-read'
 import { resumeFilenames } from '../documents/filenames'
 import { fitToOnePage, shrinkStrategies } from '../documents/fit-page'
 import { NO_RENDERER_ERROR, renderDocxToPdf } from '../documents/pdf'
@@ -357,6 +357,8 @@ async function buildResumeDocuments(params: ResumeDocumentsParams, tmp: string, 
     company: params.company,
     renderer: params.skipPdf || noRenderer ? null : renderer,
     pdfSkipped: params.skipPdf === true,
+    // Only meaningful when no PDF is produced; qaResumeDocument ignores it otherwise.
+    masterTextLength: documentText(masterFile).replace(/\s+/g, '').length,
   })
   qa.shrink_attempts = fit.shrink_attempts
 

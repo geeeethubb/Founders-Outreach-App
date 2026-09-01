@@ -14,6 +14,7 @@ import type { LetterView, PackageSummary, PackageView } from '@/components/caree
 import InlineNotice from '@/components/career/InlineNotice'
 import DocLinks from '@/components/career/DocLinks'
 import ResumeDiff from './ResumeDiff'
+import { AttentionPanel, PackageChecklist, attentionFor } from './PackageChecklist'
 import LetterPanel from './LetterPanel'
 import PackageDocuments from './PackageDocuments'
 import PackageVersions from './PackageVersions'
@@ -193,8 +194,10 @@ export default function PackagePanel({ jobId, job, packages, view, application, 
         <div className="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center">
           <p className="text-slate-700 font-medium">No package for this job yet.</p>
           <p className="text-sm text-slate-500 mt-1 mb-3 max-w-xl mx-auto">
-            Generating one researches the company, judges fit, matches your evidence, then proposes résumé changes — each verified
-            against your Evidence Bank — for you to review. Nothing is sent anywhere. A few minutes; cached inputs are free.
+            One click runs everything: research, fit, evidence matching, résumé tailoring, fact verification, the DOCX, the cover
+            letter and document QA. Changes that pass verification are applied automatically; anything that fails keeps your original
+            wording. You get <strong>Ready to apply</strong> or a specific thing to look at. Nothing is ever submitted for you.
+            A few minutes; cached inputs are free.
           </p>
           <button type="button" onClick={generate} disabled={job.verification_status === 'CLOSED'} className="px-3 py-1.5 rounded-md bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-50">
             Generate package
@@ -282,6 +285,7 @@ export default function PackagePanel({ jobId, job, packages, view, application, 
             <div className="rounded-xl border border-emerald-300 bg-emerald-50 p-4">
               <p className="text-base font-semibold text-emerald-900">Ready to apply</p>
               <p className="text-sm text-emerald-800 mt-0.5">Submit through the company&apos;s own application — this system never applies for you.</p>
+              <PackageChecklist view={view as never} />
               <div className="mt-3 flex items-center gap-3 flex-wrap">
                 {applyHref ? (
                   <a href={applyHref} target="_blank" rel="noreferrer" className="px-3 py-1.5 rounded-md bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700">
@@ -336,11 +340,12 @@ export default function PackagePanel({ jobId, job, packages, view, application, 
               {status === 'resume_review' && (
                 <div className="mt-4 rounded-lg border border-indigo-200 bg-indigo-50/40 p-3">
                   <p className="text-sm text-slate-700">
-                    Only approved or edited changes reach the document; everything pending or rejected keeps the master text. Building takes a minute
-                    or two: résumé DOCX + PDF, then the cover letter, then QA.
+                    This package stopped before its documents were built — usually because the request timed out part-way. Finishing it
+                    picks up where it left off: the résumé DOCX, the cover letter, then QA. Changes that passed verification are applied;
+                    anything pending or rejected keeps your original wording.
                   </p>
                   <button type="button" disabled={busy !== null} onClick={approveResume} className="mt-2 px-3 py-1.5 rounded-md bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-50">
-                    {busy === 'resume' ? 'Building documents… (this takes a while)' : 'Approve résumé and build documents'}
+                    {busy === 'resume' ? 'Building documents… (this takes a while)' : 'Finish this package'}
                   </button>
                 </div>
               )}
@@ -356,22 +361,32 @@ export default function PackagePanel({ jobId, job, packages, view, application, 
             <LetterPanel packageId={latest.id} letter={view.cover_letter} readOnly={readOnly} onChanged={onLetter} onDocuments={onReload} />
           )}
 
+          {/*
+            A package that finished but is NOT ready. Generation already tried
+            everything; landing here means a specific thing needs a person, so
+            this says what — and keeps the override, because "apply with the
+            résumé only" is a real decision the founder is entitled to make.
+          */}
           {status === 'ready_for_review' && !applicationLocked && (
-            <div className="rounded-lg border border-emerald-200 bg-emerald-50/40 p-3">
-              <p className="text-sm text-slate-700">
-                Finalizing marks the package READY TO APPLY. The cover letter should be approved first;
-                {view.cover_letter?.review_status !== 'approved' && ' it is not yet —'}
-              </p>
-              {view.cover_letter && view.cover_letter.review_status !== 'approved' && (
-                <label className="mt-1.5 flex items-center gap-2 text-xs text-slate-700">
-                  <input type="checkbox" checked={ackLetter} onChange={(e) => setAckLetter(e.target.checked)} />
-                  I acknowledge the letter is {view.cover_letter.review_status} and want to finalize anyway
-                </label>
-              )}
-              <button type="button" disabled={busy !== null} onClick={finalize} className="mt-2 px-3 py-1.5 rounded-md bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 disabled:opacity-50">
-                {busy === 'finalize' ? 'Finalizing…' : 'Mark READY TO APPLY'}
-              </button>
-            </div>
+            <>
+              <AttentionPanel items={attentionFor(view as never)} />
+              <div className="rounded-lg border border-slate-200 bg-white p-3">
+                <PackageChecklist view={view as never} />
+                <p className="text-xs text-slate-500 mt-2">
+                  The documents above are built and stored. If what needs attention does not block your application — an
+                  ungrounded cover-letter sentence when you plan to send the résumé alone, say — you can mark this ready.
+                </p>
+                {view.cover_letter && view.cover_letter.review_status !== 'approved' && (
+                  <label className="mt-1.5 flex items-center gap-2 text-xs text-slate-700">
+                    <input type="checkbox" checked={ackLetter} onChange={(e) => setAckLetter(e.target.checked)} />
+                    I have read the cover letter and want to mark this ready anyway
+                  </label>
+                )}
+                <button type="button" disabled={busy !== null} onClick={finalize} className="mt-2 px-3 py-1.5 rounded-md bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 disabled:opacity-50">
+                  {busy === 'finalize' ? 'Marking ready…' : 'Mark READY TO APPLY'}
+                </button>
+              </div>
+            </>
           )}
 
         </>

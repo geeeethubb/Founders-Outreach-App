@@ -26,6 +26,7 @@
 // and what the card displays can never disagree.
 
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { bestOpportunities, type QueueJob } from '@/lib/career/jobs/queue'
 import type { JobListRow } from '@/lib/career/jobs/store'
 import {
   bestFirstKey,
@@ -66,7 +67,13 @@ export interface CensusFilters {
 }
 
 export type InboxSort = 'best' | 'fit' | 'recent' | 'deadline'
-export type InboxView = 'all' | 'needs_look'
+/**
+ * `best` is the APPLICATION QUEUE: what is actually worth acting on today —
+ * open, not dismissed, not already applied, ordered by fit. It is a view rather
+ * than a sort because its job is to REMOVE things; the ordering it wants is the
+ * one `best` sort already produces.
+ */
+export type InboxView = 'all' | 'needs_look' | 'best'
 
 export interface ScoredJob {
   id: string
@@ -184,6 +191,16 @@ export function rankAndFilter(
   // "Needs a look" is a queue, not a filter on top of a filter: relevant
   // postings nobody — no model, no person — has read yet.
   if (opts.view === 'needs_look') shown = shown.filter((s) => !s.read && s.relevance.band !== 'off')
+  // The application queue. `bestOpportunities` owns the rule so the API, the
+  // CLI and the tests cannot each decide separately what "worth applying to"
+  // means; here it is used for its EXCLUSIONS, and the existing 'best'
+  // comparator below still does the ordering.
+  if (opts.view === 'best') {
+    const keep = new Set(
+      bestOpportunities(shown.map((s) => s.row as unknown as QueueJob & { id: string })).jobs.map((j) => j.id)
+    )
+    shown = shown.filter((s) => keep.has(s.row.id))
+  }
 
   shown.sort(comparatorFor(opts.sort))
 

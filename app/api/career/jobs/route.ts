@@ -215,7 +215,8 @@ export async function GET(request: NextRequest) {
     const sort: InboxSort = rawSort === 'fit' || rawSort === 'recent' || rawSort === 'deadline' ? rawSort : 'best'
     const rawRelevance = p.get('relevance')
     const relevance: RelevanceFilter = rawRelevance === 'strong' || rawRelevance === 'any' ? rawRelevance : 'possible'
-    const view: InboxView = p.get('view') === 'needs_look' ? 'needs_look' : 'all'
+    const rawView = p.get('view')
+    const view: InboxView = rawView === 'needs_look' ? 'needs_look' : rawView === 'best' ? 'best' : 'all'
     const limit = Math.min(200, Math.max(1, Number(p.get('limit')) || 50))
     const offset = Math.max(0, Number(p.get('offset')) || 0)
 

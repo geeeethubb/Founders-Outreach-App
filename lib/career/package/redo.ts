@@ -16,7 +16,7 @@
 // Nothing here submits anything.
 
 import { updateApplicationDetails } from '../applications/store'
-import type { ApplicationPackage } from '../types'
+import type { ApplicationPackage, PackageStatus } from '../types'
 import { generatePackage, type PackageResult } from './orchestrator'
 import { getPackage, insertPackage, nextPackageVersion, supersedePackages, updatePackage } from './persist'
 
@@ -29,13 +29,35 @@ export interface RedoResult extends PackageResult {
 }
 
 /** A new version through the whole generate path. The old package becomes superseded unless it is locked. */
+/**
+ * The guards a redo has to pass, and the job it is a redo OF.
+ *
+ * Split out because there are now two things a redo can run — the stepwise
+ * flow and the one-click complete flow — and the guards must not be written
+ * twice. A second copy of "is it still generating?" is a second chance to get
+ * it wrong.
+ */
+export async function resolveRedoTarget(userId: string, packageId: string): Promise<{
+  jobId: string | null
+  fromStatus: PackageStatus | null
+  error: string | null
+  migrationMissing: boolean
+}> {
+  const got = await getPackage(userId, packageId)
+  const fromStatus = got.pkg?.status ?? null
+  if (got.migrationMissing) return { jobId: null, fromStatus, error: MIGRATION, migrationMissing: true }
+  if (!got.pkg) return { jobId: null, fromStatus, error: 'package not found', migrationMissing: false }
+  if (got.pkg.status === 'generating') {
+    return { jobId: null, fromStatus, error: 'package is still generating — wait for it to finish', migrationMissing: false }
+  }
+  return { jobId: got.pkg.job_id, fromStatus, error: null, migrationMissing: false }
+}
+
 export async function redoPackage(params: { userId: string; packageId: string }): Promise<RedoResult> {
-  const got = await getPackage(params.userId, params.packageId)
-  const base = { fromPackageId: params.packageId, fromStatus: got.pkg?.status ?? null }
-  if (got.migrationMissing) return { ...emptyResult(MIGRATION, true), ...base }
-  if (!got.pkg) return { ...emptyResult('package not found'), ...base }
-  if (got.pkg.status === 'generating') return { ...emptyResult('package is still generating — wait for it to finish'), ...base }
-  const r = await generatePackage({ userId: params.userId, jobId: got.pkg.job_id })
+  const target = await resolveRedoTarget(params.userId, params.packageId)
+  const base = { fromPackageId: params.packageId, fromStatus: target.fromStatus }
+  if (!target.jobId) return { ...emptyResult(target.error ?? 'package not found', target.migrationMissing), ...base }
+  const r = await generatePackage({ userId: params.userId, jobId: target.jobId })
   return { ...r, ...base }
 }
 

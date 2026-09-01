@@ -54,6 +54,10 @@ async function dbMode(jobId: string): Promise<void> {
   }
   if (!userId) throw new Error('no user — pass --user <id>')
 
+  // One click, the way the product does it. --stepwise keeps the old
+  // generate/approve/finish walk for debugging a single stage.
+  if (!process.argv.includes('--stepwise')) return autoMode(userId, jobId)
+
   console.log(`\nPACKAGE — job ${jobId} → user ${userId}\n`)
   const gen = await generatePackage({ userId, jobId, onProgress: (stage, detail) => console.log(`  [${stage}] ${detail}`) })
   if (gen.migrationMissing) {
@@ -86,6 +90,44 @@ async function dbMode(jobId: string): Promise<void> {
     console.log(`  letter: ${v.cover_letter?.word_count ?? '-'} words, ${v.cover_letter?.review_status ?? '-'}`)
   }
   process.exitCode = fin.status === 'failed' ? 1 : 0
+}
+
+
+/**
+ * The founder's actual workflow: one call, and the answer is READY TO APPLY or
+ * a named reason it is not. This is also the harness the live acceptance test
+ * runs, so what it prints is what the UI has to be able to say.
+ */
+async function autoMode(userId: string, jobId: string): Promise<void> {
+  const { generateCompletePackage } = await import('../lib/career/package/auto')
+
+  console.log(`
+PACKAGE — job ${jobId} → user ${userId}
+`)
+  const started = Date.now()
+  const r = await generateCompletePackage({
+    userId,
+    jobId,
+    renderPdf: process.argv.includes('--pdf'),
+    onProgress: (stage, detail) => console.log(`  [${stage}] ${detail}`),
+  })
+
+  console.log(`
+${r.outcome === 'ready_to_apply' ? 'READY TO APPLY' : 'NEEDS ATTENTION'} · ${money(r.costUsd)} · ${(r.elapsedMs / 1000).toFixed(1)}s · package ${r.packageId ?? '-'} v${r.version ?? '-'}`)
+  console.log(`  résumé: ${r.resume.summary}`)
+  if (r.letter) console.log(`  letter: ${r.letter.wordCount ?? '-'} words, ${r.letter.blockingGrounding} unsupported claim(s)`)
+  console.log(`  docx:   ${r.documents.resumeDocx ?? '-'}`)
+  if (r.documents.coverDocx) console.log(`  cover:  ${r.documents.coverDocx}`)
+  console.log(`  apply:  ${r.applyUrl ?? '(no application link)'}`)
+  for (const a of r.attention) console.log(`
+  ATTENTION [${a.code}] ${a.what}
+    why:    ${a.why}
+    action: ${a.action}`)
+  for (const w of r.warnings) console.log(`  warn: ${w}`)
+  for (const e of r.errors) console.log(`  error: ${e}`)
+  console.log(`
+  wall clock ${(Date.now() - started) / 1000}s · approval clicks required: 0`)
+  process.exitCode = r.outcome === 'ready_to_apply' ? 0 : 1
 }
 
 // ─── NO-DB mode ──────────────────────────────────────────────────────────────

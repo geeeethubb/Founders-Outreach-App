@@ -157,7 +157,17 @@ export async function generatePackage(params: {
 
 // ─── Step 3: finalize ────────────────────────────────────────────────────────
 
-export async function finalizePackage(params: { userId: string; packageId: string; acknowledgeLetter?: boolean }): Promise<{
+export async function finalizePackage(params: {
+  userId: string
+  packageId: string
+  acknowledgeLetter?: boolean
+  /**
+   * Who decided. On the one-click path nobody pressed anything — the gates did —
+   * and recording that as 'user' puts a click in the audit trail that never
+   * happened. Provenance only; nothing gates on it.
+   */
+  actor?: 'user' | 'system'
+}): Promise<{
   ok: boolean; status: PackageStatus | null; applicationState: ApplicationState | null; error: string | null; migrationMissing: boolean
 }> {
   const got = await getPackage(params.userId, params.packageId)
@@ -178,7 +188,7 @@ export async function finalizePackage(params: { userId: string; packageId: strin
   if (w.error) return { ok: false, status: pkg.status, applicationState: null, error: w.error, migrationMissing: w.migrationMissing }
   let applicationState: ApplicationState | null = null
   if (pkg.application_id) {
-    const moved = await transitionApplication(params.userId, pkg.application_id, 'READY_TO_APPLY', { actor: 'user', detail: { package_id: pkg.id } })
+    const moved = await transitionApplication(params.userId, pkg.application_id, 'READY_TO_APPLY', { actor: params.actor ?? 'user', detail: { package_id: pkg.id } })
     applicationState = moved.application?.state ?? null
   }
   return { ok: true, status: 'ready_to_apply', applicationState, error: null, migrationMissing: false }

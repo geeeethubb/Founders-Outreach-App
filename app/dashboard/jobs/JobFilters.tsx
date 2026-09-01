@@ -16,8 +16,11 @@ export interface JobFilterState {
   freshness: 'verified' | 'likely' | 'open' | 'any'
   /** How close to the stated direction. `possible` = strong + possible. */
   relevance: 'strong' | 'possible' | 'any'
-  /** `needs_look` = relevant postings no model has read yet. */
-  view: 'all' | 'needs_look'
+  /**
+   * `needs_look` = relevant postings no model has read yet.
+   * `best` = the application queue: open, not dismissed, not already applied.
+   */
+  view: 'all' | 'needs_look' | 'best'
   tier: string
   role_family: string
   disposition: string
@@ -111,6 +114,17 @@ export default function JobFilters({
           <option value="possible">Strong + possible</option>
           <option value="any">Everything, including off-direction</option>
         </select>
+        <button
+          type="button"
+          onClick={() => set('view', value.view === 'best' ? 'all' : 'best')}
+          aria-pressed={value.view === 'best'}
+          title="Open, not dismissed, not already applied — ranked by fit. The list to work through."
+          className={`rounded-md border px-2 py-1 text-xs ${
+            value.view === 'best' ? 'border-emerald-300 bg-emerald-50 text-emerald-800 font-medium' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+          }`}
+        >
+          Best opportunities
+        </button>
         <button
           type="button"
           onClick={() => set('view', value.view === 'needs_look' ? 'all' : 'needs_look')}

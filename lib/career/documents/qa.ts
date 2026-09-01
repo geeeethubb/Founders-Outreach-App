@@ -146,6 +146,18 @@ export interface ResumeQaInput {
    * install Word when nobody asked for a PDF in the first place.
    */
   pdfSkipped?: boolean
+  /**
+   * Visible characters in the MASTER's body. With no PDF there is no page count,
+   * and the whole one-page apparatus is keyed on one — so a DOCX-only package
+   * would sail past the check that used to catch a two-page résumé.
+   *
+   * This is the argument that survives without a renderer: the master is one
+   * page, QA has already proved the fonts, sizes and section setup are
+   * byte-identical to it, so a document that is no LONGER than the master
+   * cannot need more pages than the master. Growth is the only risky direction,
+   * and growth is measurable from the text alone.
+   */
+  masterTextLength?: number
   docxPath?: string | null
 }
 
@@ -235,6 +247,22 @@ export async function qaResumeDocument(input: ResumeQaInput): Promise<DocumentQa
     if (!needle) continue
     if (docxSquashed.includes(needle) || (pdfSquashed !== null && pdfSquashed.includes(needle))) leaked.push(t)
   }
+  // Page fit without a renderer — see `masterTextLength`. Only asserted when no
+  // PDF was produced; when one exists, `pdf_page_count` above is the real check
+  // and this would be a weaker duplicate of it.
+  if (!info && input.masterTextLength !== undefined) {
+    const grew = text.replace(/\s+/g, '').length - input.masterTextLength
+    checks.push(
+      check(
+        'one_page_safe',
+        grew <= 0,
+        grew <= 0
+          ? `no PDF rendered, but the body is ${Math.abs(grew)} character(s) shorter than the master — it cannot need more pages`
+          : `no PDF rendered and the body grew by ${grew} character(s); the one-page guarantee could not be checked. Regenerate with a PDF to confirm, or shorten the résumé.`
+      )
+    )
+  }
+
   checks.push(
     check(
       'no_rejected_text',

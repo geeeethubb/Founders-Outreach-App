@@ -22,6 +22,7 @@ import { runCoverLetterPipeline, type CompanyResearchForLetter, type CoverLetter
 import type { CareerRun } from '../runs'
 import type { CoverLetter, DocumentQaReport, EvidenceBank, ResumeParagraphMapEntry } from '../types'
 import { withTempDir } from '../documents/tmp'
+import { letterBlockingCount } from './assessment'
 import { insertCoverLetter, nextLetterVersion, updateCoverLetter, type LetterSigner } from './persist'
 import { PDF_UNAVAILABLE_WARNING, pdfRenderFailedWarning, writeOutput, type DocumentOutput } from './resume'
 
@@ -318,8 +319,7 @@ export interface ReuseLetterResult {
 }
 
 function blockingCountOf(g: unknown): number {
-  const b = (g as { blocking?: unknown[] } | null)?.blocking
-  return Array.isArray(b) ? b.length : 0
+  return letterBlockingCount(g)
 }
 
 /**

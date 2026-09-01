@@ -83,7 +83,11 @@
     "eval:career": "tsx scripts/career-eval-all.ts",
     "eval:career-factuality": "tsx scripts/career-eval-factuality.ts",
     "eval:career-tailoring": "tsx scripts/career-eval-tailoring.ts",
-    "eval:career-cover-letter": "tsx scripts/career-eval-cover-letter.ts"
+    "eval:career-cover-letter": "tsx scripts/career-eval-cover-letter.ts",
+    "test:career-auto": "tsx scripts/test-career-auto.ts",
+    "test:career-batch": "tsx scripts/test-career-batch.ts",
+    "test:career-queue": "tsx scripts/test-career-queue.ts",
+    "career:package-batch": "tsx scripts/career-package-batch.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.116.0",
