@@ -34,6 +34,8 @@ import {
   workerBaseUrl,
 } from '@/lib/career/scout/run-dispatch'
 import { reapStaleRuns } from '@/lib/career/scout/run-reaper'
+import { sweepScoutQueue } from '@/lib/career/scout/queue-watchdog'
+import { HARD_QUEUE_CEILING_MS } from '@/lib/career/scout/queue-health'
 import { activeJobScoutRun, enqueueScoutRun, getRunJobCounts, getScoutRun, toRunView } from '@/lib/career/scout/run-store'
 
 export const dynamic = 'force-dynamic'
@@ -94,6 +96,11 @@ export async function POST(request: NextRequest) {
     // so a run whose worker really did die does not block the next one.
     if (body.force !== true) {
       await reapStaleRuns(user.id)
+      // AND the queue. reapStaleRuns only selects ['running'], so before this a
+      // run stuck at 'queued' was not merely unrecoverable — it counted as
+      // "active" and returned 409 to every subsequent Scout now. One lost
+      // dispatch disabled scouting entirely until someone edited the database.
+      await sweepScoutQueue(user.id, { baseUrl: workerBaseUrl(request.headers) })
       const existing = await activeJobScoutRun(user.id)
       if (existing.run) {
         const view = toRunView(existing.run, await getRunJobCounts(user.id, existing.run.id))
@@ -118,6 +125,22 @@ export async function POST(request: NextRequest) {
     }
 
     const { dispatched, error } = await dispatchScoutWorker(workerBaseUrl(request.headers), queued.runId, queued.claimToken)
+
+    // FAIL FAST when nothing is listening. A dispatch that could not even be
+    // sent will not be fixed by waiting: the founder gets a real error in a
+    // second instead of a spinner that the watchdog eventually retires a minute
+    // later. `dispatched` false with no error means the race timer won — the
+    // request is still in flight — and that IS worth waiting for.
+    if (!dispatched && error) {
+      await sweepScoutQueue(user.id, {
+        baseUrl: workerBaseUrl(request.headers),
+        // Judged immediately rather than in 60s: we already KNOW it failed, so
+        // the ceiling is used to force the terminal branch rather than to wait.
+        now: Date.now() + HARD_QUEUE_CEILING_MS + 1_000,
+        dispatch: async () => ({ dispatched: false, error }),
+      })
+    }
+
     return NextResponse.json(
       {
         runId: queued.runId,

@@ -447,33 +447,70 @@ export function workerBaseUrl(headers?: HeaderBag | null, env: Record<string, st
 }
 
 /**
- * Start the worker without waiting for it. We await only long enough for the
- * request to be on the wire — the whole point is that the run outlives this
- * request. A dispatch that never lands is not fatal: GET
- * /api/career/scout/runs/[id] re-dispatches a run still queued after
- * REDISPATCH_AFTER_MS.
+ * Start the worker without waiting for it to finish. We await only long enough
+ * to learn whether the request was ACCEPTED — the run itself outlives this
+ * request.
+ *
+ * This used to lie in three separate ways, and together they are why a run sat
+ * queued for 328 minutes with `dispatched: true` recorded against it:
+ *
+ *   1. The race timer resolved `true`, so "1.5 seconds elapsed" and "a worker
+ *      took it" were the same answer.
+ *   2. `.then(() => true)` never looked at the Response, so a 401 from
+ *      deployment protection, a 404, a 500 or an HTML login page all reported
+ *      success with no error.
+ *   3. A rejection arriving after the race wrote `error` into a variable
+ *      nobody read again.
+ *
+ * Now the three outcomes are distinct, because the caller has to act
+ * differently on each: `accepted` (the worker answered 2xx), `pending` (still in
+ * flight — genuinely worth waiting for), `failed` (we know it did not land, so
+ * fail fast rather than leave a spinner running).
  */
+export type DispatchOutcome = 'accepted' | 'pending' | 'failed'
+
 export async function dispatchScoutWorker(
   baseUrl: string,
   runId: string,
   token: string,
   opts: { raceMs?: number; fetchImpl?: typeof fetch } = {}
-): Promise<{ dispatched: boolean; error: string | null }> {
+): Promise<{ dispatched: boolean; outcome: DispatchOutcome; status: number | null; error: string | null }> {
   const raceMs = opts.raceMs ?? 1_500
   const doFetch = opts.fetchImpl ?? fetch
-  let error: string | null = null
-  const sent = doFetch(`${trimUrl(baseUrl)}/api/career/scout/worker`, {
+  const url = `${trimUrl(baseUrl)}/api/career/scout/worker`
+
+  type Settled = { outcome: DispatchOutcome; status: number | null; error: string | null }
+  const sent: Promise<Settled> = doFetch(url, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ runId, token }),
     cache: 'no-store',
   }).then(
-    () => true,
-    (e: unknown) => {
-      error = e instanceof Error ? e.message : String(e)
-      return false
-    }
+    (res) =>
+      res.ok
+        ? { outcome: 'accepted' as const, status: res.status, error: null }
+        : {
+            outcome: 'failed' as const,
+            status: res.status,
+            // 401 here is almost always Vercel Deployment Protection on the
+            // self-POST; say so, because "401" alone sends people to their auth code.
+            error:
+              res.status === 401 || res.status === 403
+                ? `the worker refused the request (HTTP ${res.status}) — on Vercel this is usually Deployment Protection blocking the app from calling itself; set SCOUT_WORKER_BASE_URL to a reachable URL`
+                : `the worker answered HTTP ${res.status} at ${url}`,
+          },
+    (e: unknown) => ({
+      outcome: 'failed' as const,
+      status: null,
+      error: `${e instanceof Error ? e.message : String(e)} (dispatching to ${url})`,
+    })
   )
-  const raced = await Promise.race([sent, new Promise<boolean>((r) => setTimeout(() => r(true), raceMs))])
-  return { dispatched: raced, error }
+
+  const pending: Promise<Settled> = new Promise((r) =>
+    setTimeout(() => r({ outcome: 'pending', status: null, error: null }), raceMs)
+  )
+  const raced = await Promise.race([sent, pending])
+  // `dispatched` keeps its old meaning for existing callers — "not known to have
+  // failed" — while `outcome` carries the distinction they now need.
+  return { dispatched: raced.outcome !== 'failed', outcome: raced.outcome, status: raced.status, error: raced.error }
 }

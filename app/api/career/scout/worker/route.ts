@@ -80,6 +80,7 @@ async function execute(runId: string, userId: string, params: ReturnType<typeof 
   let chain: Promise<unknown> = Promise.resolve()
   let progressErrors = 0
   let lostRun = false
+  let cancelled = false
   const onProgress = (stage: string, detail: string, counts?: Record<string, number>) => {
     chain = chain
       .then(() => recordProgress(runId, { stage, detail, counts }))
@@ -88,6 +89,10 @@ async function execute(runId: string, userId: string, params: ReturnType<typeof 
         // Surface it — a silent heartbeat is exactly the failure this whole
         // module exists to make visible.
         if (r.notRunning) lostRun = true
+        // Cancellation arrives on the write that was happening anyway. The
+        // orchestrator stops at its next stage boundary, so a stage part-way
+        // through writing findings still finishes that write.
+        else if (r.cancelRequested) cancelled = true
         else if (r.error) progressErrors++
       })
       .catch(() => {
@@ -165,12 +170,16 @@ async function execute(runId: string, userId: string, params: ReturnType<typeof 
     ]
     // stats MERGE onto what attachCareerRun already wrote, so cost_usd and
     // agent_calls survive: one stats shape for web, CLI and legacy runs.
-    const finished = await finishScoutRun(runId, status, {
+    // A cancelled run is not a failure and not a success: the founder stopped
+    // it. Recording it as 'partial' or 'succeeded' would hide that, and anything
+    // it did find before stopping is still saved and still counted.
+    const finalStatus = cancelled ? 'cancelled' : status
+    const finished = await finishScoutRun(runId, finalStatus, {
       stats: { ...result.stats, jobs: result.jobs.length, rejected: result.rejected.length, errors: errors.slice(0, 10) },
-      error: errors[0] ?? null,
+      error: cancelled ? 'Cancelled while running; anything already found was kept.' : errors[0] ?? null,
     })
     return NextResponse.json({
-      runId, status, jobs: result.jobs.length, errors, finished: finished.ok, overrodeReap: finished.overrodeReap,
+      runId, status: finalStatus, cancelled, jobs: result.jobs.length, errors, finished: finished.ok, overrodeReap: finished.overrodeReap,
       mode: result.budget.mode, stopped: result.stopped, spentUsd: result.spend.spent_usd,
     })
   } catch (e) {

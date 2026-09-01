@@ -18,6 +18,8 @@ import { isDynamicUsage } from '@/lib/http/dynamic'
 import { dispatchScoutWorker, workerBaseUrl } from '@/lib/career/scout/run-dispatch'
 import { reapStaleRuns } from '@/lib/career/scout/run-reaper'
 import { getRunJobCounts, getScoutRun, REDISPATCH_AFTER_MS, toRunView } from '@/lib/career/scout/run-store'
+import { sweepScoutQueue } from '@/lib/career/scout/queue-watchdog'
+import { MAX_QUEUE_WAIT_MS } from '@/lib/career/scout/queue-health'
 
 export const dynamic = 'force-dynamic'
 
@@ -46,19 +48,29 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     if (error) return NextResponse.json({ error }, { status: 500 })
     if (!run) return NextResponse.json({ error: 'Run not found' }, { status: 404 })
 
+    // Two mechanisms, deliberately. The eager one below re-asks after ~10s so a
+    // watched run starts fast. The WATCHDOG is what makes the invariant true:
+    // past 60s it counts attempts and, once they are spent, FAILS the run. The
+    // old code had only the eager half, so a run nobody was watching — the UI
+    // says "you can close this tab" — had no path out of 'queued' at all.
     let redispatched = false
     if (run.status === 'queued' && run.claim_token) {
       const queuedFor = Date.now() - Date.parse(String(run.started_at ?? run.heartbeat_at ?? ''))
-      if (Number.isFinite(queuedFor) && queuedFor > REDISPATCH_AFTER_MS) {
+      if (Number.isFinite(queuedFor) && queuedFor > REDISPATCH_AFTER_MS && queuedFor <= MAX_QUEUE_WAIT_MS) {
         const d = await dispatchScoutWorker(workerBaseUrl(request.headers), run.id, run.claim_token, { raceMs: 800 })
         redispatched = d.dispatched
       }
     }
+    const swept = await sweepScoutQueue(user.id, { baseUrl: workerBaseUrl(request.headers) })
+    // The sweep may have just finalised this run; re-read so the caller is told
+    // the truth rather than the status from before the watchdog acted.
+    const after = swept.actions.some((a) => a.runId === run.id) ? (await getScoutRun(user.id, params.id)).run ?? run : run
 
-    const jobs = await getRunJobCounts(user.id, run.id)
+    const jobs = await getRunJobCounts(user.id, after.id)
     return NextResponse.json({
-      run: toRunView(run, jobs),
+      run: toRunView(after, jobs),
       redispatched,
+      queueActions: swept.actions.filter((a) => a.runId === after.id),
       reaped: reap.reaped.filter((r) => r.runId === run.id),
     })
   } catch (error) {

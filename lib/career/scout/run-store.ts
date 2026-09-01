@@ -176,6 +176,16 @@ export interface ProgressResult {
   written: boolean
   /** The guarded update matched nothing: the run is no longer 'running'. */
   notRunning: boolean
+  /**
+   * Somebody pressed Cancel while this run was working.
+   *
+   * Read off the row the update RETURNED rather than by polling: the write was
+   * happening anyway, so cancellation costs nothing extra and arrives at the
+   * next progress tick. On a pre-020 database the column is absent, which reads
+   * as false — cancelling a running scout then needs the migration, and
+   * `cancelScoutRun` says so rather than pretending it worked.
+   */
+  cancelRequested: boolean
   progress: ScoutRunProgress
   migrationMissing: boolean
   error: string | null
@@ -211,7 +221,7 @@ export async function recordProgress(
 
   const progress: ScoutRunProgress = { stage: input.stage, detail, counts: { ...cache.counts }, events: [...cache.events], deadline_at: cache.deadlineAt }
   const due = opts.force || stageChanged || now - cache.lastWriteAt >= PROGRESS_MIN_INTERVAL_MS
-  if (!due) return { written: false, notRunning: false, progress, migrationMissing: false, error: null }
+  if (!due) return { written: false, notRunning: false, cancelRequested: false, progress, migrationMissing: false, error: null }
 
   cache.lastWriteAt = now
   const db = opts.db ?? liveRunStoreDb()
@@ -220,9 +230,9 @@ export async function recordProgress(
     { stage: input.stage, progress, heartbeat_at: new Date(now).toISOString() },
     { status: 'running' }
   )
-  if (error) return { written: false, notRunning: false, progress, migrationMissing: isMissingSchema(error), error }
-  if (rows.length === 0) return { written: false, notRunning: true, progress, migrationMissing: false, error: 'the run is no longer running' }
-  return { written: true, notRunning: false, progress, migrationMissing: false, error: null }
+  if (error) return { written: false, notRunning: false, cancelRequested: false, progress, migrationMissing: isMissingSchema(error), error }
+  if (rows.length === 0) return { written: false, notRunning: true, cancelRequested: false, progress, migrationMissing: false, error: 'the run is no longer running' }
+  return { written: true, notRunning: false, cancelRequested: rows[0]?.cancel_requested === true, progress, migrationMissing: false, error: null }
 }
 
 // ─── The task cursor ─────────────────────────────────────────────────────────

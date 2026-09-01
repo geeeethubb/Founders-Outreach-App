@@ -80,6 +80,17 @@ export interface ScoutRunRow {
   stats?: unknown
   error?: string | null
   career_mission_id?: string | null
+  // ─── Migration 020. Optional because the watchdog must work before it is
+  // applied by hand: a missing attempt_count reads as 0, and a missing
+  // queued_at falls back to started_at.
+  queued_at?: string | null
+  claimed_at?: string | null
+  attempt_count?: number | null
+  last_dispatch_at?: string | null
+  worker_id?: string | null
+  lease_expires_at?: string | null
+  cancel_requested?: boolean | null
+  last_error?: string | null
 }
 
 /**
