@@ -185,6 +185,25 @@ export function anthropicAvailable(): boolean {
   return Boolean(process.env.ANTHROPIC_API_KEY)
 }
 
+/**
+ * How long ONE request may take.
+ *
+ * 120s is right for an ordinary completion and far too short for one that uses
+ * server-side web search: the connection is held open while Anthropic runs the
+ * searches, so the wall clock covers the model AND every search it decides to
+ * make. The mission planner (webSearch, maxSteps 6) exceeded 120s on every one
+ * of four attempts, in five consecutive live scout runs and again from the CLI
+ * with no queue involved — so every run fell back to deterministic strategies
+ * and discovered nothing. At 300s the same planner returns 8 strategies and 31
+ * seeds, and the run persists postings. It was slow, not hung.
+ */
+export const DEFAULT_REQUEST_TIMEOUT_MS = Number(process.env.ANTHROPIC_TIMEOUT_MS ?? 120_000)
+/** Does this request hand work to Anthropic's own search tool? */
+export function usesWebSearch(tools: unknown): boolean {
+  return Array.isArray(tools) && tools.some((t) => typeof (t as { type?: unknown })?.type === 'string' && /web_search/.test(String((t as { type: string }).type)))
+}
+export const SEARCH_REQUEST_TIMEOUT_MS = Number(process.env.ANTHROPIC_SEARCH_TIMEOUT_MS ?? 300_000)
+
 function getClient(): Anthropic {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) throw new Error('ANTHROPIC_API_KEY is not set')
@@ -193,7 +212,7 @@ function getClient(): Anthropic {
       apiKey,
       // Retries are handled here so they are visible in our own accounting.
       maxRetries: 0,
-      timeout: Number(process.env.ANTHROPIC_TIMEOUT_MS ?? 120_000),
+      timeout: DEFAULT_REQUEST_TIMEOUT_MS,
     })
   }
   return client
@@ -286,7 +305,12 @@ export async function anthropicComplete(params: CompleteParams): Promise<Complet
           ...(params.tools ? { tools: params.tools as Anthropic.MessageCreateParams['tools'] } : {}),
           ...(params.toolChoice ? { tool_choice: params.toolChoice } : {}),
         },
-        params.extraHeaders ? { headers: params.extraHeaders } : undefined
+        {
+          // Per REQUEST, so a search-enabled call gets the longer ceiling
+          // without making every ordinary call wait five minutes to fail.
+          timeout: usesWebSearch(params.tools) ? SEARCH_REQUEST_TIMEOUT_MS : DEFAULT_REQUEST_TIMEOUT_MS,
+          ...(params.extraHeaders ? { headers: params.extraHeaders } : {}),
+        }
       )
 
       const inTok = res.usage.input_tokens ?? 0

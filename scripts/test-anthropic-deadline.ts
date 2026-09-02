@@ -12,7 +12,15 @@
 //
 //   npx tsx scripts/test-anthropic-deadline.ts
 
-import { setAnthropicDeadline, withAnthropicDeadline, resetAnthropicDeadlines, __pastRunDeadlineForTests } from '../lib/providers/anthropic/client'
+import {
+  setAnthropicDeadline,
+  withAnthropicDeadline,
+  resetAnthropicDeadlines,
+  usesWebSearch,
+  DEFAULT_REQUEST_TIMEOUT_MS,
+  SEARCH_REQUEST_TIMEOUT_MS,
+  __pastRunDeadlineForTests,
+} from '../lib/providers/anthropic/client'
 
 let passed = 0
 const failures: string[] = []
@@ -70,6 +78,23 @@ async function main(): Promise<void> {
     })
     check('and once the scope ends the slot decides again', !__pastRunDeadlineForTests())
     resetAnthropicDeadlines()
+  }
+
+  console.log('\nweb-search requests get the longer ceiling')
+  {
+    check('a plain request uses the default', !usesWebSearch(undefined) && !usesWebSearch([]))
+    check('a tool-using request without search still uses the default',
+      !usesWebSearch([{ name: 'submit_result', input_schema: {} }]))
+    check('a server-side web_search tool is recognised',
+      usesWebSearch([{ type: 'web_search_20250305', name: 'web_search' }]))
+    check('and recognised alongside other tools',
+      usesWebSearch([{ name: 'submit_result' }, { type: 'web_search_20250305', name: 'web_search' }]))
+    // The whole point: the search ceiling must actually be longer, or the
+    // planner times out exactly as it did in five consecutive live runs.
+    check('the search ceiling exceeds the default',
+      SEARCH_REQUEST_TIMEOUT_MS > DEFAULT_REQUEST_TIMEOUT_MS,
+      `${SEARCH_REQUEST_TIMEOUT_MS}ms vs ${DEFAULT_REQUEST_TIMEOUT_MS}ms`)
+    check('and it is at least the 300s the planner needed', SEARCH_REQUEST_TIMEOUT_MS >= 300_000)
   }
 
   console.log(`\n${passed} passed, ${failures.length} failed`)
