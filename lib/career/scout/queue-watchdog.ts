@@ -74,7 +74,7 @@ export async function sweepScoutQueue(userId: string, opts: SweepOptions = {}): 
     if (verdict.state === 'cancelled') {
       const done = await finishQueued(db, row.id, 'cancelled', message, now)
       if (done) actions.push({ runId: row.id, action: 'cancelled', waitedMs, attempt, message })
-      log(row.id, 'cancelled', { waitedMs, attempt })
+      log(row.id, 'cancelled', { queue_wait_ms: waitedMs, redispatch_count: attempt, terminal_reason: 'cancelled' })
       continue
     }
 
@@ -85,7 +85,7 @@ export async function sweepScoutQueue(userId: string, opts: SweepOptions = {}): 
       const why = 'This run was queued without a claim token, so no worker could ever start it. Retry to create a fresh run.'
       const done = await finishQueued(db, row.id, 'failed', why, now)
       if (done) actions.push({ runId: row.id, action: 'failed', waitedMs, attempt, message: 'queued without a claim token' })
-      log(row.id, 'failed', { waitedMs, attempt, reason: 'no_claim_token' })
+      log(row.id, 'failed', { queue_wait_ms: waitedMs, redispatch_count: attempt, terminal_reason: 'no_claim_token' })
       continue
     }
 
@@ -96,7 +96,7 @@ export async function sweepScoutQueue(userId: string, opts: SweepOptions = {}): 
       await bumpAttempt(db, row.id, attempt + 1, now)
       const send = opts.dispatch ?? ((id: string, t: string) => dispatchScoutWorker(opts.baseUrl ?? workerBaseUrl(null), id, t, { raceMs: 1_200 }))
       const d = await send(row.id, token)
-      log(row.id, 'redispatched', { waitedMs, attempt: attempt + 1, ok: d.dispatched, error: d.error })
+      log(row.id, 'redispatched', { queue_wait_ms: waitedMs, redispatch_count: attempt + 1, outcome: d.dispatched ? 'sent' : 'failed', error: d.error })
       actions.push({
         runId: row.id,
         action: 'redispatched',
@@ -110,7 +110,7 @@ export async function sweepScoutQueue(userId: string, opts: SweepOptions = {}): 
     if (verdict.state === 'no_worker') {
       const done = await finishQueued(db, row.id, 'failed', message, now)
       if (done) actions.push({ runId: row.id, action: 'failed', waitedMs, attempt, message })
-      log(row.id, 'failed', { waitedMs, attempt, reason: 'no_worker' })
+      log(row.id, 'failed', { queue_wait_ms: waitedMs, redispatch_count: attempt, terminal_reason: 'no_worker' })
     }
   }
 

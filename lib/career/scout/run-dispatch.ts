@@ -474,7 +474,18 @@ export async function dispatchScoutWorker(
   runId: string,
   token: string,
   opts: { raceMs?: number; fetchImpl?: typeof fetch } = {}
-): Promise<{ dispatched: boolean; outcome: DispatchOutcome; status: number | null; error: string | null }> {
+): Promise<{
+  dispatched: boolean
+  outcome: DispatchOutcome
+  status: number | null
+  error: string | null
+  /**
+   * The underlying request, still in flight when `outcome` is 'pending'. Handed
+   * to `waitUntil` by the caller so a serverless function is not frozen before
+   * the self-POST lands — the failure this exists to prevent.
+   */
+  settled: Promise<{ outcome: DispatchOutcome; status: number | null; error: string | null }>
+}> {
   const raceMs = opts.raceMs ?? 1_500
   const doFetch = opts.fetchImpl ?? fetch
   const url = `${trimUrl(baseUrl)}/api/career/scout/worker`
@@ -512,5 +523,5 @@ export async function dispatchScoutWorker(
   const raced = await Promise.race([sent, pending])
   // `dispatched` keeps its old meaning for existing callers — "not known to have
   // failed" — while `outcome` carries the distinction they now need.
-  return { dispatched: raced.outcome !== 'failed', outcome: raced.outcome, status: raced.status, error: raced.error }
+  return { dispatched: raced.outcome !== 'failed', outcome: raced.outcome, status: raced.status, error: raced.error, settled: sent }
 }

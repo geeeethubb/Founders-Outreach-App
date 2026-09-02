@@ -26,6 +26,7 @@ import {
   dispatchScoutWorker,
   isCursorComplete,
   readRunCursor,
+  resolveWorkerBase,
   sanitizeScoutParams,
   scoutCaps,
   toJobScoutParams,
@@ -35,6 +36,8 @@ import {
 } from '@/lib/career/scout/run-dispatch'
 import { reapStaleRuns } from '@/lib/career/scout/run-reaper'
 import { sweepScoutQueue } from '@/lib/career/scout/queue-watchdog'
+import { runInBackground } from '@/lib/career/scout/background'
+import { checkWorkerBase, logWorkerBaseHealth } from '@/lib/career/scout/worker-env'
 import { HARD_QUEUE_CEILING_MS } from '@/lib/career/scout/queue-health'
 import { activeJobScoutRun, enqueueScoutRun, getRunJobCounts, getScoutRun, toRunView } from '@/lib/career/scout/run-store'
 
@@ -124,7 +127,28 @@ export async function POST(request: NextRequest) {
       return runInline(user.id, body, queued.migrationMissing, queued.error)
     }
 
-    const { dispatched, error } = await dispatchScoutWorker(workerBaseUrl(request.headers), queued.runId, queued.claimToken)
+    // Where are we dispatching, and is that address believable? On Vercel with
+    // nothing pinned this is an ERROR — the fallback is the per-deployment
+    // hostname that Deployment Protection answers with 401 — and it must never
+    // be logged as if things were fine.
+    const resolvedBase = resolveWorkerBase(request.headers)
+    const baseHealth = checkWorkerBase(process.env, resolvedBase)
+    logWorkerBaseHealth(baseHealth)
+
+    const enqueuedAt = Date.now()
+    const d = await dispatchScoutWorker(resolvedBase.baseUrl, queued.runId, queued.claimToken)
+    const { dispatched, error } = d
+
+    // Hand the still-in-flight POST to the platform so this function is not
+    // frozen before it lands. A no-op off Vercel, and never load-bearing: the
+    // watchdog is what guarantees the run starts or fails.
+    const bg = d.outcome === 'pending' ? runInBackground(d.settled) : { extended: false }
+
+    console.log(
+      `[scout] run_id=${queued.runId} event=dispatch outcome=${d.outcome} http_status=${d.status ?? '-'} ` +
+        `queue_wait_ms=${Date.now() - enqueuedAt} base=${resolvedBase.source} wait_until=${bg.extended} ` +
+        `base_severity=${baseHealth.severity}${d.error ? ` error=${JSON.stringify(d.error)}` : ''}`
+    )
 
     // FAIL FAST when nothing is listening. A dispatch that could not even be
     // sent will not be fixed by waiting: the founder gets a real error in a
@@ -133,7 +157,7 @@ export async function POST(request: NextRequest) {
     // request is still in flight — and that IS worth waiting for.
     if (!dispatched && error) {
       await sweepScoutQueue(user.id, {
-        baseUrl: workerBaseUrl(request.headers),
+        baseUrl: resolvedBase.baseUrl,
         // Judged immediately rather than in 60s: we already KNOW it failed, so
         // the ceiling is used to force the terminal branch rather than to wait.
         now: Date.now() + HARD_QUEUE_CEILING_MS + 1_000,
@@ -153,6 +177,11 @@ export async function POST(request: NextRequest) {
         resuming: continuedFrom ? describeCursor(params.cursor) : null,
         // Not fatal: polling the run re-dispatches one still queued after ~10s.
         dispatchError: error,
+        // Surfaced so a misconfigured deployment is visible in the response as
+        // well as the log — this used to be returned and read by nobody.
+        dispatchOutcome: d.outcome,
+        dispatchStatus: d.status,
+        workerBase: { source: resolvedBase.source, severity: baseHealth.severity, message: baseHealth.message, remedy: baseHealth.remedy },
       },
       { status: 202 }
     )

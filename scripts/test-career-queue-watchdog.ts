@@ -24,6 +24,8 @@ import {
 } from '../lib/career/scout/queue-health'
 import { sweepScoutQueue } from '../lib/career/scout/queue-watchdog'
 import { dispatchScoutWorker } from '../lib/career/scout/run-dispatch'
+import { checkWorkerBase } from '../lib/career/scout/worker-env'
+import { platformWaitUntil, runInBackground } from '../lib/career/scout/background'
 import type { RunStoreDb } from '../lib/career/scout/run-store-db'
 import type { ScoutRunRow } from '../lib/career/scout/run-record'
 
@@ -289,6 +291,82 @@ async function main(): Promise<void> {
     })
     check('a request still in flight is PENDING, not accepted', slow.outcome === 'pending', JSON.stringify(slow))
     check('and pending is not treated as a failure either', slow.dispatched && slow.error === null)
+  }
+
+  // ─── The worker base: never silently healthy ───
+  console.log('\nworker base: a misconfigured deployment must be loud')
+  {
+    const at = (env: Record<string, string | undefined>, resolved: { baseUrl: string; source: string }) => checkWorkerBase(env, resolved)
+
+    // THE INCIDENT CONFIGURATION: on Vercel with nothing pinned, the base falls
+    // back to the per-deployment hostname that Deployment Protection 401s.
+    const unpinned = at({ VERCEL: '1' }, { baseUrl: 'https://app-abc123-team.vercel.app', source: 'env:VERCEL_URL' })
+    check('Vercel with nothing pinned is an ERROR', unpinned.severity === 'error', unpinned.severity)
+    check('and it names the variable that fixes it', /SCOUT_WORKER_BASE_URL/.test(String(unpinned.remedy)), String(unpinned.remedy))
+    check('and explains Deployment Protection rather than just saying 401', /Deployment Protection/.test(unpinned.message))
+
+    const pinned = at(
+      { VERCEL: '1', SCOUT_WORKER_BASE_URL: 'https://outreach.example.com' },
+      { baseUrl: 'https://outreach.example.com', source: 'env:SCOUT_WORKER_BASE_URL' }
+    )
+    check('a pinned production URL is ok', pinned.severity === 'ok', pinned.severity)
+
+    // Pinned, but to something a serverless function cannot reach.
+    const loopback = at(
+      { VERCEL: '1', SCOUT_WORKER_BASE_URL: 'http://localhost:3000' },
+      { baseUrl: 'http://localhost:3000', source: 'env:SCOUT_WORKER_BASE_URL' }
+    )
+    check('localhost pinned on Vercel is an ERROR', loopback.severity === 'error', loopback.severity)
+
+    // Pinned, but to the deployment hash URL — the subtle version of the bug.
+    const hash = at(
+      { VERCEL: '1', SCOUT_WORKER_BASE_URL: 'https://app-9f2c1a-team.vercel.app' },
+      { baseUrl: 'https://app-9f2c1a-team.vercel.app', source: 'env:SCOUT_WORKER_BASE_URL' }
+    )
+    check('a per-deployment URL pinned on Vercel still WARNS', hash.severity === 'warn', hash.severity)
+
+    const local = at({}, { baseUrl: 'http://localhost:3000', source: 'env:NEXT_PUBLIC_APP_URL' })
+    check('localhost off Vercel is fine', local.severity === 'ok', local.severity)
+
+    const guessed = at({}, { baseUrl: 'https://staging.example.com', source: 'header:loopback' })
+    check('an inferred non-local base warns rather than passing silently', guessed.severity === 'warn', guessed.severity)
+
+    // The whole point of the module: nothing unverified is reported as healthy.
+    const verdicts = [unpinned, loopback, hash, guessed].map((v) => v.severity)
+    check('no unverified configuration is ever "ok"', !verdicts.includes('ok'), verdicts.join(','))
+  }
+
+  console.log('\nbackground: waitUntil is an optimisation, never a dependency')
+  {
+    const KEY = Symbol.for('@vercel/request-context')
+    const g = globalThis as Record<symbol, unknown>
+    const original = g[KEY]
+    try {
+      delete g[KEY]
+      check('off-platform there is no waitUntil', platformWaitUntil() === null)
+      check('and running in background still succeeds, just unextended', runInBackground(Promise.resolve('x')).extended === false)
+
+      const held: Promise<unknown>[] = []
+      g[KEY] = { get: () => ({ waitUntil: (p: Promise<unknown>) => held.push(p) }) }
+      check('on-platform it is found', typeof platformWaitUntil() === 'function')
+      const on = runInBackground(Promise.resolve('y'))
+      check('and the promise is handed over', on.extended === true && held.length === 1)
+
+      // A rejection must not become an unhandled rejection that kills a request
+      // which has already succeeded.
+      check('a rejected background promise is swallowed', runInBackground(Promise.reject(new Error('dispatch died'))).extended === true)
+      await Promise.allSettled(held)
+
+      // A platform whose waitUntil throws must not take the request down.
+      g[KEY] = { get: () => ({ waitUntil: () => { throw new Error('no') } }) }
+      check('a throwing waitUntil degrades instead of propagating', runInBackground(Promise.resolve(1)).extended === false)
+
+      g[KEY] = { get: () => undefined }
+      check('a context with no request in flight is handled', platformWaitUntil() === null)
+    } finally {
+      if (original === undefined) delete g[KEY]
+      else g[KEY] = original
+    }
   }
 
   console.log(`\n${passed} passed, ${failures.length} failed`)

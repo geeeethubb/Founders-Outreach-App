@@ -145,6 +145,14 @@ export async function claimScoutRun(
   // Seed the in-memory progress cache so the first recordProgress carries the
   // deadline and this event forward instead of overwriting them.
   progressCache.set(runId, { lastWriteAt: nowMs, stage: 'starting', events: [...progress.events], counts: {}, deadlineAt })
+  // The one place the real queue wait is knowable: the gap between the row being
+  // written and a worker winning the claim. This is the number the 60-second
+  // invariant is about, so it is logged where it is measured.
+  const queuedAt = Date.parse(String(row.queued_at ?? row.started_at ?? ''))
+  const queueWaitMs = Number.isFinite(queuedAt) ? Math.max(0, nowMs - queuedAt) : null
+  console.log(
+    `[scout] run_id=${runId} event=claimed queue_wait_ms=${queueWaitMs ?? '-'} attempt=${(row.attempt_count ?? 0) + 1} kind=${row.kind ?? '-'}`
+  )
   return { claimed: true, run: row, params: (row.params as Record<string, unknown> | null) ?? {}, migrationMissing: false, error: null }
 }
 
