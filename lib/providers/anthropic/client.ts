@@ -103,42 +103,65 @@ let callBudget = Number(process.env.ANTHROPIC_MAX_CALLS_PER_RUN ?? 500)
 // that would retry after it returns an error instead, and the run degrades
 // the way every other failure does.
 
-// A SET of active deadlines, not one slot. The single slot was a bug the moment
-// two runs overlapped: batch generation runs two packages at once, and whichever
-// finished first called setAnthropicDeadline(null) and stripped the deadline
-// from the one still working — restoring exactly the unbounded retries this
-// mechanism exists to prevent.
+// TWO shapes, because the two callers have genuinely different lifetimes.
 //
-// `pastRunDeadline` compares against the EARLIEST active deadline. Across
-// independent runs that is deliberately conservative: it can only make retries
-// stop sooner, never later. Stopping sooner degrades gracefully — the caller
-// sees a failed call and handles it like any other — while stopping later is
-// the failure mode being fixed. A shared retry budget is worth that.
-const activeDeadlines = new Set<number>()
+// `legacyDeadline` is ONE SLOT with REPLACE semantics, and that is deliberate.
+// The scout orchestrator sets it at the top of a run and clears it in finish();
+// if a run exits some other way — the planner throws — the slot is left stale,
+// and the next run's set() overwrites it. That self-healing is load-bearing.
+// Making this a set instead cost five consecutive scout runs: one leaked
+// deadline stayed in the collection for ever, `pastRunDeadline` takes the
+// EARLIEST, and every later run in the process reported "run deadline passed
+// during retry" before doing any work. Replace beats accumulate for a
+// long-lived, single-owner slot.
+//
+// `scopedDeadlines` is a set, and safe as one, because the ONLY way in is
+// `withAnthropicDeadline`, which removes its own entry in a `finally`. That is
+// what package generation uses, and it is what makes two concurrent packages
+// safe — the bug that motivated the set in the first place was one package
+// clearing another's deadline through the shared slot.
+let legacyDeadline: number | null = null
+const scopedDeadlines = new Set<number>()
 
 export function setAnthropicDeadline(epochMs: number | null): void {
-  if (epochMs === null) activeDeadlines.clear()
-  else activeDeadlines.add(epochMs)
+  legacyDeadline = epochMs
 }
 
 /**
  * Arm a deadline for the duration of `fn` and remove exactly that one
- * afterwards, leaving any concurrent run's deadline in place.
+ * afterwards, leaving any concurrent run's deadline in place. Cannot leak: the
+ * removal is in a `finally`.
  */
 export async function withAnthropicDeadline<T>(epochMs: number, fn: () => Promise<T>): Promise<T> {
-  activeDeadlines.add(epochMs)
+  scopedDeadlines.add(epochMs)
   try {
     return await fn()
   } finally {
-    activeDeadlines.delete(epochMs)
+    scopedDeadlines.delete(epochMs)
   }
 }
 
+/** Test seam. Named so nobody mistakes it for part of the retry contract. */
+export function __pastRunDeadlineForTests(): boolean {
+  return pastRunDeadline()
+}
+
+/** Test seam: forget every deadline, both shapes. */
+export function resetAnthropicDeadlines(): void {
+  legacyDeadline = null
+  scopedDeadlines.clear()
+}
+
+/**
+ * The earliest deadline anything has armed. Conservative across independent
+ * runs on purpose: it can only make retries stop sooner, never later, and
+ * stopping sooner degrades gracefully while stopping later is the failure this
+ * whole mechanism exists to prevent.
+ */
 function pastRunDeadline(): boolean {
-  if (activeDeadlines.size === 0) return false
-  let earliest = Infinity
-  for (const d of activeDeadlines) if (d < earliest) earliest = d
-  return Date.now() > earliest
+  let earliest = legacyDeadline ?? Infinity
+  for (const d of scopedDeadlines) if (d < earliest) earliest = d
+  return Number.isFinite(earliest) && Date.now() > earliest
 }
 
 export function setAnthropicBudget(n: number): void {

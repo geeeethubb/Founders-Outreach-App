@@ -39,6 +39,7 @@ const SUITES = [
   'scripts/test-career-auto.ts',
   'scripts/test-career-deadline.ts',
   'scripts/test-career-queue-watchdog.ts',
+  'scripts/test-anthropic-deadline.ts',
   'scripts/test-career-status-letter.ts',
   'scripts/test-career-batch.ts',
   'scripts/test-career-queue.ts',
