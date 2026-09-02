@@ -349,6 +349,14 @@ Saved and applied-to jobs are re-checked by `npm run career:verify` and by the c
 
 ### A run is a row, not a request
 
+> **On Vercel, set `SCOUT_WORKER_BASE_URL`.** The "worker" is an HTTP route in this same
+> deployment that the app reaches by POSTing to itself, so the address is load-bearing. With
+> nothing pinned it falls back to `VERCEL_URL` — the per-deployment hostname, which Deployment
+> Protection answers with **401**. A run then queues and never starts; one sat that way for 328
+> minutes. `npm run check:worker-env` judges the configuration and exits non-zero on one that
+> cannot work — run it in the deploy pipeline. The queue watchdog below is the backstop, not the
+> fix.
+
 A scout used to be one long HTTP request. On Vercel that request dies at 300 s, and the page
 that started it had to be kept open — so the panel counted a fake 25-second timer and told the
 founder that closing the tab spent the money for nothing.
