@@ -24,6 +24,7 @@ import { extractPending } from '@/lib/career/scout/extract'
 import { scoutToolContext } from '@/lib/career/scout/orchestrator'
 import { DEFAULT_PACKAGE_BUDGET, DEFAULT_SCOUT_BUDGET, startCareerRun } from '@/lib/career/runs'
 import { finishScoutRun } from '@/lib/career/scout/run-store'
+import { sweepScoutQueue } from '@/lib/career/scout/queue-watchdog'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
@@ -58,6 +59,11 @@ export async function GET(request: NextRequest) {
   const users: Record<string, unknown>[] = []
   let skipped = 0
   for (const p of (profiles ?? []) as { id: string }[]) {
+    // The daily backstop for the scout queue: close runs whose worker died,
+    // dispatch legs nobody dispatched, fail what nothing will ever start. Every
+    // read of a run does this too; this is the pass that runs whether or not
+    // anybody is watching.
+    await sweepScoutQueue(p.id).catch(() => undefined)
     if (Date.now() - started > DEADLINE_MS) {
       skipped++
       continue

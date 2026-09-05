@@ -231,6 +231,18 @@ and that column holds an RFC822 Message-ID this app generates.
 | `package.json` says `openai@^4.52.0` | **4.104.0** is installed, and it has the Responses API + `web_search`. |
 | `/api/research/rerun` | **Deletes all research** with no server-side confirmation. |
 | A truncated stem before `\b` in a regex | `\bmanufactur\b` cannot match "Manufacturing" — the `i` is a word character. This silently sent every inflected title to `unknown` in `lib/network/normalize.ts`. Write `manufactur\w*`. |
+| A scouting run that "hangs" | Read its row: `status`, `error_code`, `error_detail`, `invocation_count`, `lease_expires_at`, the last `progress.events`. Every read of a run (`GET /api/scout/runs/[id]`, `/api/career/scout/runs/[id]`) reaps a lapsed lease and dispatches a handed-back leg, so "open the page" IS the recovery. Never edit the row by hand. |
+| `platformWaitUntil()` in `lib/career/scout/background.ts` | An optimisation, not a guarantee. The worker executes INSIDE its POST and never depends on it; only a best-effort late dispatch write does. Do not build a code path that needs it. |
+| A worker write without `workerId` | Fenced writes (`recordProgress`, `touchScoutRun`, `recordRunCursor/Checkpoint/Result`, `finishScoutRun`) take the leg's `workerId`. Without it the guard is status-only, and a leg the platform froze can write over the leg that replaced it. The CLI's own runs may omit it; a worker leg never. |
+| `handoffScoutRun` and `queued_at` | The handoff re-stamps `queued_at`, `attempt_count` and `heartbeat_at` in the same statement as the checkpoint. The watchdog judges a queued leg from `queued_at`; a handoff that forgot it would be failed as "unstarted" by the very next poll. |
+| `startScoutingRun` without `kind` | The column default is `'outreach'`, so an inline package or verify row inserted without its kind is, for a moment, a running People Scout. Pass `kind` in the INSERT (`startCareerRun` does). |
+| `result` / `checkpoint` on `scouting_runs` | Tens of kilobytes. `getRun(..., { full: true })` selects them; the poll and `listRuns` never do. Keep them out of `COLUMNS` in `run-store-db.ts` — and never decide anything from `row.result` on a listed row (the reaper once closed a People Scout with prospects as `failed` that way; it re-reads the candidate in full). |
+| An agent failure that was really the clock | `AgentResult.errorCode` says RUN_DEADLINE / CANCELLED when the run, not the model, stopped a call. A stage that records such a failure as "this item is broken" completes with the item silently missing (live run 1 did: 14 of 16 scored, status `succeeded`). Use `isClockOutcome(run)` from `lib/runs/errors.ts`, leave the item for the next leg, and stop the leg as `deadline`. Never match the sentence. |
+| A Job Scout lane that started and was cut | `pastDeadline` only knows a stage it refused to START. A lane that ran and stopped on its share of the clock (sweep, company-first, extraction) reports `deadlineHit` itself and the orchestrator's `leftOpen` list makes the run a deadline hit; without that, the live BROAD run was closed `succeeded` with 298 companies unswept and never got its second pass. A new lane must report the same. |
+| A chained leg's age | A handed-back leg that a sweep has dispatched is aged from `last_dispatch_at`, not `queued_at` (the handoff instant, which can be minutes old if the previous worker died before its self-dispatch). Judged from `queued_at`, the next sweep would fail the leg as `no_worker` while its dispatch was still landing. `queueVerdict` in `queue-health.ts` owns this. |
+| The Anthropic / Apollo deadline | There is no module-level deadline slot any more. Provider clients size each attempt from the ambient run context (`lib/runs/context.ts`); code that runs outside `withRunContext` gets the provider ceiling and the process-wide usage object. Wrap a new orchestrator in a context; do not add a global. |
+| "after 2 attempts over 181s" on a failed run | A pre-021 sentence: the fail-fast branch used a synthetic clock and dropped the dispatch's real error. Rows written now carry `error_code` and the worker's actual answer in `last_error` / `error_detail`. |
+| A third Vercel cron | The Hobby plan allows two. The scout watchdog runs inside the existing daily `sweep` and `verify` crons and on every read; do not add a schedule. |
 | SQL inside `$$ … $$` | Invisible to a parser reading the outer file, and validated by Postgres at `CREATE` time. `npm run check:sql` parses bodies separately for this reason. |
 | An agent that "hangs" | Usually `stop_reason: max_tokens` on `submit_result`. The output is truncated mid-JSON, validation fails, and the loop used to escalate a tier — which writes *more* and truncates again, at 5× the price. `runtime/loop.ts` now handles truncation separately. Check `onStep` before assuming a hang. |
 | `resume_bullets.text` | Markdown with `**bold**` markers. The document engine renders them as bold runs; the verifier and QA see them stripped. Store nothing else in it. |
@@ -283,6 +295,17 @@ The seven product agents are TypeScript modules, not Claude Code subagents.
 ---
 
 ## Current phase
+
+**Reliability pass (2026-09-04):** both scouts run as durable rows executed in fenced legs
+under one clock (ADR-043, ADR-044). `POST /api/scout` and `POST /api/career/scout` enqueue and
+answer in seconds; `POST /api/scout/worker` executes a leg; `GET /api/scout/readiness` gates a
+paid run; `npm run check:deploy` gates a build; `npm run test:scout-reliability` is the fault
+matrix. Migration 021 adds the columns and the one-active-run index; until it is pasted, the
+run store keeps those fields inside `params.__reliability` and readiness says so as a warning.
+The People Scout page and the Jobs panel poll persisted state and never simulate progress.
+From a terminal, as the founder: `scripts/scout-acceptance.ts` starts and watches a run through
+the real routes, `npm run scout:watch -- --kind people|jobs --run <id>` watches one, and
+`npm run scout:cancel -- --kind people|jobs --run <id>` asks one to stop.
 
 **Phase 11 — Career OS** is built on top of the Phase 10 loop. The outreach loop is unchanged:
 

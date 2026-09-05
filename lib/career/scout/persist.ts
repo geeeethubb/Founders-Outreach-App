@@ -95,9 +95,11 @@ export interface BatchOutcome {
   verified: number
   inserted: number
   updated: number
+  /** True when the run's clock kept some of this batch's postings unread; they are stored thin for the next pass. */
+  deadlineHit: boolean
 }
 
-const EMPTY: BatchOutcome = { jobs: [], ids: [], rejected: [], errors: [], migrationMissing: false, extracted: 0, verified: 0, inserted: 0, updated: 0 }
+const EMPTY: BatchOutcome = { jobs: [], ids: [], rejected: [], errors: [], migrationMissing: false, extracted: 0, verified: 0, inserted: 0, updated: 0, deadlineHit: false }
 
 /**
  * Extract, cluster, verify and persist one batch of raw postings.
@@ -193,5 +195,5 @@ export async function persistBatch(raws: RawJobPosting[], batch: BatchContext, e
     }
   }
 
-  return { jobs, ids, rejected: ex.rejected, errors, migrationMissing: false, extracted: ex.extracted, verified, inserted: up.inserted, updated: up.updated }
+  return { jobs, ids, rejected: ex.rejected, errors, migrationMissing: false, extracted: ex.extracted, verified, inserted: up.inserted, updated: up.updated, deadlineHit: ex.deadlineHit }
 }

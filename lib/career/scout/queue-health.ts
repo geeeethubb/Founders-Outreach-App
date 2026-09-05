@@ -20,6 +20,14 @@
 // This module is the missing judgement. It is pure and it reads columns that
 // exist TODAY (`started_at`, `heartbeat_at`, `worker_started_at`, `status`), so
 // it recovers the runs already stuck without waiting for a migration.
+//
+// A CHAINED run (one that a worker handed back to the queue for its next leg)
+// is judged from the instant it was handed back — `queued_at`, which the
+// handoff re-stamps — never from the original enqueue. Without that a run
+// that had just spent four minutes working would be "queued for four
+// minutes" to the very next sweep and failed as unstarted.
+
+import { LEASE_GRACE_MS, LEASE_MS } from './run-record'
 
 /** Past this, a queued run is no longer merely slow to start. */
 export const MAX_QUEUE_WAIT_MS = 60_000
@@ -36,8 +44,10 @@ export const SLOW_QUEUE_MS = 30_000
  */
 export const MAX_START_ATTEMPTS = 2
 
-/** A claimed run must beat this often or it is presumed abandoned. */
-export const LEASE_MS = 90_000
+/** A redispatch is not repeated inside this window: the last one may still be landing. */
+export const REDISPATCH_SPACING_MS = 15_000
+
+export { LEASE_MS }
 
 /**
  * The absolute ceiling on time spent queued, whatever the attempt bookkeeping
@@ -64,7 +74,12 @@ export interface QueueRow {
   /** Migration 020. Absent on rows written before it — treated as 0. */
   attempt_count?: number | null
   queued_at?: string | null
+  last_dispatch_at?: string | null
   cancel_requested?: boolean | null
+  lease_expires_at?: string | null
+  worker_id?: string | null
+  /** Migration 021. A chained run has already had at least one leg. */
+  invocation_count?: number | null
 }
 
 export type QueueVerdict =
@@ -74,6 +89,8 @@ export type QueueVerdict =
   | { state: 'starting'; waitedMs: number }
   /** Queued longer than expected but still inside the wait. Say so; do nothing. */
   | { state: 'slow_start'; waitedMs: number }
+  /** A chained run handed back to the queue and not yet dispatched: ask a worker NOW, whatever its age. */
+  | { state: 'chain'; waitedMs: number; attempt: number }
   /** Queued past the wait, and an attempt remains. Ask a worker again. */
   | { state: 'redispatch'; waitedMs: number; attempt: number }
   /** Queued past the wait with no attempts left. Nothing is listening. */
@@ -104,11 +121,20 @@ export function queueVerdict(row: QueueRow, now = Date.now()): QueueVerdict {
   if (row.cancel_requested) return { state: 'cancelled' }
 
   if (row.status === 'queued') {
-    // `queued_at` after migration 020; `started_at` is when the row was written,
-    // which is the same instant for a queued run and exists today.
-    const since = ms(row.queued_at) ?? ms(row.started_at) ?? ms(row.heartbeat_at)
-    const waitedMs = since === null ? 0 : Math.max(0, now - since)
     const attempt = Math.max(0, row.attempt_count ?? 0)
+    const chained = (row.invocation_count ?? 0) > 0
+    // `queued_at` after migration 020 (re-stamped by every handoff); `started_at`
+    // is when the row was written, which is the same instant for a first leg.
+    // A chained leg that HAS been dispatched is measured from that dispatch:
+    // its queued_at is the handoff instant, which can be many minutes old when
+    // the previous worker died before its self-dispatch and a sweep has only
+    // just sent the leg on its way. Judged from queued_at, the very next sweep
+    // would fail a leg whose one dispatch was still landing.
+    const since = (chained && attempt > 0 ? ms(row.last_dispatch_at) : null) ?? ms(row.queued_at) ?? ms(row.started_at) ?? ms(row.heartbeat_at)
+    const waitedMs = since === null ? 0 : Math.max(0, now - since)
+    // A handed-back leg with no dispatch yet: the previous worker may have
+    // died before its self-dispatch landed. The poll is the chain link.
+    if (chained && attempt === 0 && row.claim_token) return { state: 'chain', waitedMs, attempt }
     if (waitedMs <= SLOW_QUEUE_MS) return { state: 'starting', waitedMs }
     if (waitedMs <= MAX_QUEUE_WAIT_MS) return { state: 'slow_start', waitedMs }
     // The clock decides the ending; attempts only decide whether to try again.
@@ -118,8 +144,15 @@ export function queueVerdict(row: QueueRow, now = Date.now()): QueueVerdict {
   }
 
   if (row.status === 'running') {
-    // A running run that never recorded a worker start is a contradiction; judge
-    // it on whatever timestamp it has rather than trusting the status.
+    // A leased run is judged on its lease: the worker renews it every
+    // heartbeat, so silence past it plus a grace is death. A running row from
+    // before leases (or one that never recorded a worker start) is judged on
+    // whatever timestamp it has rather than trusted.
+    const lease = ms(row.lease_expires_at)
+    if (lease !== null) {
+      const overdueMs = now - lease
+      return overdueMs > LEASE_GRACE_MS ? { state: 'abandoned', quietMs: overdueMs + LEASE_MS } : { state: 'working', quietMs: Math.max(0, overdueMs + LEASE_MS) }
+    }
     const beat = ms(row.heartbeat_at) ?? ms(row.worker_started_at) ?? ms(row.started_at)
     const quietMs = beat === null ? 0 : Math.max(0, now - beat)
     return quietMs > LEASE_MS ? { state: 'abandoned', quietMs } : { state: 'working', quietMs }
@@ -130,12 +163,19 @@ export function queueVerdict(row: QueueRow, now = Date.now()): QueueVerdict {
 
 /** True when the watchdog must act rather than merely report. */
 export function needsAction(v: QueueVerdict): boolean {
-  return v.state === 'redispatch' || v.state === 'no_worker' || v.state === 'cancelled'
+  return v.state === 'redispatch' || v.state === 'chain' || v.state === 'no_worker' || v.state === 'cancelled'
+}
+
+/** Is a redispatch allowed yet, or is the last one still possibly landing? */
+export function redispatchDue(row: QueueRow, now = Date.now()): boolean {
+  const last = ms(row.last_dispatch_at)
+  return last === null || now - last >= REDISPATCH_SPACING_MS
 }
 
 /**
  * The sentence a person reads. Written for someone who does not know what a
  * worker is — "no worker picked this up" is jargon; "nothing started it" is not.
+ * The numbers in it are the REAL ones: how many times we asked, how long it sat.
  */
 export function queueMessage(v: QueueVerdict): string {
   switch (v.state) {
@@ -143,10 +183,12 @@ export function queueMessage(v: QueueVerdict): string {
       return 'Starting scout…'
     case 'slow_start':
       return `Taking longer than expected to start (${Math.round(v.waitedMs / 1000)}s)…`
+    case 'chain':
+      return 'Picking the run back up for its next pass.'
     case 'redispatch':
-      return 'Nothing picked this up — asking again.'
+      return `Nothing picked this up after ${Math.round(v.waitedMs / 1000)}s — asking again (attempt ${v.attempt + 1}).`
     case 'no_worker':
-      return `Scouting could not start: nothing was available to run it after ${MAX_START_ATTEMPTS} attempts over ${Math.round(v.waitedMs / 1000)}s. This usually means the app server is not running.`
+      return `Scouting could not start: nothing was available to run it after ${v.attempt} attempt${v.attempt === 1 ? '' : 's'} over ${Math.round(v.waitedMs / 1000)}s. The app could not reach its own worker.`
     case 'abandoned':
       return `The run stopped responding ${Math.round(v.quietMs / 1000)}s ago and was abandoned.`
     case 'cancelled':

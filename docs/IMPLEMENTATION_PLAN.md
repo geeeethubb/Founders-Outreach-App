@@ -375,6 +375,32 @@ hardcoded fixture. Status and rules: [KNOWLEDGE_BASE_DEDUP_PLAN.md](KNOWLEDGE_BA
 
 ---
 
+## Scouting reliability pass ✅ built (2026-09-04)
+
+Both scouts — People (`/dashboard/scout`) and Job (`/dashboard/jobs`) — now run as **one durable
+run model**: a `scouting_runs` row, claimed by a single-use token and executed in fenced legs of
+at most one Vercel invocation each, under one absolute clock that every provider call (Anthropic,
+Apollo, page fetchers, web search) reads. A leg with work left hands the row back to the queue
+with its checkpoint; the next leg resumes; a leg that dies is reaped by lease; every run reaches
+`succeeded | partial | failed | cancelled` with a stable `error_code` and a remedy. The People
+Scout, which used to execute inside its own request and left rows `running` for ever, gets
+persisted progress, a polling monitor that survives a refresh, and cancel. Deployment
+configuration is validated at build time (`npm run check:deploy`, wired into `npm run build`)
+and at runtime (`GET /api/scout/readiness`, shown on both pages as "Scouting is unavailable:
+<reason> — Fix: <remedy>"). Fault-injection matrix: `npm run test:scout-reliability`.
+Design: [ADR-043](ARCHITECTURE.md#adr-043), [ADR-044](ARCHITECTURE.md#adr-044);
+the run model in [CAREER_OS.md](CAREER_OS.md); the incidents and measurements in
+[BUILD_LOG.md](BUILD_LOG.md).
+
+**Founder actions (one-time):** `supabase/migrations/021_scout_reliability.sql` — applied
+2026-09-04 (readiness now reports no warnings; the `params.__reliability` fallback stays for a
+database that predates it); set `CRON_SECRET` on Vercel; enable Protection Bypass for
+Automation on the Vercel project (or set `SCOUT_WORKER_BASE_URL` to the production domain) so
+the worker can be dispatched; confirm Fluid compute is on. Names and settings, never values:
+[SETUP.md](../SETUP.md) step 6.
+
+---
+
 ## Checkpoints
 
 Each phase ends with: `tsc --noEmit` clean · V1 functionality verified working ·

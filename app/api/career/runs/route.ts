@@ -4,11 +4,10 @@ import { isDynamicUsage } from '@/lib/http/dynamic'
 import { isMissingSchema } from '@/lib/career/jobs/store'
 import type { CareerRunKind } from '@/lib/career/runs'
 import {
-  ACTIVE_STATUSES,
+  activeScoutRun,
   DEFAULT_STALE_MS,
   getRunJobCounts,
   isRunStale,
-  listActiveScoutRuns,
   readProgress,
   toRunView,
   type ScoutRunRow,
@@ -17,7 +16,8 @@ import {
 
 export const dynamic = 'force-dynamic'
 
-const KINDS: CareerRunKind[] = ['job_scout', 'job_verify', 'package', 'evidence_import']
+/** Every kind the Runs page lists. 'outreach' is the People Scout, a durable run since ADR-043. */
+const KINDS: (CareerRunKind | 'outreach')[] = ['job_scout', 'outreach', 'job_verify', 'package', 'evidence_import']
 
 const BASE_COLUMNS = 'id, kind, label, status, started_at, completed_at, stats, error, budget, career_mission_id'
 // Migration 016. Selected separately so a pre-016 database degrades to the base
@@ -81,7 +81,7 @@ export async function GET(request: NextRequest) {
         .eq('user_id', user.id)
         .order('started_at', { ascending: false })
         .limit(limit)
-      if (kind && KINDS.includes(kind as CareerRunKind)) q = q.eq('kind', kind)
+      if (kind && (KINDS as string[]).includes(kind)) q = q.eq('kind', kind)
       else if (!kind) q = q.in('kind', KINDS)
       return q
     }
@@ -120,10 +120,13 @@ export async function GET(request: NextRequest) {
 
     let active: ScoutRunView | null = null
     if (wantActive) {
-      const res = await listActiveScoutRuns(user.id)
+      // The one DURABLE run of the asked kind (job_scout by default; `kind=outreach`
+      // for the People Scout). Inline rows — a manual add, a company check — are
+      // never handed to a monitor as the run to resume.
+      const activeKind = kind === 'outreach' ? 'outreach' : 'job_scout'
+      const res = await activeScoutRun(user.id, activeKind)
       if (res.migrationMissing) durable = false
-      const row = res.runs.find((r) => (r.kind ?? 'job_scout') === 'job_scout' && (ACTIVE_STATUSES as string[]).includes(r.status)) ?? null
-      if (row) active = toRunView(row, await getRunJobCounts(user.id, row.id), now)
+      if (res.run) active = toRunView(res.run, activeKind === 'job_scout' ? await getRunJobCounts(user.id, res.run.id) : undefined, now)
     }
 
     return NextResponse.json({ runs, active, durable })

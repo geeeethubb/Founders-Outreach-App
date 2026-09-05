@@ -3,8 +3,8 @@
 // The other half of the run monitor: `run-view.ts` turns whatever the endpoint
 // answered into a `RunDetail`, and this file turns a `RunDetail` into the
 // sentences and counts the Scout panel, the run results view and the Runs page
-// render. Split from it only because one file holding both had grown past the
-// size this repo keeps files to; the boundary is parsing vs. presentation.
+// render. Why a run stopped, whether it can continue and whether one can start
+// live in run-reasons.ts (re-exported here so older imports keep working).
 //
 // Every sentence here is about something the server actually reported. Nothing
 // estimates progress, nothing counts down, and nothing tells the founder a run
@@ -12,7 +12,9 @@
 //
 // Pure. No fetch, no React, no database.
 
-import { isActive, toCount, toCounts, type RunDetail, type RunEvent, type RunStatus } from './run-view'
+import { discoveryReport, isActive, toCount, toCounts, type QueueActionView, type RunDetail, type RunEvent, type RunStatus, type StartDispatch } from './run-view'
+
+export { partialReason, runContinuation, runStopReason, type RunContinuation, type RunStopReason } from './run-reasons'
 
 // ─── Numbers the founder actually reads ──────────────────────────────────────
 
@@ -64,7 +66,9 @@ export function runHeadline(run: RunDetail): string {
   const c = runSummary(run)
   switch (run.status) {
     case 'queued':
-      return 'Queued — waiting for the worker to pick it up'
+      // The row's detail carries the dispatch's own account ("asked a worker",
+      // "retry 2 could not reach a worker: …") — say that, not a generic wait.
+      return run.detail ? `Queued — ${run.detail}` : 'Queued — waiting for the worker to pick it up'
     case 'running':
       return run.stage ? `Running · ${run.stage}` : 'Running'
     case 'succeeded':
@@ -78,17 +82,49 @@ export function runHeadline(run: RunDetail): string {
   }
 }
 
+/** "pass 2" when a run is on a later leg; null on a first pass. */
+export function runPassLine(run: RunDetail): string | null {
+  return run.invocation > 1 ? `pass ${run.invocation}` : null
+}
+
+/** How many times a worker has been asked to start the leg — shown only while the run is still queued. */
+export function queueAttemptsLine(run: RunDetail): string | null {
+  if (run.status !== 'queued' || run.attempts < 1) return null
+  return run.attempts === 1 ? 'worker asked once' : `worker asked ${run.attempts} times`
+}
+
+/** One event line for something the watchdog did to the run on the way to answering a poll. */
+export function queueActionLine(a: QueueActionView): string {
+  const attempt = a.attempt > 0 ? ` (attempt ${a.attempt})` : ''
+  switch (a.action) {
+    case 'redispatched':
+      return `asking a worker again${attempt}${a.message && /could not reach/.test(a.message) ? `: ${a.message}` : ''}`
+    case 'failed':
+      return `closed as failed${attempt}: ${a.message ?? 'no reason given'}`
+    case 'reaped':
+      return `closed by the watchdog: ${a.message ?? 'the worker stopped renewing its lease'}`
+    case 'cancelled':
+      return `cancelled: ${a.message ?? 'as requested'}`
+    default:
+      return a.message ? `${a.action}: ${a.message}` : a.action
+  }
+}
+
 /**
- * Why a run ended early, in words the founder can act on. Never "whatever it
- * stored is already in the list": the run's own results view is one click away.
+ * What the enqueue said about its worker request. Only a failure is worth a
+ * sentence — 'pending' is the normal case (the worker answers at the end of
+ * its leg) and 'accepted' is already visible as a running run.
  */
-export function partialReason(run: RunDetail): string | null {
-  if (!run.partial && run.status !== 'partial' && run.status !== 'failed' && run.status !== 'cancelled') return null
-  if (run.error) return run.error
-  if (run.stats?.deadline_hit === true) return 'It ran out of time before working through everything it planned, so the later strategies never ran.'
-  if (run.stale) return 'The run stopped reporting progress and was closed out at what it had already stored.'
-  if (run.status === 'cancelled') return 'The run was cancelled.'
-  return 'Some stages did not finish. Everything it did store is shown in this run’s results.'
+export function dispatchNote(d: StartDispatch | null): string | null {
+  if (!d || d.outcome !== 'failed') return null
+  const status = d.status ? ` (HTTP ${d.status})` : ''
+  return `The worker could not be reached${status}: ${d.error ?? 'no reason given'}. Attempt ${Math.max(1, d.attempt)}; the queue keeps trying.`
+}
+
+/** A small note naming which address the enqueue dispatched to. */
+export function workerSourceLine(w: { source: string; baseUrl: string } | null): string | null {
+  if (!w) return null
+  return w.baseUrl ? `worker: ${w.source} → ${w.baseUrl}` : `worker: ${w.source}`
 }
 
 /** The last few progress lines, newest last, as the monitor shows them. */
@@ -154,66 +190,26 @@ export function statsLines(stats: Record<string, unknown> | null): string[] {
   return lines
 }
 
-// ─── The discovery report ────────────────────────────────────────────────────
-
-/** `stats.discovery`, as the orchestrator writes it, or null. */
-function discovery(stats: Record<string, unknown> | null | undefined): Record<string, unknown> | null {
-  const d = stats?.discovery
-  return d && typeof d === 'object' && !Array.isArray(d) ? (d as Record<string, unknown>) : null
-}
-
 /** The run's own report lines — budget, lanes, yield, spend, stopping reason. */
 export function discoveryNotes(stats: Record<string, unknown> | null | undefined): string[] {
-  const notes = discovery(stats)?.notes
+  const notes = discoveryReport(stats)?.notes
   return Array.isArray(notes) ? notes.filter((n): n is string => typeof n === 'string').slice(0, 8) : []
-}
-
-export interface RunContinuation {
-  /** There is work left and a later pass would not redo what is done. */
-  canContinue: boolean
-  /** 'complete' | 'deadline' | 'budget' | 'saturated', or null on a run that predates the report. */
-  stopped: string | null
-  /** One line for the button's neighbour: why continuing is worth a click. */
-  note: string | null
-}
-
-/**
- * Can this run be picked up where it stopped?
- *
- * Only when the run's own report says it stopped short AND its cursor is not
- * marked done. A saturated run is finished — the sources had nothing new left
- * — and offering to continue it would sell a second pass over an exhausted
- * market. A run with no report at all (pre-modes, or a legacy CLI run) is not
- * continuable: there is nothing to continue FROM, and starting one that
- * silently re-ran everything at full price is the failure this replaces.
- */
-export function runContinuation(run: RunDetail): RunContinuation {
-  const d = discovery(run.stats)
-  const stopped = typeof d?.stopped === 'string' ? d.stopped : null
-  const cursor = d?.cursor && typeof d.cursor === 'object' ? (d.cursor as Record<string, unknown>) : null
-  const stages = Array.isArray(cursor?.stages) ? (cursor?.stages as unknown[]).filter((s): s is string => typeof s === 'string') : []
-  if (!stopped || stages.includes('done')) return { canContinue: false, stopped, note: null }
-  if (stopped === 'budget') {
-    return { canContinue: true, stopped, note: 'It stopped at its spend limit. Continuing picks up where it stopped — raise the limit to go further.' }
-  }
-  if (stopped === 'deadline') {
-    return { canContinue: true, stopped, note: 'It ran out of time. Continuing picks up at the strategies and companies it never reached.' }
-  }
-  return { canContinue: false, stopped, note: null }
 }
 
 // ─── Is the run detached from this request? ──────────────────────────────────
 
 /**
- * The one sentence about closing the tab. An unknown answer is worded like the
- * pre-016 one, because the expensive mistake is telling the founder a run
- * survives a closed tab when it is executing inside the request that started it
- * and its model calls are already paid for.
+ * The one sentence about closing the tab. Three answers, none of them a guess:
+ * the server said durable, the server said not, or the server has not answered
+ * yet — and "not answered yet" is said as exactly that. It used to be worded
+ * like the pre-016 answer, which told a founder on a migrated database that
+ * migration 016 was missing every time the page loaded a beat before the
+ * environment call came back.
  */
 export function tabSafetyLine(durable: boolean | null | undefined): string {
-  return durable === true
-    ? 'The run happens on the server — you can close this tab.'
-    : 'This run happens inside this request, so keep the tab open until it finishes. (Applying migration 016 moves it onto the server.)'
+  if (durable === true) return 'The run happens on the server — you can close this tab.'
+  if (durable === false) return 'This run happens inside this request, so keep the tab open until it finishes. (Applying migration 016 moves it onto the server.)'
+  return 'Checking whether runs survive this request…'
 }
 
 /**

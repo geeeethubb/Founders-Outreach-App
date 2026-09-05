@@ -20,6 +20,8 @@ import { decideSufficiency, type SearchMode, type SufficiencyDecision } from '@/
 import { persistNetworkMatches } from '@/lib/network/matches'
 import { loadInternalContexts } from '@/lib/network/context'
 import { mapWithConcurrency } from './concurrency'
+import { currentRunClock } from '@/lib/runs/context'
+import { isClockOutcome } from '@/lib/runs/errors'
 import type { ScoutedProspect } from './prospect'
 
 export interface InternalPhaseParams {
@@ -210,6 +212,10 @@ export async function runInternalPhase(params: InternalPhaseParams): Promise<Int
 
 export interface ScoreInternalParams {
   userId: string
+  /** Do not start a candidate the run's clock cannot fit; it is reported as `deadlined` for the next leg. */
+  minAttemptMs?: number
+  /** The run was asked to stop: remaining candidates are left for the next leg (or the cancel). */
+  shouldStop?: () => boolean
   mission: { goal: string; timeframe: string }
   positioningAngle: string
   backgroundItems: { id: string; summary: string }[]
@@ -235,9 +241,12 @@ export interface ScoreInternalParams {
 export async function scoreInternalProspects(params: ScoreInternalParams): Promise<{
   prospects: ScoutedProspect[]
   errors: string[]
+  /** Candidates the run's clock (or a cancel) kept this leg from scoring. Not failures: the next leg's work. */
+  deadlined: RankedInternalCandidate[]
 }> {
   const errors: string[] = []
-  if (params.candidates.length === 0) return { prospects: [], errors }
+  const deadlined: RankedInternalCandidate[] = []
+  if (params.candidates.length === 0) return { prospects: [], errors, deadlined }
 
   const log = params.onProgress ?? (() => {})
   const contexts = await loadInternalContexts(
@@ -246,6 +255,14 @@ export async function scoreInternalProspects(params: ScoreInternalParams): Promi
   )
 
   const scored = await mapWithConcurrency(params.candidates, params.concurrency ?? 4, async (c) => {
+    // A ranking call takes 10–40 s. One started with less than that left in
+    // the run would be cut at the reserve and count for nothing — it belongs
+    // to the next leg, which is what `deadlined` says.
+    const clock = currentRunClock()
+    if (params.shouldStop?.() || (clock && !clock.canStart(params.minAttemptMs ?? 0))) {
+      deadlined.push(c)
+      return null
+    }
     const ctxRow = contexts.get(c.contact.contact_id)
     const companyContext = ctxRow?.companyContext ?? `WHAT THEY DO: ${c.contact.company ?? 'unknown company'}`
     const personContext =
@@ -276,6 +293,11 @@ export async function scoreInternalProspects(params: ScoreInternalParams): Promi
     if (params.trace) await params.trace(run as AgentResult<unknown>, { internal_person: c.contact.name })
 
     if (!run.output) {
+      // The clock's doing, not the model's: this candidate was never really judged.
+      if (isClockOutcome(run)) {
+        deadlined.push(c)
+        return null
+      }
       errors.push(`ranking(internal:${c.contact.name}): ${run.error}`)
       return null
     }
@@ -318,6 +340,6 @@ export async function scoreInternalProspects(params: ScoreInternalParams): Promi
   })
 
   const prospects = scored.filter((p): p is ScoutedProspect => p !== null)
-  log('internal-rank', `${prospects.length}/${params.candidates.length} internal candidates scored`)
-  return { prospects, errors }
+  log('internal-rank', `${prospects.length}/${params.candidates.length} internal candidates scored${deadlined.length ? `, ${deadlined.length} left for the next pass` : ''}`)
+  return { prospects, errors, deadlined }
 }

@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "tsx scripts/check-deploy-config.ts && tsx scripts/check-sql.ts && next build",
     "start": "next start",
     "lint": "next lint",
     "eval:phase3": "tsx scripts/phase3-eval.ts",
@@ -30,6 +30,7 @@
     "eval:reference": "tsx scripts/reference-eval.ts",
     "career:seed": "tsx scripts/career-seed-evidence.ts",
     "test:career": "tsx scripts/test-career-all.ts",
+    "test:scout-reliability": "tsx scripts/test-scout-reliability.ts",
     "test:career-evidence": "tsx scripts/test-career-evidence.ts",
     "test:career-consolidation": "tsx scripts/test-career-consolidation.ts",
     "test:career-canonical-view": "tsx scripts/test-career-canonical-view.ts",
@@ -92,7 +93,13 @@
     "test:career-deadline": "tsx scripts/test-career-deadline.ts",
     "test:career-queue-watchdog": "tsx scripts/test-career-queue-watchdog.ts",
     "check:worker-env": "tsx scripts/check-worker-env.ts",
-    "test:anthropic-deadline": "tsx scripts/test-anthropic-deadline.ts"
+    "check:deploy": "tsx scripts/check-deploy-config.ts",
+    "test:deploy-config": "tsx scripts/test-deploy-config.ts",
+    "test:route-config": "tsx scripts/test-route-config.ts",
+    "test:anthropic-deadline": "tsx scripts/test-anthropic-deadline.ts",
+    "test:scout-page-view": "tsx scripts/test-scout-page-view.ts",
+    "scout:watch": "tsx scripts/scout-watch.ts",
+    "scout:cancel": "tsx scripts/scout-cancel.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.116.0",

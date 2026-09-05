@@ -99,6 +99,28 @@ A run advances to stage N+1 only when every non-optional task in stage N is `suc
 `failed_permanent`, or `skipped`. Stages 6–9 are per-person and run concurrently across
 people; stages 1–5 are ordered.
 
+### ⚠ As built (2026-09-04): one row per run, executed in fenced legs
+
+The `pipeline_tasks` table above was never built. What ships is simpler and carries the same
+guarantee ([ADR-043](ARCHITECTURE.md#adr-043)): a scouting run — the People Scout
+(`kind='outreach'`) and the Job Scout (`kind='job_scout'`) alike — is **one `scouting_runs`
+row**, queued by the request that starts it, claimed by a worker with a single-use token,
+executed in **legs** of at most one hosted function invocation each, and either finished or
+handed back to the queue with a **checkpoint** (People Scout: `checkpoint` column, stages 1–7
+below persisted as they land) or a **cursor** (Job Scout) for the next leg to resume from.
+
+```
+queued ──claim──▶ running ──finish──▶ succeeded | partial | failed | cancelled
+  ▲                  │
+  └─────handoff──────┘        (a leg reached its clock with work left)
+```
+
+Every leg runs under one absolute clock ([ADR-044](ARCHITECTURE.md#adr-044)); every provider
+call inside it is sized from what the run has left; every write is fenced on the leg's worker
+id; a lapsed lease is reaped on the next read. The browser polls the row and never holds the
+work in its own request. The stage numbers below still describe what a run does; the legs
+describe when it does it.
+
 ---
 
 ## 3. Run status

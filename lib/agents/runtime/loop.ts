@@ -15,6 +15,8 @@
 
 import type Anthropic from '@anthropic-ai/sdk'
 import { anthropicComplete, recordWebSearches, recordEscalation } from '@/lib/providers/anthropic/client'
+import { currentRunClock, runCancelRequested } from '@/lib/runs/context'
+import type { ScoutErrorCode } from '@/lib/runs/errors'
 import { modelForTier, escalate, ANTHROPIC_WEB_SEARCH_COST_PER_CALL } from '@/lib/ai/models'
 import { cached, cacheKey } from '@/lib/providers/cache'
 import type { ModelRole, ModelTier } from '@/lib/ai/models'
@@ -226,11 +228,13 @@ async function runAgentLive<TInput, TOutput>(
   const finish = (
     output: TOutput | null,
     status: AgentResult<TOutput>['status'],
-    error: string | null
+    error: string | null,
+    errorCode: ScoutErrorCode | null = null
   ): AgentResult<TOutput> => ({
     output,
     status,
     error,
+    errorCode,
     evidence,
     trace: {
       agent_id: params.agentId,
@@ -251,6 +255,16 @@ async function runAgentLive<TInput, TOutput>(
   })
 
   while (steps < maxSteps) {
+    // The run's clock is consulted BETWEEN steps as well as inside each call.
+    // A step that begins inside the finalisation reserve would be refused by
+    // the client anyway; refusing it here says why in the agent's own words,
+    // and a cancelled run stops at the next step rather than at the next stage.
+    const clock = currentRunClock()
+    if (clock && clock.inReserve()) {
+      return finish(null, 'failed', `run deadline reached after ${steps} step(s): ${Math.round(clock.remainingMs() / 1000)}s left is inside the finalisation reserve`, 'RUN_DEADLINE')
+    }
+    if (runCancelRequested()) return finish(null, 'failed', `run cancelled after ${steps} step(s)`, 'CANCELLED')
+
     steps++
     const stepStartedAt = Date.now()
 
@@ -261,6 +275,7 @@ async function runAgentLive<TInput, TOutput>(
       messages,
       maxTokens: params.maxTokens ?? 4000,
       tools,
+      stage: params.agentId,
     })
 
     params.onStep?.({
@@ -274,7 +289,7 @@ async function runAgentLive<TInput, TOutput>(
     tokensOut += res.usage.outputTokens
     costUsd += res.usage.costUsd
 
-    if (res.error) return finish(null, 'failed', res.error)
+    if (res.error) return finish(null, 'failed', res.error, res.errorCode ?? null)
 
     harvestEvidence(res.content, evidence, seenUrls)
 

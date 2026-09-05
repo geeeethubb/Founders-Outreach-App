@@ -6,6 +6,214 @@ architecturally and why.
 
 ---
 
+## 2026-09-04 — Scouting reliability pass: both scouts become durable runs in fenced legs
+
+**Type:** architecture + implementation + fault-injection tests · **Behavior change:** the People
+Scout no longer executes inside its request; the Job Scout's synchronous fallback is gone; every
+provider call is bounded by the run's clock; deployment configuration is a build gate. Migration
+**021** recommended (the store runs without it). [ADR-043](ARCHITECTURE.md#adr-043),
+[ADR-044](ARCHITECTURE.md#adr-044).
+
+### The incidents, read off the founder's database
+
+- **Five People Scout rows stuck at `running` for ever** (three from 2026-08-11, two from the
+  afternoon of 2026-09-04). `POST /api/scout` wrote `status='running'` at the top of a 300 s
+  request that a full-depth run (measured 527 s) could not fit, and wrote a terminal status only
+  on its own normal return. A 504, a throw, or a closed laptop left the row open; the reaper
+  skipped kind `outreach`; nothing in the product could ever close it.
+- **Two Job Scout runs the same afternoon "failed after 2 attempts over 181 s" with
+  `attempt_count = 0`.** The sentence was fabricated: the fail-fast branch in the enqueue route
+  called the watchdog with a synthetic clock 181 s in the future, the watchdog's `no_worker`
+  branch never read the dispatch's own error, and the row recorded a count that never happened.
+  The dispatch had failed within about two seconds with a real reason that was thrown away.
+- **Provider calls did not know the run had a clock.** Anthropic requests ran to a fixed 120 s
+  (300 s with web search) with four attempts; the run deadline lived in a module-global slot
+  that a dying run left behind and concurrent runs overwrote for each other; Apollo requests had
+  no abort at all and one hung request held the process-wide throttle chain for every caller.
+- **The worker executed a whole run inside the dispatch POST**, so every dispatch was "pending"
+  and a failure that settled after the race was never written to the row. Any enqueue error fell
+  back to running the scout inline in the request — in production too.
+- **Nothing gated a deployment.** The worker address preferred `VERCEL_URL` (a protected
+  preview host) over the app's own URL, sent no bypass header, and `check:worker-env` was not
+  wired into anything. A preview could dispatch to production.
+- **The pages guessed.** `res.json()` on a Vercel HTML 504 produced "Unexpected token", the
+  202's dispatch report and the poll's queue actions were never read, five failed polls stopped
+  polling for good, a 409 attached silently, and there was no Cancel.
+
+### What was built
+
+**One run model for both scouts (ADR-043).** A scouting run is a `scouting_runs` row of kind
+`outreach` (People) or `job_scout`, claimed by a single-use token and executed in **fenced
+legs** of at most one invocation each. `POST /api/scout` and `POST /api/career/scout` only
+enqueue: they check readiness, insert the row, dispatch `POST /api/scout/worker`, and observe the
+claim on the row (`awaitClaim`), never the HTTP answer. The worker (`lib/runs/worker.ts`)
+claims, executes inside its own request under a lease it renews every 30 s, writes progress,
+cursor, checkpoint and result fenced on its `worker_id`, and at the end either finishes the row
+or **hands it back** in one statement (new token, `queued_at` and `attempt_count` reset,
+checkpoint carried) and dispatches the next leg. Every read of a run — the page poll, the run
+routes, the daily crons — runs the watchdog: a lapsed lease is reaped (`partial` if it produced
+value, `failed` otherwise, `PLATFORM_KILL` when the leg died early), a handed-back leg whose
+dispatch never landed is re-dispatched ("chain"), a queued row past its attempts is failed with
+the dispatcher's real sentence. `MAX_INVOCATIONS` 6, whole-run `run_deadline_at`, cancel via
+`cancel_requested` honoured between steps.
+
+**One clock per leg (ADR-044).** `lib/runs/deadline.ts` + `lib/runs/context.ts`: a `RunClock`
+(hard deadline, finalize reserve, minimum attempt) carried in `AsyncLocalStorage`. Anthropic,
+Apollo, the OpenAI search, the ATS/page fetchers and the agent loop all size each attempt from
+the ambient clock, refuse to start an attempt that cannot fit before the reserve, and answer
+`RUN_DEADLINE` instead of overrunning. No module-level deadline slot remains; per-run usage lives
+in the context. Vercel legs get 280 s of the 300 s function; local runs 20 min.
+
+**A stable error contract.** `lib/runs/errors.ts`: 17 `ScoutErrorCode`s, one body shape
+`{ error, code, retryable, stage?, provider?, runId?, remedy? }`, row columns `error_code` /
+`error_detail`. The pages render code, sentence and remedy; `components/career/api-errors.ts`
+describes a Vercel HTML 504 or an empty body instead of throwing on it.
+
+**Readiness and gates.** `lib/runs/readiness.ts` (`GET /api/scout/readiness`) checks env
+presence, the schema (016/020 required, 021 warned), the worker address rules (no loopback in
+production, a preview never routes to production, the bypass header only for our own Vercel
+hosts) and probes the worker itself (401/403 → the Deployment Protection remedy; HTML → the
+challenge page; deployment-id mismatch). Both pages show "Scouting is unavailable: <reason> —
+Fix: <remedy>" before a paid run. `lib/runs/deploy-config.ts` judges the same rules at build
+time; `npm run build` is now `check:deploy && check:sql && next build`, so a production build
+without `CRON_SECRET` or a valid worker address refuses with the fix named.
+
+**People Scout, durable.** `lib/scouting/orchestrator.ts` was rebuilt around a JSON checkpoint
+(`lib/scouting/checkpoint.ts`): stage gates that refuse to start a stage the clock cannot fit,
+per-dossier research checkpoints, a resumable leg that skips finished stages, and a
+`PeopleScoutResult` payload on the row. `/dashboard/scout` was rewritten (898 → 331 lines plus
+five components under 400 lines each) to attach to the active run on mount, poll persisted
+state, survive a refresh, cancel, and never keep results in the browser. New routes:
+`GET /api/scout/runs`, `GET /api/scout/runs/[id]?result=1`, `POST /api/scout/runs/[id]/cancel`.
+
+**Migration 021** adds `error_code`, `error_detail`, `invocation_count`, `run_deadline_at`,
+`checkpoint`, `result`, closes the orphaned rows, and adds a partial unique index — one active
+run per user and kind. Until it is applied the store folds those six fields into
+`params.__reliability` (`lib/career/scout/run-store-db.ts`) and readiness says so as a
+warning; only the index-level guarantee waits on the paste.
+
+### What the fault matrix found in the new code
+
+`npm run test:scout-reliability` (10 in-memory suites, 524 checks, ~20 s) was written against
+the kernel with a fake store that models the Supabase guard semantics and the 021 index. Its
+first run failed 8 checks, each pinned to a real defect in code written earlier the same day:
+
+1. A cancel arriving between a leg's last write and the handoff left the row `running` under
+   the dead leg (the handoff refused before writing; the close-out then used a queued-only
+   guard). Fixed: closed exactly like a mid-leg cancel.
+2. The reaper read `result` off `listRuns`, which deliberately omits the heavy columns, so a
+   People Scout that died after persisting prospects was closed as `failed` and its prospects
+   hidden. Fixed: the candidate is re-read in full before the verdict.
+3. A chained leg was aged from `queued_at`: once a sweep dispatched a leg that had waited past
+   the hard ceiling, the very next sweep failed it as `no_worker` while its one dispatch was
+   still landing. Fixed: a dispatched chained leg is aged from its last dispatch.
+4. The watchdog's comment said a token-less queued row is failed at every age; the code skipped
+   young rows first. Fixed to match the comment (the token is only ever cleared by the claim
+   itself, so a queued row without one is never a race).
+5. The People Scout's re-scout persist reported only its ids; its inserted count, errors and
+   migration flag were dropped. Fixed to mirror the main persist.
+
+### What the first live run found
+
+The first production-like People Scout (internal-only, 280 s legs) finished `succeeded` with
+14 of 16 internal candidates scored: the last two ranking attempts were sized to the 19 s and
+11 s left before the reserve, timed out there, and were recorded as item errors. The clock had
+done exactly what ADR-044 says at the provider level; one level up, the stage treated
+"the clock cut this" like "the model failed on this" and completed. The external rank stage
+already knew the difference — by matching the error sentence, and not the sentence the client
+writes for a timeout inside the reserve.
+
+Fixed structurally: `AgentResult` now carries `errorCode`, set by the loop from the provider
+(RUN_DEADLINE, CANCELLED, PROVIDER_*); `isClockOutcome()` in `lib/runs/errors.ts` is the one
+predicate every stage uses; internal scoring gates each candidate on the clock, reports the
+ones it did not reach as `deadlined`, and the checkpoint keeps them as `internal.pending` so
+the leg hands back and the next leg scores exactly those without paying for retrieval again;
+the ranking gate rose from 12 s to 40 s, the measured cost of a ranking call. Regression case
+in `scripts/reliability/people-scout.ts` ("internal scoring cut by the clock"), shown failing
+against the old code before the fix.
+
+**The BROAD Job Scout: three lanes cut by the clock, row closed `succeeded`, never continued.**
+The planner's web-search call took 145 s of the 280 s leg, so the watchlist sweep started with
+its quarter of the run already spent and left 298 of 298 companies unchecked; company-first
+stopped at its share with 42 unchecked; four extractions were refused inside the finalisation
+reserve. Each lane said so in its own sentence — and `stats.deadline_hit` stayed false, because
+only a stage refused *before starting* ever set it. So `everyStageRan` was true, the cursor was
+marked `done`, the row read `succeeded`, and a twenty-minute run ended after one pass with
+four jobs. Fixed at the source: every lane that starts and is cut reports it
+(`SweepStageResult.deadlineHit`, `CompanyFirstStageResult.deadlineHit`, `BatchOutcome.deadlineHit`
+from `isClockOutcome` per posting), the orchestrator keeps a `leftOpen` list and closes the run
+as a deadline hit whenever it is non-empty, and the worker's continuation rule is a pure
+function (`jobLegContinuation`, `run-record.ts`) bounded by the mode's own runtime — a BROAD
+run chains, a QUICK run that has used its five minutes stops with the sentence that says so.
+The QUICK run's row had also carried the sweep's sentence where the ledger's "$0.48 of $0.75"
+belonged; the ceiling's own sentence is now preferred. Regression cases: `test-career-scout.ts`
+B2–B4 (shown failing against the old code) and the continuation checks in `test-career-modes.ts`.
+
+**The live cancel.** Asked to stop 186 s into a People Scout leg, the route answered in 387 ms,
+the leg finished the two ranking calls in flight, closed `cancelled` with the 16 prospects it
+had ranked, and left the kind free. A throwaway-row probe on the founder's database confirmed a
+fenced heartbeat sees `cancel_requested` within one beat.
+
+### Tests
+
+| Command | Result |
+|---|---|
+| `npx tsc --noEmit` | clean |
+| `npm run check:sql` | 19 files, 507 statements, 3 bodies parse |
+| `npm run test:scout-reliability` | 10 suites, 524 checks |
+| `npm run test:anthropic-deadline` | 40 |
+| `npm run test:career-scout-run` | 97 |
+| `npm run test:career-queue-watchdog` | 52 |
+| `npm run test:career-queue` | 72 |
+| `npm run test:deterministic` | 347 |
+| `npm run test:career` | 39 suites |
+| `npm run test:deploy-config` · `test:route-config` | 130 · 22 |
+| `npm run test:scout-page-view` · `test:career-ui-direction` | 93 · 177 |
+| `npm run check:worker-env` · `check:deploy` | ok (local) |
+| `npm run build` | passes the gate |
+
+### Live acceptance (production-like, this machine, 2026-09-04)
+
+`npm run build` (gated), then `next start -p 3100` with `SCOUT_INVOCATION_BUDGET_MS=280000` and
+`SCOUT_WORKER_BASE_URL=http://localhost:3100` — Vercel's leg length, the real Supabase, Anthropic
+and Apollo — driven by `scripts/scout-acceptance.ts` through the cookie routes as the founder.
+Every run: readiness allowed it, the enqueue answered in 2.8–4.8 s with the claim observed in
+160–270 ms, a second click got a 409 naming the same run, a refresh found it, polling reached a
+terminal state by itself with zero poll failures, and the kind was free afterwards.
+
+| Run | Outcome |
+|---|---|
+| People, internal-only | `succeeded` in 230 s, 14 prospects, $0.64. Two rankings cut by the clock were recorded as item errors — the gap fixed above. |
+| Jobs, QUICK | `partial` at 268 s on its $0.75 ceiling, 151 jobs (20 new), 24 ranked, resumable. Its row carried the sweep's sentence instead of the ledger's — fixed. |
+| People, internal-first, cancelled live | Cancel accepted in 387 ms at 186 s; the two rankings in flight finished; `cancelled` with 16 prospects kept. |
+| Jobs, BROAD $2 (before the lane fix) | Closed `succeeded` at 269 s with 4 jobs, three lanes cut by the clock, not resumable — the defect fixed above. |
+| People, both (external discovery) | **Two passes.** Pass 1 handed back at 205 s; pass 2 claimed in 1.7 s; all ten stages; 20 prospects (1 new, 8 companies validated, 24 people enriched, 16 Apollo credits), $2.38, no errors. |
+| Jobs, BROAD $2 (after the lane fix) | **Two passes.** Pass 1 handed back at 264 s; pass 2 swept the watchlist (357 postings listed), resumed the strategies, stopped on its ceiling at $1.75 of $2.00 with the ledger's own sentence; `partial`, resumable, 360 jobs (7 new), 37 ranked. |
+
+Also observed, as designed: a poll's chain dispatch overlapped the handoff's own dispatch and
+lost with a 409 on the single-use token; a throwaway-row probe showed a fenced heartbeat sees
+`cancel_requested` within one beat. Migration 021 was not applied for any of this — the
+`params.__reliability` fallback carried every run.
+
+**Known wart, not fixed:** the first progress write of a new pass shows that pass's own counts
+(zeros) for a few seconds until the leg re-counts the stored rows; nothing is lost, and the
+terminal counts come from the database.
+
+### Founder actions
+
+1. Paste `supabase/migrations/021_scout_reliability.sql` in the Supabase SQL editor — **done
+   2026-09-04**, after the live runs above; readiness reports no warnings since.
+2. On Vercel: set `CRON_SECRET`; enable **Protection Bypass for Automation** (or set
+   `SCOUT_WORKER_BASE_URL` to the production domain); confirm Fluid compute and that system
+   environment variables are exposed. Names and settings in [SETUP.md](../SETUP.md) step 6.
+
+### Not verifiable from this machine
+
+Vercel's own logs and project settings (no CLI or credentials here); migration 021 (no SQL
+path from this machine); `waitUntil` semantics, which the design does not depend on.
+
+---
+
 ## 2026-09-01 — A queued scouting run can no longer wait forever
 
 **Type:** incident fix · **Behavior change:** 60s to act, 180s hard ceiling, then a real error.

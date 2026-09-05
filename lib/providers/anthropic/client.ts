@@ -7,6 +7,15 @@
 // This is the low-level transport. Business logic depends on the interfaces in
 // lib/providers/model.ts, not on this file directly — so swapping vendors is a
 // provider change, not a rewrite. See docs/ARCHITECTURE.md ADR-016.
+//
+// EVERY ATTEMPT IS SIZED FROM THE RUN'S CLOCK. A request's timeout is the
+// provider ceiling (120s, or 300s when the model runs web searches) or what is
+// left of the run before its finalisation reserve — whichever is smaller. An
+// attempt that would not get MIN_ATTEMPT_MS is not started; a backoff sleep
+// that would eat the next attempt is refused. So a child request can never
+// outlive the run that made it, and a retry storm can never outlive a deadline.
+// The clock arrives through the run context (lib/runs/context.ts): nothing
+// here is a module-global slot that two runs could overwrite for each other.
 
 import Anthropic from '@anthropic-ai/sdk'
 import {
@@ -17,6 +26,10 @@ import {
   type ModelTier,
 } from '@/lib/ai/models'
 import { cached, cacheKey } from '../cache'
+import { createRunContext, currentRunClock, currentRunContext, runUsageSlot, withRunContext } from '@/lib/runs/context'
+import { RunClock, sleepWithin } from '@/lib/runs/deadline'
+import { classifyError, type ScoutErrorCode } from '@/lib/runs/errors'
+import { scoutLog } from '@/lib/runs/log'
 
 // ─── Usage accounting ────────────────────────────────────────────────────────
 
@@ -64,14 +77,34 @@ function emptyUsage(): AnthropicUsage {
   }
 }
 
-let usage = emptyUsage()
+/**
+ * Usage is PER RUN when a run context is active, and process-wide otherwise.
+ *
+ * The process-wide object is what a CLI or an eval reads after `resetAnthropicUsage()`.
+ * Inside a worker the run's own slot is used, so two runs on one warm instance
+ * cannot add each other's calls to their own totals — or, worse, exhaust a
+ * call budget that a dozen earlier requests on the same instance had been
+ * quietly filling.
+ */
+let processUsage = emptyUsage()
+
+function currentUsage(): AnthropicUsage {
+  return runUsageSlot<AnthropicUsage>('anthropic', emptyUsage) ?? processUsage
+}
 
 export function anthropicUsage(): AnthropicUsage {
-  return { ...usage, byRole: { ...usage.byRole }, byTier: { ...usage.byTier }, escalations: [...usage.escalations] }
+  const u = currentUsage()
+  return { ...u, byRole: { ...u.byRole }, byTier: { ...u.byTier }, escalations: [...u.escalations] }
 }
 
 export function resetAnthropicUsage(): void {
-  usage = emptyUsage()
+  const slot = runUsageSlot<AnthropicUsage>('anthropic', emptyUsage)
+  if (slot) {
+    // Zero in place, so an in-flight call keeps writing to a live object.
+    Object.assign(slot, emptyUsage())
+    return
+  }
+  processUsage = emptyUsage()
 }
 
 /**
@@ -79,90 +112,22 @@ export function resetAnthropicUsage(): void {
  * within a month, so every one is logged with its reason.
  */
 export function recordEscalation(agent: string, from: string, to: string, reason: string): void {
-  usage.escalations.push({ agent, from, to, reason })
+  currentUsage().escalations.push({ agent, from, to, reason })
 }
 
 /** Recorded by the web-research provider, which is billed per search. */
 export function recordWebSearches(n: number, costUsd: number): void {
-  usage.webSearches += n
-  usage.costUsd += costUsd
+  const u = currentUsage()
+  u.webSearches += n
+  u.costUsd += costUsd
 }
 
 // ─── Run budget ──────────────────────────────────────────────────────────────
 // A hard ceiling so an agent loop can never bill without bound. Mirrors the
-// Apollo and web-search budgets.
+// Apollo and web-search budgets. The COUNTER is per run (see currentUsage); the
+// ceiling is per process.
 
 let callBudget = Number(process.env.ANTHROPIC_MAX_CALLS_PER_RUN ?? 500)
-
-// ─── Run deadline ────────────────────────────────────────────────────────────
-// The retry loop below is right to be patient with a flaky API — up to four
-// attempts, each with a two-minute timeout. It is wrong to be patient PAST the
-// point where the orchestrator has already given up: a scout run with a 600s
-// deadline spent 4120s inside retries during an API outage, because nothing
-// here knew a deadline existed. An orchestrator that has one sets it; a call
-// that would retry after it returns an error instead, and the run degrades
-// the way every other failure does.
-
-// TWO shapes, because the two callers have genuinely different lifetimes.
-//
-// `legacyDeadline` is ONE SLOT with REPLACE semantics, and that is deliberate.
-// The scout orchestrator sets it at the top of a run and clears it in finish();
-// if a run exits some other way — the planner throws — the slot is left stale,
-// and the next run's set() overwrites it. That self-healing is load-bearing.
-// Making this a set instead cost five consecutive scout runs: one leaked
-// deadline stayed in the collection for ever, `pastRunDeadline` takes the
-// EARLIEST, and every later run in the process reported "run deadline passed
-// during retry" before doing any work. Replace beats accumulate for a
-// long-lived, single-owner slot.
-//
-// `scopedDeadlines` is a set, and safe as one, because the ONLY way in is
-// `withAnthropicDeadline`, which removes its own entry in a `finally`. That is
-// what package generation uses, and it is what makes two concurrent packages
-// safe — the bug that motivated the set in the first place was one package
-// clearing another's deadline through the shared slot.
-let legacyDeadline: number | null = null
-const scopedDeadlines = new Set<number>()
-
-export function setAnthropicDeadline(epochMs: number | null): void {
-  legacyDeadline = epochMs
-}
-
-/**
- * Arm a deadline for the duration of `fn` and remove exactly that one
- * afterwards, leaving any concurrent run's deadline in place. Cannot leak: the
- * removal is in a `finally`.
- */
-export async function withAnthropicDeadline<T>(epochMs: number, fn: () => Promise<T>): Promise<T> {
-  scopedDeadlines.add(epochMs)
-  try {
-    return await fn()
-  } finally {
-    scopedDeadlines.delete(epochMs)
-  }
-}
-
-/** Test seam. Named so nobody mistakes it for part of the retry contract. */
-export function __pastRunDeadlineForTests(): boolean {
-  return pastRunDeadline()
-}
-
-/** Test seam: forget every deadline, both shapes. */
-export function resetAnthropicDeadlines(): void {
-  legacyDeadline = null
-  scopedDeadlines.clear()
-}
-
-/**
- * The earliest deadline anything has armed. Conservative across independent
- * runs on purpose: it can only make retries stop sooner, never later, and
- * stopping sooner degrades gracefully while stopping later is the failure this
- * whole mechanism exists to prevent.
- */
-function pastRunDeadline(): boolean {
-  let earliest = legacyDeadline ?? Infinity
-  for (const d of scopedDeadlines) if (d < earliest) earliest = d
-  return Number.isFinite(earliest) && Date.now() > earliest
-}
 
 export function setAnthropicBudget(n: number): void {
   callBudget = n
@@ -173,6 +138,42 @@ export class AnthropicBudgetExceeded extends Error {
     super(`Anthropic call budget exceeded (${limit} live calls). Raise ANTHROPIC_MAX_CALLS_PER_RUN.`)
     this.name = 'AnthropicBudgetExceeded'
   }
+}
+
+// ─── Run deadline ────────────────────────────────────────────────────────────
+//
+// There is no deadline slot in this module any more. The clock a call sizes
+// itself from is the ambient run's (lib/runs/context.ts), carried by
+// AsyncLocalStorage through every await of one invocation and invisible to
+// every other. A module slot cost five consecutive scout runs once (a leaked,
+// expired deadline poisoned every later run in the process) and would let two
+// concurrent runs on one instance disarm each other; a context cannot leak,
+// because it ends with the promise chain it belongs to.
+
+/**
+ * Arm a deadline for the duration of `fn`.
+ *
+ * Package generation's entry point. If a run context already exists (the
+ * package is being built inside a scout worker), the earlier of the two
+ * deadlines wins and the outer run's identity and usage slots are kept, so the
+ * inner work is still accounted to the run that paid for it.
+ */
+export async function withAnthropicDeadline<T>(epochMs: number, fn: () => Promise<T>): Promise<T> {
+  const outer = currentRunContext()
+  const hardDeadlineAt = outer ? Math.min(outer.clock.hardDeadlineAt, epochMs) : epochMs
+  // The caller's deadline is already a WORK deadline (package/deadline.ts keeps
+  // its own finalisation reserve), so this clock reserves nothing of its own.
+  const clock = new RunClock({ hardDeadlineAt, finalizeReserveMs: 0 })
+  const ctx = outer
+    ? { ...outer, clock }
+    : createRunContext({ clock, kind: 'package', label: 'anthropic-deadline' })
+  return withRunContext(ctx, fn)
+}
+
+/** Test seam. True when the ambient run has no time left for another attempt. */
+export function __pastRunDeadlineForTests(): boolean {
+  const clock = currentRunClock()
+  return clock ? clock.attemptTimeoutMs(DEFAULT_REQUEST_TIMEOUT_MS) === 0 : false
 }
 
 // ─── Client ──────────────────────────────────────────────────────────────────
@@ -186,7 +187,7 @@ export function anthropicAvailable(): boolean {
 }
 
 /**
- * How long ONE request may take.
+ * How long ONE request may take, at most.
  *
  * 120s is right for an ordinary completion and far too short for one that uses
  * server-side web search: the connection is held open while Anthropic runs the
@@ -196,13 +197,27 @@ export function anthropicAvailable(): boolean {
  * with no queue involved — so every run fell back to deterministic strategies
  * and discovered nothing. At 300s the same planner returns 8 strategies and 31
  * seeds, and the run persists postings. It was slow, not hung.
+ *
+ * These are CEILINGS. The actual timeout of an attempt is the smaller of the
+ * ceiling and what the run has left (see `attemptTimeoutMs`).
  */
 export const DEFAULT_REQUEST_TIMEOUT_MS = Number(process.env.ANTHROPIC_TIMEOUT_MS ?? 120_000)
+export const SEARCH_REQUEST_TIMEOUT_MS = Number(process.env.ANTHROPIC_SEARCH_TIMEOUT_MS ?? 300_000)
+
 /** Does this request hand work to Anthropic's own search tool? */
 export function usesWebSearch(tools: unknown): boolean {
   return Array.isArray(tools) && tools.some((t) => typeof (t as { type?: unknown })?.type === 'string' && /web_search/.test(String((t as { type: string }).type)))
 }
-export const SEARCH_REQUEST_TIMEOUT_MS = Number(process.env.ANTHROPIC_SEARCH_TIMEOUT_MS ?? 300_000)
+
+/**
+ * The timeout THIS attempt gets: the provider ceiling, or what the run has
+ * left before its finalisation reserve — whichever is smaller. Zero means "do
+ * not start": there is not enough time for the attempt to be worth the money.
+ * Outside a run (a CLI helper, a test) the ceiling stands.
+ */
+export function attemptTimeoutMs(ceilingMs: number, clock: RunClock | null = currentRunClock()): number {
+  return clock ? clock.attemptTimeoutMs(ceilingMs) : ceilingMs
+}
 
 function getClient(): Anthropic {
   const apiKey = process.env.ANTHROPIC_API_KEY
@@ -218,13 +233,17 @@ function getClient(): Anthropic {
   return client
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((r) => setTimeout(r, ms))
+/** Test seam: replace the SDK client (a fake `messages.create`). */
+export function __setAnthropicClientForTests(fake: Anthropic | null): void {
+  client = fake
 }
 
-function isRetryable(status: number | undefined): boolean {
-  return status === 429 || status === 408 || status === 409 || (status !== undefined && status >= 500)
+/** Retryable: transient conditions only. 4xx other than 408/409/429 will never succeed. */
+export function isRetryableStatus(status: number | undefined): boolean {
+  return status === 429 || status === 408 || status === 409 || status === 529 || (status !== undefined && status >= 500)
 }
+
+const MAX_ATTEMPTS = 4
 
 // ─── Core completion ─────────────────────────────────────────────────────────
 
@@ -243,6 +262,8 @@ export interface CompleteParams {
   toolChoice?: Anthropic.MessageCreateParams['tool_choice']
   /** Server-side tools (web_search) need this beta header on some accounts. */
   extraHeaders?: Record<string, string>
+  /** For the log line: which stage of the run is asking. */
+  stage?: string
 }
 
 export interface CompleteResult {
@@ -253,12 +274,30 @@ export interface CompleteResult {
   content: Anthropic.ContentBlock[]
   usage: { inputTokens: number; outputTokens: number; costUsd: number }
   error?: string
+  /** Stable classification of `error`, for the run row and the UI. */
+  errorCode?: ScoutErrorCode
+  /** How many attempts this call made, successful or not. */
+  attempts?: number
+}
+
+function errorStatus(e: unknown): number | undefined {
+  const s = (e as { status?: unknown }).status
+  return typeof s === 'number' ? s : undefined
+}
+
+function isTimeoutError(e: unknown): boolean {
+  const name = (e as { name?: unknown }).name
+  const message = e instanceof Error ? e.message : String(e)
+  return name === 'APIConnectionTimeoutError' || name === 'AbortError' || /timed? ?out|timeout/i.test(message)
 }
 
 /**
  * One Messages call. Retries transient failures, records usage, and never
  * throws for an expected API condition — errors come back on the result so a
  * single failed agent step degrades the run instead of halting it.
+ *
+ * The budget it obeys is the RUN's: `remaining_ms` in every log line is the
+ * run's remaining work time, and the request timeout is derived from it.
  */
 export async function anthropicComplete(params: CompleteParams): Promise<CompleteResult> {
   const model = params.tier ? modelForTier(params.tier) : anthropicModelFor(params.role)
@@ -270,8 +309,9 @@ export async function anthropicComplete(params: CompleteParams): Promise<Complet
     content: [],
     usage: { inputTokens: 0, outputTokens: 0, costUsd: 0 },
   }
+  const usage = currentUsage()
 
-  if (!anthropicAvailable()) return { ...empty, error: 'ANTHROPIC_API_KEY is not set' }
+  if (!anthropicAvailable()) return { ...empty, error: 'ANTHROPIC_API_KEY is not set', errorCode: 'CONFIGURATION', attempts: 0 }
   if (usage.calls >= callBudget) throw new AnthropicBudgetExceeded(callBudget)
 
   const tierKey = params.tier ?? 'role:' + params.role
@@ -280,20 +320,45 @@ export async function anthropicComplete(params: CompleteParams): Promise<Complet
   const tierBucket = (usage.byTier[tierKey] ??= { calls: 0, costUsd: 0 })
   tierBucket.calls++
 
-  const maxAttempts = 4
-  let lastError = ''
+  const search = usesWebSearch(params.tools)
+  const ceiling = search ? SEARCH_REQUEST_TIMEOUT_MS : DEFAULT_REQUEST_TIMEOUT_MS
+  const operation = search ? 'messages.create+web_search' : 'messages.create'
+  const fail = (code: ScoutErrorCode, message: string, attempts: number): CompleteResult => {
+    usage.errors++
+    scoutLog({ event: 'provider_failed', provider: 'anthropic', operation, stage: params.stage ?? null, attempt: attempts, error_code: code, error: message.slice(0, 200) }, 'warn')
+    return { ...empty, error: message, errorCode: code, attempts }
+  }
 
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    if (attempt > 0) {
-      if (pastRunDeadline()) {
-        usage.errors++
-        return { ...empty, error: `Anthropic: run deadline passed during retry — ${lastError.slice(0, 200)}` }
-      }
+  let lastError = ''
+  let lastCode: ScoutErrorCode = 'PROVIDER_ERROR'
+
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const clock = currentRunClock()
+    if (attempt > 1) {
       usage.retries++
-      const base = Math.min(16_000, 700 * Math.pow(2, attempt))
-      await sleep(Math.round(base * (0.5 + Math.random() * 0.5)))
+      const base = Math.min(16_000, 700 * Math.pow(2, attempt - 1))
+      const want = Math.round(base * (0.5 + Math.random() * 0.5))
+      // A sleep that would leave no room for the next attempt is refused: the
+      // run is better off finalising with what it has than sleeping into the
+      // reserve and being killed mid-request.
+      const slept = await sleepWithin(clock, want)
+      if (!slept) {
+        return fail('RUN_DEADLINE', `Anthropic: run deadline passed before retry ${attempt} — ${lastError.slice(0, 200)}`, attempt - 1)
+      }
     }
 
+    // Sized from the run's clock, on EVERY attempt including the first.
+    const timeout = attemptTimeoutMs(ceiling, clock)
+    if (timeout === 0) {
+      return fail(
+        'RUN_DEADLINE',
+        `Anthropic: not started — ${Math.round((clock?.remainingForWorkMs() ?? 0) / 1000)}s left in the run is not enough for a ${operation} attempt` +
+          (lastError ? ` (previous: ${lastError.slice(0, 160)})` : ''),
+        attempt - 1
+      )
+    }
+
+    const startedAt = Date.now()
     try {
       const res = await getClient().messages.create(
         {
@@ -306,9 +371,7 @@ export async function anthropicComplete(params: CompleteParams): Promise<Complet
           ...(params.toolChoice ? { tool_choice: params.toolChoice } : {}),
         },
         {
-          // Per REQUEST, so a search-enabled call gets the longer ceiling
-          // without making every ordinary call wait five minutes to fail.
-          timeout: usesWebSearch(params.tools) ? SEARCH_REQUEST_TIMEOUT_MS : DEFAULT_REQUEST_TIMEOUT_MS,
+          timeout,
           ...(params.extraHeaders ? { headers: params.extraHeaders } : {}),
         }
       )
@@ -336,6 +399,18 @@ export async function anthropicComplete(params: CompleteParams): Promise<Complet
         .filter((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use')
         .map((b) => ({ id: b.id, name: b.name, input: b.input }))
 
+      scoutLog({
+        event: 'provider_ok',
+        provider: 'anthropic',
+        operation,
+        stage: params.stage ?? null,
+        attempt,
+        status: res.stop_reason ?? 'ok',
+        latency_ms: Date.now() - startedAt,
+        cost_usd: cost,
+        timeout_ms: timeout,
+      })
+
       return {
         text,
         model,
@@ -343,20 +418,41 @@ export async function anthropicComplete(params: CompleteParams): Promise<Complet
         toolUses,
         content: res.content,
         usage: { inputTokens: inTok, outputTokens: outTok, costUsd: cost },
+        attempts: attempt,
       }
     } catch (e) {
-      const status = (e as { status?: number }).status
+      const status = errorStatus(e)
+      const timedOut = isTimeoutError(e)
       lastError = e instanceof Error ? e.message : String(e)
-      if (!isRetryable(status) && status !== undefined) {
-        usage.errors++
-        return { ...empty, error: `Anthropic ${status}: ${lastError.slice(0, 240)}` }
+      lastCode = timedOut ? 'PROVIDER_TIMEOUT' : status === 429 || status === 529 ? 'PROVIDER_RATE_LIMIT' : status !== undefined ? (status >= 500 ? 'PROVIDER_ERROR' : classifyError(e, 'PROVIDER_ERROR')) : 'PROVIDER_TIMEOUT'
+      const retryable = timedOut || status === undefined || isRetryableStatus(status)
+      scoutLog(
+        {
+          event: retryable && attempt < MAX_ATTEMPTS ? 'provider_retry' : 'provider_error',
+          provider: 'anthropic',
+          operation,
+          stage: params.stage ?? null,
+          attempt,
+          http_status: status ?? null,
+          latency_ms: Date.now() - startedAt,
+          timeout_ms: timeout,
+          error_code: lastCode,
+          error: lastError.slice(0, 200),
+        },
+        'warn'
+      )
+      if (!retryable) {
+        return fail(lastCode, `Anthropic ${status}: ${lastError.slice(0, 240)}`, attempt)
       }
-      // No status means a network fault — transient by nature, keep retrying.
+      // A timeout that consumed the run's remaining window is a deadline, not
+      // a provider fault — say so, and do not sleep into the reserve.
+      if (timedOut && clock && clock.inReserve()) {
+        return fail('RUN_DEADLINE', `Anthropic: the request ran out the run's clock (${Math.round(timeout / 1000)}s attempt) — ${lastError.slice(0, 160)}`, attempt)
+      }
     }
   }
 
-  usage.errors++
-  return { ...empty, error: `Anthropic: exhausted retries — ${lastError.slice(0, 240)}` }
+  return fail(lastCode, `Anthropic: exhausted retries — ${lastError.slice(0, 240)}`, MAX_ATTEMPTS)
 }
 
 // ─── Structured output ───────────────────────────────────────────────────────
@@ -381,6 +477,7 @@ export interface StructuredResult<T> {
   model: string
   usage: { inputTokens: number; outputTokens: number; costUsd: number }
   error?: string
+  errorCode?: ScoutErrorCode
 }
 
 export async function anthropicStructured<T>(params: StructuredParams<T>): Promise<StructuredResult<T>> {
@@ -392,11 +489,16 @@ export async function anthropicStructured<T>(params: StructuredParams<T>): Promi
    * cannot retry makes every caller's success depend on the model getting it
    * right first time.
    */
-  const MAX_ATTEMPTS = 3
+  const MAX_VALIDATION_ATTEMPTS = 3
 
   const run = async (): Promise<StructuredResult<T>> => {
     let last: StructuredResult<T> | null = null
-    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    for (let attempt = 0; attempt < MAX_VALIDATION_ATTEMPTS; attempt++) {
+      // Nothing starts inside the run's reserve — including the FIRST attempt.
+      const clock = currentRunClock()
+      if (clock && clock.attemptTimeoutMs(DEFAULT_REQUEST_TIMEOUT_MS) === 0) {
+        return last ?? { value: null, model: params.tier ? modelForTier(params.tier) : anthropicModelFor(params.role), usage: { inputTokens: 0, outputTokens: 0, costUsd: 0 }, error: 'run deadline: no time left for a structured call', errorCode: 'RUN_DEADLINE' }
+      }
       const result = await attempt_()
       if (result.value !== null) return result
       last = result
@@ -410,8 +512,6 @@ export async function anthropicStructured<T>(params: StructuredParams<T>): Promi
       // agent loop learned this lesson (loop.ts handles max_tokens separately);
       // this path never did. Retrying identically cannot help, so stop.
       if (result.error && /max_tokens/i.test(result.error)) break
-      // Nor is there any point starting another attempt past the run's deadline.
-      if (pastRunDeadline()) break
     }
     return last!
   }
@@ -424,6 +524,7 @@ export async function anthropicStructured<T>(params: StructuredParams<T>): Promi
       messages: params.messages,
       maxTokens: params.maxTokens,
       temperature: params.temperature,
+      stage: params.stage,
       tools: [
         {
           name: params.schemaName,
@@ -434,7 +535,7 @@ export async function anthropicStructured<T>(params: StructuredParams<T>): Promi
       toolChoice: { type: 'tool', name: params.schemaName },
     })
 
-    if (res.error) return { value: null, model: res.model, usage: res.usage, error: res.error }
+    if (res.error) return { value: null, model: res.model, usage: res.usage, error: res.error, errorCode: res.errorCode }
 
     const call = res.toolUses.find((t) => t.name === params.schemaName)
     if (!call) {
@@ -443,12 +544,13 @@ export async function anthropicStructured<T>(params: StructuredParams<T>): Promi
         model: res.model,
         usage: res.usage,
         error: `model returned no ${params.schemaName} tool call (stop_reason=${res.stopReason})`,
+        errorCode: 'PROVIDER_INVALID_RESPONSE',
       }
     }
 
     const value = params.validate(call.input)
     if (value === null) {
-      return { value: null, model: res.model, usage: res.usage, error: 'output failed schema validation' }
+      return { value: null, model: res.model, usage: res.usage, error: 'output failed schema validation', errorCode: 'PROVIDER_INVALID_RESPONSE' }
     }
 
     return { value, model: res.model, usage: res.usage }
@@ -473,6 +575,6 @@ export async function anthropicStructured<T>(params: StructuredParams<T>): Promi
     (v) => v.value !== null && !v.error
   )
 
-  if (wasCached) usage.cachedCalls++
+  if (wasCached) currentUsage().cachedCalls++
   return result
 }

@@ -20,26 +20,54 @@ export interface StartRunParams {
   label: string
   mission: unknown
   budget: unknown
+  /**
+   * Which product this run belongs to (migration 014). Set IN THE INSERT: a
+   * row inserted with the column default and re-labelled a moment later is,
+   * for that moment, a running run of the wrong kind — which is how an inline
+   * package run once looked like an active People Scout.
+   */
+  kind?: string
 }
 
 export async function startScoutingRun(p: StartRunParams): Promise<{ runId: string | null; migrationMissing: boolean; error?: string }> {
   const supabase = createServiceClient()
-  const { data, error } = await supabase
-    .from('scouting_runs')
-    .insert({
-      user_id: p.userId,
-      label: p.label,
-      mission: p.mission as never,
-      budget: p.budget as never,
-      status: 'running',
-    })
-    .select('id')
-    .single()
+  const insert = async (withKind: boolean) =>
+    supabase
+      .from('scouting_runs')
+      .insert({
+        user_id: p.userId,
+        label: p.label,
+        mission: p.mission as never,
+        budget: p.budget as never,
+        status: 'running',
+        ...(withKind && p.kind ? { kind: p.kind } : {}),
+      } as never)
+      .select('id')
+      .single()
 
+  let { data, error } = await insert(true)
+  // A database predating migration 014 has no `kind`; the run still exists.
+  if (error && p.kind && /column .* does not exist|schema cache/i.test(error.message)) ({ data, error } = await insert(false))
   if (error) {
     return { runId: null, migrationMissing: isMissingSchema(error.message), error: error.message }
   }
-  return { runId: data.id as string, migrationMissing: false }
+  return { runId: (data as { id: string }).id, migrationMissing: false }
+}
+
+/**
+ * A FENCE for writers that belong to one worker invocation.
+ *
+ * A durable run can be executed by several invocations in turn (a leg hands
+ * the row back to the queue at its deadline and the next worker claims it).
+ * A late write from an earlier leg — a finish that lands after the platform
+ * has already frozen and thawed it, a queued heartbeat — must not touch the
+ * row the next leg now owns. Passing the worker id the leg was claimed with
+ * makes the write match nothing once the row has moved on.
+ */
+export interface RunWriteGuard {
+  workerId?: string | null
+  /** Only rows in one of these statuses are written. */
+  statuses?: string[]
 }
 
 export async function updateScoutingRun(
@@ -54,10 +82,11 @@ export async function updateScoutingRun(
     searchMode?: string
     /** Migration 013. Why external discovery did or did not run. */
     internalDecision?: unknown
-  }
-): Promise<{ ok: boolean; error?: string }> {
+  },
+  guard: RunWriteGuard = {}
+): Promise<{ ok: boolean; matched?: boolean; error?: string }> {
   const supabase = createServiceClient()
-  const { error } = await supabase
+  let q = supabase
     .from('scouting_runs')
     .update({
       ...(patch.status ? { status: patch.status } : {}),
@@ -69,6 +98,9 @@ export async function updateScoutingRun(
       ...(patch.completed ? { completed_at: new Date().toISOString() } : {}),
     })
     .eq('id', runId)
+  if (guard.workerId) q = q.eq('worker_id', guard.workerId)
+  if (guard.statuses && guard.statuses.length) q = q.in('status', guard.statuses)
+  const { data, error } = await q.select('id')
 
   // A run predating migration 013 must still be updatable. The columns are
   // additive, so a missing one degrades to "the decision was not recorded"
@@ -76,10 +108,14 @@ export async function updateScoutingRun(
   if (error && /column .* does not exist|schema cache/i.test(error.message) && (patch.searchMode !== undefined || patch.internalDecision !== undefined)) {
     const { searchMode: _a, internalDecision: _b, ...rest } = patch
     if (Object.keys(rest).length === 0) return { ok: true }
-    return updateScoutingRun(runId, rest)
+    return updateScoutingRun(runId, rest, guard)
   }
 
-  return error ? { ok: false, error: error.message } : { ok: true }
+  if (error) return { ok: false, error: error.message }
+  // A guarded write that matched nothing is not an error, but the caller must
+  // know: the row has moved on to another worker or a terminal state.
+  const matched = (data?.length ?? 0) > 0
+  return { ok: matched || (!guard.workerId && !guard.statuses), matched }
 }
 
 // ─── Agent runs ──────────────────────────────────────────────────────────────

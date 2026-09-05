@@ -47,7 +47,8 @@ import { SWEEP_MAX_COMPANIES, type SweepResult } from '../jobs/sweep'
 import { runIntelligenceBatch } from '../intelligence/orchestrator'
 import { renderMission, sanitizeDirection } from '../missions/store'
 import { DEFAULT_SCOUT_BUDGET, type CareerBudget, type CareerRun } from '../runs'
-import { setAnthropicDeadline } from '@/lib/providers/anthropic/client'
+import { createRunContext, currentRunContext, withRunContext } from '@/lib/runs/context'
+import { RunClock } from '@/lib/runs/deadline'
 import { getPageFetcher } from '../sources/fetch'
 import { getSourceRegistry } from '../sources/registry'
 import type { RawJobPosting } from '../sources/types'
@@ -159,11 +160,53 @@ export function scoutToolContext(userId: string, runId: string | null, budget: C
 
 // ─── The run ─────────────────────────────────────────────────────────────────
 
+/**
+ * How long THIS invocation may run: the invocation's own deadline, or what is
+ * left of the mode's whole-run clock across every invocation — whichever is
+ * smaller. Computed once here so the run context's clock and the orchestrator's
+ * own `deadline` cannot disagree.
+ */
+export function invocationWindowMs(params: JobScoutParams & JobScoutModeParams): { budget: CareerBudget; runBudget: ReturnType<typeof resolveRunBudget>; runtimeLeftMs: number; windowMs: number } {
+  const budget: CareerBudget = { ...DEFAULT_SCOUT_BUDGET, ...(params.budget ?? {}) }
+  const runBudget = resolveRunBudget(params.mode ?? null, {
+    maxSpendUsd: params.maxSpendUsd ?? null,
+    maxExtract: params.maxExtract ?? null,
+    maxStrategies: params.maxStrategies ?? null,
+    maxRoundsPerStrategy: params.maxRoundsPerStrategy ?? null,
+    maxCompanyFirst: params.maxCompaniesFirst ?? null,
+  })
+  const openingElapsedMs = params.cursor ? sanitizeCursor(params.cursor).elapsed_ms : 0
+  const runtimeLeftMs = params.mode ? Math.max(0, runBudget.maxRuntimeMs - openingElapsedMs) : budget.deadlineMs
+  const windowMs = Math.max(0, Math.min(budget.deadlineMs, runtimeLeftMs))
+  return { budget, runBudget, runtimeLeftMs, windowMs }
+}
+
+/**
+ * One invocation of a job scout, under ONE clock.
+ *
+ * Every provider call inside sizes its attempts from the run context's clock
+ * (lib/runs/context.ts), so nothing the run starts can outlive it. The context
+ * is derived from an outer one when a worker already opened it (keeping the
+ * run id and usage slots), and created fresh for the CLI and the evals.
+ */
 export async function runJobScout(
   params: JobScoutParams & JobScoutSweepParams & JobScoutModeParams,
   deps: JobScoutDeps & JobScoutSweepDeps = {}
 ): Promise<JobScoutRunResult> {
   const started = Date.now()
+  const { windowMs } = invocationWindowMs(params)
+  const outer = currentRunContext()
+  const hardDeadlineAt = Math.min(outer?.clock.hardDeadlineAt ?? Infinity, started + windowMs)
+  const clock = new RunClock({ hardDeadlineAt, startedAt: started })
+  const ctx = outer ? { ...outer, clock } : createRunContext({ clock, kind: 'jobs', label: params.label ?? 'job scout' })
+  return withRunContext(ctx, () => runJobScoutInvocation(params, deps, started))
+}
+
+async function runJobScoutInvocation(
+  params: JobScoutParams & JobScoutSweepParams & JobScoutModeParams,
+  deps: JobScoutDeps & JobScoutSweepDeps,
+  started: number
+): Promise<JobScoutRunResult> {
   const store = deps.store ?? liveScoutStore()
   const registry = deps.registry ?? getSourceRegistry()
   const fetcher = deps.fetcher ?? getPageFetcher()
@@ -215,6 +258,13 @@ export async function runJobScout(
   let stageYields: YieldSample[] = []
   let budgetStopped: string | null = null
   let saturationStopped: string | null = null
+  // Lanes that STARTED and were cut by the clock with work left. `pastDeadline`
+  // only knows about a stage it refused to start; a lane that ran and stopped
+  // on its own share of the clock has to say so here, or the run is reported
+  // complete with the work it left behind invisible. (The live BROAD run of
+  // 2026-09-04 was closed "succeeded" with 298 of 298 watchlist companies
+  // unswept, and never got its second pass.)
+  const leftOpen: string[] = []
   /** The ledger follows the run's own trace, so it prices nothing itself. */
   const syncSpend = (stage: string) => {
     ledger.syncTotal(openingUsd + runCost(), { stage })
@@ -229,9 +279,9 @@ export async function runJobScout(
     cursor.updated_at = new Date().toISOString()
     params.onCursor?.({ ...cursor, pages: { ...cursor.pages } })
   }
-  // The API client stops retrying past this point too (see setAnthropicDeadline):
-  // a run that has already given up must not sit inside a retry storm.
-  setAnthropicDeadline(deadline)
+  // The provider clients stop past this point too: the run context's clock
+  // (opened by runJobScout) ends at the same `deadline`, so a run that has
+  // already given up cannot sit inside a retry storm.
   const stats: ScoutRunStats = { ...emptyStats(), companies_selected: { target: 0, watching: 0, suggested: 0, skipped: 0 }, job_first_reserve_ms: 0 }
   const errors: string[] = []
   // Set at stage (b). Everything before it is free, so an unset run costs $0.
@@ -300,9 +350,14 @@ export async function runJobScout(
       saturationStopped,
     })
   }
+  // A run that could not START is a failure, not a partial run that "ran out
+  // of time": `stopped: 'failed'` keeps the worker from recording it as
+  // partial and the panel from offering a continuation against the same
+  // broken input.
   const fail = (message: string, migrationMissing = false): JobScoutRunResult => ({
-    runId: null, mission: null, plan: null, stats, jobs: [], rejected: [], errors: [...errors, message], costUsd: 0, latencyMs: Date.now() - started, migrationMissing, partial: stats.deadline_hit,
+    runId: null, mission: null, plan: null, stats, jobs: [], rejected: [], errors: [...errors, message], costUsd: 0, latencyMs: Date.now() - started, migrationMissing, partial: false,
     ...report(false),
+    stopped: 'failed',
   })
 
   // (a) Inputs.
@@ -468,6 +523,7 @@ export async function runJobScout(
     syncSpend('extract')
     rejected.push(...out.rejected)
     errors.push(...out.errors)
+    if (out.deadlineHit && !leftOpen.includes('extraction')) leftOpen.push('extraction')
     if (out.migrationMissing) return false
     for (let i = 0; i < out.jobs.length; i++) {
       const job = out.jobs[i]
@@ -554,8 +610,13 @@ export async function runJobScout(
     }
     countStored()
     // Only a sweep that reached every company is finished for good; one that
-    // left companies behind stays open so the next pass picks them up.
+    // left companies behind stays open so the next pass picks them up — and a
+    // sweep the clock cut is a deadline hit like any other.
     if (sw.complete) doneStages.add('sweep')
+    else if (sw.deadlineHit) {
+      stats.deadline_hit = true
+      leftOpen.push('sweep')
+    }
     noteCursor()
   }
 
@@ -586,6 +647,7 @@ export async function runJobScout(
     })
     stats.companies_selected = { ...cf.selection.counts, skipped: cf.selection.skipped }
     if (cf.complete) doneStages.add('company-first')
+    else if (cf.deadlineHit) leftOpen.push('company-first')
     noteCursor()
     if (!cf.ok) return finish(run, 'failed', 'migration 014_career_os.sql has not been applied', true)
   }
@@ -639,6 +701,7 @@ export async function runJobScout(
     stageYields = jf.yields
     if (jf.stopReason && !budgetStopped) saturationStopped = jf.stopReason
     if (jf.complete) doneStages.add('job-first')
+    else if (!jf.stopReason && !budgetStopped) leftOpen.push('job-first')
     syncSpend('job-first')
     noteCursor()
     if (!jf.ok) return finish(run, 'failed', 'migration 014_career_os.sql has not been applied', true)
@@ -677,6 +740,7 @@ export async function runJobScout(
     })
     extractBudget.left = Math.max(0, extractBudget.left - ep.extracted)
     errors.push(...ep.errors)
+    if (ep.deadlineHit && !leftOpen.includes('extraction')) leftOpen.push('extraction')
     syncSpend('deferred extraction')
     if (ep.migrationMissing) return finish(run, 'failed', 'migration 014_career_os.sql has not been applied', true)
     progress('extract', `deferred: ${ep.extracted} of ${ep.candidates} pending rows extracted ($${ep.costUsd.toFixed(4)})`)
@@ -723,14 +787,17 @@ export async function runJobScout(
   return finish(run, 'succeeded', null, false, resultJobs)
 
   async function finish(r: CareerRun, status: 'succeeded' | 'failed', error: string | null, migrationMissing: boolean, out: JobScoutResultJob[] = []): Promise<JobScoutRunResult> {
-    // The deadline belongs to this run only; a later call in the same process
-    // (a package build, an eval) must not inherit an expired one.
-    setAnthropicDeadline(null)
     if (error) errors.push(error)
     // The ranking batch runs under its own run row; its cost is added here so the scout's number is what the whole call cost.
     stats.cost_usd = Number((r.costUsd() + stats.rank_cost_usd).toFixed(4))
     stats.latency_ms = Date.now() - started
     syncSpend('final')
+    // A lane that started and was cut with work left makes the run a deadline
+    // hit whatever the other flags say: the next pass has something to do.
+    if (leftOpen.length && !stats.deadline_hit && !budgetStopped && !saturationStopped) {
+      stats.deadline_hit = true
+      errors.push(`${leftOpen.join(', ')} left work for the next pass`)
+    }
     const rep = report(status === 'succeeded' && !stats.deadline_hit && !budgetStopped && !saturationStopped)
     // The report's own lines belong in the run's stats: this is what "why did
     // the run stop, and what did each lane and each stage cost?" is answered

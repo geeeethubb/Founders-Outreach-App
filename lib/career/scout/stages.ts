@@ -105,6 +105,8 @@ export interface SweepStageResult {
   inserted: number
   /** True when no company was left unvisited: nothing for a later pass to sweep. */
   complete: boolean
+  /** True when the sweep stopped because its clock ran out — the companies it left are the next pass's work. */
+  deadlineHit: boolean
 }
 
 /**
@@ -121,7 +123,7 @@ export interface SweepStageResult {
  * the second sighting to the row the sweep inserted.
  */
 export async function runSweepStage(run: StageRun, opts: SweepStageOptions): Promise<SweepStageResult> {
-  const empty: SweepStageResult = { ok: true, jobs: [], postings: 0, inserted: 0, complete: false }
+  const empty: SweepStageResult = { ok: true, jobs: [], postings: 0, inserted: 0, complete: false, deadlineHit: false }
   run.progress('sweep', 'listing every resolvable board on the watchlist (no model calls)')
   try {
     // Its OWN stats object. The two passes see the same postings — the sweep
@@ -159,7 +161,7 @@ export async function runSweepStage(run: StageRun, opts: SweepStageOptions): Pro
     // counts for the same rule — nothing a sweep discards is hidden.
     for (const [reason, n] of Object.entries(sw.rejected)) bump(run.stats.jobs_rejected, `sweep:${reason}`, n)
     run.progress('sweep', `${sw.checked} companies · ${sw.postingsListed} postings · ${sw.inserted} new, ${sw.updated} updated${sw.remaining ? ` · ${sw.remaining} companies left for the next sweep` : ''}`)
-    return { ok: true, jobs: sw.jobs, postings: sw.postingsListed, inserted: sw.inserted, complete: !sw.remaining }
+    return { ok: true, jobs: sw.jobs, postings: sw.postingsListed, inserted: sw.inserted, complete: !sw.remaining, deadlineHit: Boolean(sw.deadlineHit) && sw.remaining > 0 }
   } catch (e) {
     // A sweep is an optimisation, never a precondition: a run whose sweep
     // throws still does everything it did before the sweep existed.
@@ -199,6 +201,8 @@ export interface CompanyFirstStageResult {
   checked: string[]
   /** True when every eligible company was reached: the stage is finished for good. */
   complete: boolean
+  /** True when the lane stopped on its share of the clock with companies unchecked — the next pass's work. */
+  deadlineHit: boolean
 }
 
 /**
@@ -257,7 +261,7 @@ export async function runCompanyFirstStage(run: StageRun, opts: CompanyFirstStag
   // that this pass was long. A stage cut short by its own share of the clock,
   // or holding companies it never reached, stays open in the cursor.
   const complete = !cf.deadlineHit && selection.skipped === 0
-  return { selection, ok, checked, complete }
+  return { selection, ok, checked, complete, deadlineHit: Boolean(cf.deadlineHit) }
 }
 
 // ─── (e) Job-first ───────────────────────────────────────────────────────────

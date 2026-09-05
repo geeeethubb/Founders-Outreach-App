@@ -349,36 +349,51 @@ Saved and applied-to jobs are re-checked by `npm run career:verify` and by the c
 
 ### A run is a row, not a request
 
-> **On Vercel, set `SCOUT_WORKER_BASE_URL`.** The "worker" is an HTTP route in this same
-> deployment that the app reaches by POSTing to itself, so the address is load-bearing. With
-> nothing pinned it falls back to `VERCEL_URL` — the per-deployment hostname, which Deployment
-> Protection answers with **401**. A run then queues and never starts; one sat that way for 328
-> minutes. `npm run check:worker-env` judges the configuration and exits non-zero on one that
-> cannot work — run it in the deploy pipeline. The queue watchdog below is the backstop, not the
-> fix.
+> **On Vercel the app must be able to reach its own worker.** The "worker" is an HTTP route in
+> this same deployment that the app reaches by POSTing to itself, so the address is
+> load-bearing. The address is chosen by the server (`lib/career/scout/worker-target.ts`), in
+> this order: `SCOUT_WORKER_BASE_URL` if set; the deployment's own `VERCEL_URL` with the
+> `x-vercel-protection-bypass` header when **Protection Bypass for Automation** is enabled
+> (Vercel provides `VERCEL_AUTOMATION_BYPASS_SECRET`) — the same deployment, preview or
+> production; the production alias `VERCEL_PROJECT_PRODUCTION_URL` (production only); and
+> nothing else. A preview with none of these is refused with the remedy, never routed to
+> production. `npm run check:deploy` runs at build time and fails a production build whose
+> configuration cannot work; `GET /api/scout/readiness` probes the address for real before
+> any run is paid for. The queue watchdog below is the backstop, not the fix.
 
 A scout used to be one long HTTP request. On Vercel that request dies at 300 s, and the page
 that started it had to be kept open — so the panel counted a fake 25-second timer and told the
 founder that closing the tab spent the money for nothing.
 
-A run is now a **row**. `POST /api/career/scout` enqueues it and answers `202 { runId,
-status: 'queued', durable: true }`; a worker advances it; `GET /api/career/scout/runs/[id]`
-answers the only truth the UI ever shows — `status` (`queued | running | succeeded | partial |
-failed | cancelled`), the current `stage`, the last progress `events`, live `counts`, `stats`,
-`error`, and the server's own `partial` and `stale` judgements. `GET /api/career/runs?active=1`
-answers `{ active, durable }`: the newest run the server itself calls queued or running, so a
-refresh, a second tab, or a reopened panel resumes the same run instead of paying for another.
+A run is a **row**, executed in **legs** (ADR-043). `POST /api/career/scout` checks readiness,
+enqueues the row, dispatches a worker and watches the row for the worker's claim, then answers
+`202 { runId, status: 'queued' | 'running', claimed, dispatch }` in a few seconds. The worker
+(`POST /api/scout/worker`, shared with the People Scout) claims the row by single-use token and
+executes inside its own request under one absolute clock (280 s of the 300 s function); when
+it reaches that clock with work left it writes the cursor and hands the row back to the queue
+in one statement, and the next leg picks it up — the browser's 3-second poll dispatches a
+handed-back leg itself if the worker's own self-dispatch was lost. `GET
+/api/career/scout/runs/[id]` answers the only truth the UI ever shows — `status` (`queued |
+running | succeeded | partial | failed | cancelled`), the current `stage`, the last progress
+`events`, live `counts`, `stats`, `error` with its stable `error_code` and `remedy`, the leg
+number (`invocation`), whether the run is `resumable`, and the server's own `partial` and
+`stale` judgements. `GET /api/career/runs?active=1` answers `{ active, durable }`: the newest
+durable run the server itself calls queued or running, so a refresh, a second tab, or a
+reopened panel resumes the same run instead of paying for another. The database itself allows
+one queued run per kind per user (migration 021), so a double click is answered with the run
+already going.
 
-`app/dashboard/jobs/ScoutPanel.tsx` is a monitor over that endpoint (3 s poll, four tolerated
-misses before it says it lost contact). It invents nothing: every number, stage line and
-headline is parsed from the answer by `app/dashboard/jobs/run-view.ts` and phrased by
-`run-copy.ts`, both pure and both covered offline by `npm run test:career-ui-direction`.
+`app/dashboard/jobs/ScoutPanel.tsx` is a monitor over that endpoint (3 s poll; after five
+misses it says it lost contact and keeps polling slowly). It invents nothing: every number,
+stage line and headline is parsed from the answer by `app/dashboard/jobs/run-view.ts` and
+phrased by `run-copy.ts`, both pure and both covered offline by `npm run test:career-ui-direction`.
+It shows the readiness verdict before the button is enabled, the dispatch's own outcome, queue
+actions as they happen, and a Cancel that asks the worker to stop at its next step.
 
-**Before migration 016 the run is not durable**, because there is no row to write. The route
-falls back to running the scout inside the request, and both answers carry `durable` so the
-panel can say which one is happening — "you can close this tab" only when the server has said
-`durable: true`, and "this run happens inside this request — leave the tab open" until then.
-The panel never guesses that sentence.
+**There is no synchronous fallback.** A database missing migration 016, 020 or 021, a
+deployment that cannot name its worker, or a worker that does not answer the readiness probe
+is reported as "Scouting is unavailable: … Fix: …" before anything is paid for. It is never
+quietly downgraded to a five-minute request.
 
 **`/dashboard/jobs?run=<id>`** is the second surface: exactly what one run produced.
 `GET /api/career/jobs?run=<id>` applies **none** of the inbox's curating defaults — an
@@ -387,6 +402,14 @@ orders and counts in the database over the whole set, so the header's counts and
 agree. The inbox keeps its defaults; the two are visually distinct (a bordered run card with
 one way back, "← Back to all jobs") and never conflated. The Runs page links a `job_scout` row
 straight to it.
+
+**From a terminal, as the founder.** `npx tsx scripts/scout-acceptance.ts --base <app> --kind people|jobs …`
+starts a run through the real routes and watches it to its terminal state, recording enqueue
+and claim latency, the duplicate-click 409, the refresh attach, every progress change and the
+persisted result; `npm run scout:watch -- --kind people|jobs --run <id>` watches a run started
+from the page; `npm run scout:cancel -- --kind people|jobs --run <id>` asks one to stop. All
+three mint a session with the Supabase admin API (`scripts/lib/test-session.ts`) and never
+touch a row except through the routes.
 
 ### How big a run is: a mode, a ceiling, a cursor (ADR-041)
 

@@ -11,6 +11,7 @@ import type { CareerMission, DirectionMode } from '@/lib/career/types'
 import { missionDirectionMode } from '@/lib/career/types'
 import { api } from '@/components/career/api'
 import InlineNotice, { MigrationNotice } from '@/components/career/InlineNotice'
+import { loadScoutReadiness, readinessBlocks, readinessBlockText, type ReadinessState } from '@/components/career/ReadinessBanner'
 import JobCard, { type JobCardData } from './JobCard'
 import JobFilters, { DEFAULT_FILTERS, filtersToQuery, isDefaultFilters, type JobFilterState } from './JobFilters'
 import ScoutPanel, { readScoutEnvironment } from './ScoutPanel'
@@ -65,6 +66,8 @@ function JobsView() {
   const [resumeRunId, setResumeRunId] = useState<string | null>(null)
   /** Whether a scout run outlives its request, as the server said. null = not asked yet. */
   const [scoutDurable, setScoutDurable] = useState<boolean | null>(null)
+  /** Whether a run can start here at all, as the server said. Read once; the panel shows the same answer. */
+  const [scoutReadiness, setScoutReadiness] = useState<ReadinessState>({ phase: 'loading' })
   const [filters, setFilters] = useState<JobFilterState>(initialSearch ? { ...DEFAULT_FILTERS, search: initialSearch } : DEFAULT_FILTERS)
   const [offset, setOffset] = useState(0)
   const [data, setData] = useState<JobsResponse | null>(null)
@@ -153,6 +156,9 @@ function JobsView() {
   useEffect(() => {
     if (runParam) return
     let alive = true
+    loadScoutReadiness('jobs').then((state) => {
+      if (alive) setScoutReadiness(state)
+    })
     readScoutEnvironment().then((env) => {
       if (!alive) return
       setScoutDurable(env.durable)
@@ -247,7 +253,9 @@ function JobsView() {
             <button
               type="button"
               onClick={openScout}
-              disabled={migrationMissing || directionSaving}
+              // A run already going is still shown: the panel opens on it even when a new one could not start.
+              disabled={migrationMissing || directionSaving || (readinessBlocks(scoutReadiness) && !scouting && !resumeRunId)}
+              title={readinessBlockText(scoutReadiness) ?? undefined}
               className="px-3 py-1.5 rounded-md bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-50"
             >
               {directionSaving ? 'Saving…' : 'Scout now'}
@@ -255,6 +263,9 @@ function JobsView() {
           )}
         </div>
       </div>
+      {!runParam && readinessBlocks(scoutReadiness) && !scouting && (
+        <p className="-mt-3 mb-4 text-xs text-rose-700">{readinessBlockText(scoutReadiness)}</p>
+      )}
 
       {runParam && <RunResults runId={runParam} />}
 
@@ -312,6 +323,7 @@ function JobsView() {
             directionMode={mission ? missionDirectionMode(mission.preferences) : null}
             initialRunId={resumeRunId}
             durable={scoutDurable}
+            readiness={scoutReadiness}
             onFinished={() => {
               loadJobs()
               loadContext()

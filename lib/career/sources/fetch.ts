@@ -6,9 +6,20 @@
 // docs/CAREER_OS.md §5 treats those as manual-entry sources, not surfaces.
 
 import { cached, cacheKey } from '@/lib/providers/cache'
+import { ambientTimeoutMs } from '@/lib/runs/context'
 import type { FetchedPage, PageFetcher } from './types'
 import { extractLinks, extractTitle, htmlToText } from './html'
 import { CAREER_BOT_USER_AGENT, getRobotsRules, isPathAllowed } from './robots'
+
+/**
+ * How long a request may take: its own ceiling, or what the ambient run has
+ * left before its finalisation reserve — whichever is smaller (see
+ * lib/runs/context.ts). Every network call in this file sizes itself from
+ * this, so a multi-probe ATS detection that begins near the run's deadline
+ * collapses into immediate refusals instead of a chain of fifteen-second waits
+ * that outlives the function.
+ */
+export const boundedTimeoutMs = ambientTimeoutMs
 
 export const EXCLUDED_HOSTS = ['linkedin.com', 'indeed.com', 'glassdoor.com', 'handshake.com', 'joinhandshake.com']
 
@@ -114,6 +125,10 @@ async function fetchOnce(
   const url = parsed.toString()
   const origin = parsed.origin
 
+  // Nothing starts inside the run's reserve — including the robots lookup and
+  // the per-origin throttle wait, which can be ten seconds on their own.
+  if (boundedTimeoutMs(opts.timeoutMs ?? DEFAULT_TIMEOUT_MS) === 0) return failed(url, 'run deadline: not started')
+
   if (!options.skipRobots) {
     const rules = await getRobotsRules(origin)
     if (!isPathAllowed(rules, parsed.pathname + parsed.search)) {
@@ -124,8 +139,10 @@ async function fetchOnce(
     await throttle(origin, options.minGapMs ?? MIN_GAP_PER_ORIGIN_MS)
   }
 
+  const timeoutMs = boundedTimeoutMs(opts.timeoutMs ?? DEFAULT_TIMEOUT_MS)
+  if (timeoutMs === 0) return failed(url, 'run deadline: not started')
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? DEFAULT_TIMEOUT_MS)
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
   const maxBytes = opts.maxBytes ?? DEFAULT_MAX_BYTES
   try {
     const res = await fetch(url, {
@@ -204,8 +221,10 @@ export async function fetchJson<T>(
   url: string,
   init: { method?: 'GET' | 'POST'; body?: unknown; timeoutMs?: number } = {}
 ): Promise<JsonFetchResult<T>> {
+  const timeoutMs = boundedTimeoutMs(init.timeoutMs ?? 15_000)
+  if (timeoutMs === 0) return { status: 0, data: null, error: 'run deadline: not started' }
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), init.timeoutMs ?? 15_000)
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
     const res = await fetch(url, {
       method: init.method ?? 'GET',

@@ -7,6 +7,7 @@
 // robots.txt is not a prohibition, and most sites simply have none.
 
 import { cached, cacheKey } from '@/lib/providers/cache'
+import { ambientTimeoutMs as boundedTimeoutMs } from '@/lib/runs/context'
 
 export const CAREER_BOT_USER_AGENT =
   'OutreachOS-CareerBot/1.0 (personal job search; contact via linkedin.com/in/zuyu-liu-58b2b2241)'
@@ -100,8 +101,12 @@ export async function getRobotsRules(origin: string, opts: { timeoutMs?: number;
   const rules = await cached<RobotsRules>(
     cacheKey('robots', { origin, day: utcDay() }),
     async () => {
+      // Sized from the ambient run's clock, like every other request; a robots
+      // lookup that begins inside the run's reserve is not made at all.
+      const timeoutMs = boundedTimeoutMs(opts.timeoutMs ?? 8000)
+      if (timeoutMs === 0) return { origin, disallow: [], allow: [], fetched: false, crawlDelayMs: null }
       const controller = new AbortController()
-      const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? 8000)
+      const timer = setTimeout(() => controller.abort(), timeoutMs)
       try {
         const res = await fetch(`${origin}/robots.txt`, {
           headers: { 'User-Agent': CAREER_BOT_USER_AGENT, Accept: 'text/plain,*/*;q=0.5' },

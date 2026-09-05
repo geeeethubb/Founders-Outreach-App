@@ -13,6 +13,7 @@ import RunRow, { type RunView } from './RunRow'
 const KINDS: { value: string; label: string }[] = [
   { value: '', label: 'All' },
   { value: 'job_scout', label: 'Job scouts' },
+  { value: 'outreach', label: 'People scouts' },
   { value: 'job_verify', label: 'Verifications' },
   { value: 'package', label: 'Packages' },
   { value: 'evidence_import', label: 'Evidence imports' },
@@ -53,7 +54,7 @@ export default function RunsPage() {
         <div>
           <h1 className="text-2xl font-semibold text-slate-900">Runs</h1>
           <p className="text-sm text-slate-500 mt-1">
-            Career OS runs only (job scouts, verifications, packages, evidence imports) with the agent calls that made each cost what it did. People-search Scout runs are not listed here.{' '}
+            Every run — job scouts, people scouts, verifications, packages, evidence imports — with the agent calls that made each cost what it did, and the code and remedy for any that failed.{' '}
             <Link href="/dashboard/jobs" className="text-indigo-600 hover:underline">
               Jobs
             </Link>

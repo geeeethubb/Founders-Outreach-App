@@ -25,6 +25,7 @@
 import { mapWithConcurrency } from '@/lib/scouting/concurrency'
 import { jobExtractorPrompt, runJobExtractor, type JobExtraction } from '@/lib/agents/job-extractor'
 import type { AgentResult, ToolContext } from '@/lib/agents/runtime/types'
+import { isClockOutcome } from '@/lib/runs/errors'
 import type { CareerMission, ExtractedJobFields } from '../types'
 import { evaluateConstraint, isInternshipLike } from '../jobs/filters'
 import { buildNormalizedJob, type NormalizeOptions, type NormalizedJob } from '../jobs/normalize'
@@ -108,6 +109,7 @@ export async function extractAndNormalize(raws: RawJobPosting[], opts: ExtractOp
   const errors: string[] = []
   let extractionCost = 0
   let deadlineHit = false
+  let unreadByClock = 0
 
   await mapWithConcurrency(extractable, opts.concurrency ?? 4, async (raw) => {
     if (opts.deadline && Date.now() > opts.deadline) {
@@ -123,7 +125,12 @@ export async function extractAndNormalize(raws: RawJobPosting[], opts: ExtractOp
       if (opts.stats) opts.stats.model_calls++
       await opts.run?.trace(res, { title: raw.title, company: raw.company_name, source_url: raw.source_url })
       if (res.output) extractions.set(raw, res.output)
-      else errors.push(`extract ${raw.company_name} / ${raw.title}: ${res.error ?? res.status}`)
+      else if (isClockOutcome(res)) {
+        // The run's clock, not the posting: it stays stored thin, and the
+        // next pass reads it. Counted once below, never as a per-posting error.
+        deadlineHit = true
+        unreadByClock++
+      } else errors.push(`extract ${raw.company_name} / ${raw.title}: ${res.error ?? res.status}`)
       opts.onProgress?.(`${raw.company_name} / ${raw.title}: ${res.output ? 'extracted' : `failed (${res.status})`}`)
     } catch (e) {
       errors.push(`extract ${raw.company_name} / ${raw.title}: ${e instanceof Error ? e.message : String(e)}`)
@@ -156,6 +163,7 @@ export async function extractAndNormalize(raws: RawJobPosting[], opts: ExtractOp
     jobs.push(job)
   }
   if (opts.stats) opts.stats.jobs_extracted += extractions.size
+  if (unreadByClock > 0) errors.push(`extraction: ${unreadByClock} posting(s) not read before the run's clock ran out — stored thin, read on the next pass`)
   return { jobs, rejected, extracted: extractions.size, extractionCost, errors, deadlineHit }
 }
 
@@ -311,7 +319,8 @@ export async function extractPending(userId: string, opts: ExtractPendingOptions
       await opts.run?.trace(res, { job_id: row.id, title: row.title, company: row.company_name })
       if (!res.output) {
         failed++
-        errors.push(`extract ${row.company_name} / ${row.title}: ${res.error ?? res.status}`)
+        if (isClockOutcome(res)) deadlineHit = true
+        else errors.push(`extract ${row.company_name} / ${row.title}: ${res.error ?? res.status}`)
         rows.push({ ...label, outcome: 'failed' })
         return
       }

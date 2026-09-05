@@ -9,6 +9,7 @@
 // money runs out, and NOT when a counter reaches twelve.
 
 import { readFileSync } from 'fs'
+import { jobLegContinuation, MIN_CONTINUATION_MS } from '../lib/career/scout/run-record'
 import { createSourceRegistry } from '../lib/career/sources/registry'
 import type { FetchedPage, JobSourceAdapter, PageFetcher, RawJobPosting } from '../lib/career/sources/types'
 import type { AgentResult } from '../lib/agents/runtime/types'
@@ -447,6 +448,17 @@ async function main() {
     check('what it did find is still stored', mem.jobs.length > 0 && r.jobs.length > 0)
     check('the cursor is left resumable, not marked done', !isCursorComplete(r.cursor) && r.cursor.strategies.length === 0)
 
+    // The worker's continuation rule, pure (lib/career/scout/run-record.ts):
+    // only the clock continues a run by itself, and only while the run's own
+    // runtime has room for another pass.
+    const cur = (stages: string[], elapsed: number) => ({ stages, elapsed_ms: elapsed })
+    check('a partial deadline stop with runtime left continues by itself', jobLegContinuation({ status: 'partial', stopped: 'deadline', cursor: cur(['plan'], 250_000), runtimeMs: 1_200_000 }).continuable === true)
+    check('a budget stop never continues by itself', jobLegContinuation({ status: 'partial', stopped: 'budget', cursor: cur(['plan'], 250_000), runtimeMs: 1_200_000 }).continuable === false)
+    check('a cursor marked done never continues', jobLegContinuation({ status: 'partial', stopped: 'deadline', cursor: cur(['plan', 'done'], 10_000), runtimeMs: 1_200_000 }).continuable === false)
+    const spent = jobLegContinuation({ status: 'partial', stopped: 'deadline', cursor: cur(['plan'], 300_000 - MIN_CONTINUATION_MS + 1_000), runtimeMs: 300_000 })
+    check('a run that has used its whole runtime stops, and says so', spent.continuable === false && /used all 5 minutes/.test(spent.reason ?? ''), spent.reason ?? '')
+    check('a succeeded run never continues', jobLegContinuation({ status: 'succeeded', stopped: 'complete', cursor: cur(['plan', 'done'], 1), runtimeMs: 300_000 }).continuable === false)
+
     // A ceiling of zero: nothing paid may start at all, including the plan.
     const z = memStore({ watchlist: [ACME_ROW] })
     let planned = 0
@@ -558,20 +570,26 @@ async function main() {
 
   // ─── J. The mode reaches the ONLY executor the UI uses ────────────────────
   //
-  // Every run started from the Jobs page is executed by
-  // app/api/career/scout/worker. It used to build the orchestrator's argument
-  // object by hand and omit `mode`, `maxSpendUsd` and `cursor` — so the run
-  // the founder pressed for executed the LEGACY budget with no ceiling at all,
-  // and the spend limit in the UI did nothing. There is no way to call a Next
-  // route handler offline, so what is asserted here is the property that made
-  // it possible: the executors share ONE mapping, and the worker uses it.
+  // Every run started from the Jobs page is executed by the shared worker
+  // kernel (lib/runs/worker.ts, reached through POST /api/scout/worker and its
+  // /api/career/scout/worker alias), which hands a claimed job_scout leg to the
+  // executor in lib/career/scout/execute.ts. The old route built the
+  // orchestrator's argument object by hand and omitted `mode`, `maxSpendUsd`
+  // and `cursor` — so the run the founder pressed for executed the LEGACY
+  // budget with no ceiling at all, and the spend limit in the UI did nothing.
+  // There is no way to call a Next route handler offline, so what is asserted
+  // here is the property that made it possible: the executors share ONE
+  // mapping, the executor uses it, and the kernel persists the cursor.
   console.log('worker: the run the founder asked for is the run that executes')
   {
-    const workerSrc = readFileSync(new URL('../app/api/career/scout/worker/route.ts', import.meta.url), 'utf8')
-    check('the worker maps the stored row through the shared toJobScoutParams', workerSrc.includes('toJobScoutParams(params'))
-    check('the worker does not hand-roll the orchestrator’s arguments', !/runJobScout\(\s*\{/.test(workerSrc))
-    check('the worker persists the cursor while the run is alive and at the end', workerSrc.includes('onCursor') && (workerSrc.match(/recordRunCursor\(/g) ?? []).length >= 2)
-    check('the worker tells terminalStatusFor how the run stopped', /terminalStatusFor\(\{[\s\S]*?stopped:/.test(workerSrc))
+    const routeSrc = readFileSync(new URL('../app/api/career/scout/worker/route.ts', import.meta.url), 'utf8')
+    const executorSrc = readFileSync(new URL('../lib/career/scout/execute.ts', import.meta.url), 'utf8')
+    const kernelSrc = readFileSync(new URL('../lib/runs/worker.ts', import.meta.url), 'utf8')
+    check('the worker route delegates to the shared kernel', routeSrc.includes('workerPost(') && !routeSrc.includes('runJobScout'))
+    check('the executor maps the stored row through the shared toJobScoutParams', executorSrc.includes('toJobScoutParams(params'))
+    check('the executor does not hand-roll the orchestrator’s arguments', !/runJobScout\(\s*\{/.test(executorSrc))
+    check('the kernel persists the cursor while the leg is alive and at the end', kernelSrc.includes('onCursor') && (kernelSrc.match(/recordRunCursor\(/g) ?? []).length >= 2)
+    check('the executor tells terminalStatusFor how the run stopped', /terminalStatusFor\(\{[\s\S]*?stopped:/.test(executorSrc))
 
     // And the mapping itself carries everything the run's shape depends on.
     const p = readScoutParams({ mode: 'QUICK', maxSpendUsd: 1, cursor: { v: 1, stages: ['plan'], strategies: ['S1'], spent_usd: 0.2, attempts: 1 } }, scoutCaps(false))

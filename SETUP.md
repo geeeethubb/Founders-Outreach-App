@@ -123,6 +123,25 @@ Or connect your GitHub repo at https://vercel.com/new
 Update `NEXT_PUBLIC_APP_URL` and `GOOGLE_REDIRECT_URI` to your Vercel URL, and add that
 redirect URI to the Google OAuth client.
 
+**Scouting on Vercel needs four things, and the build refuses to ship without them**
+(`npm run check:deploy` runs first in `npm run build`; `GET /api/scout/readiness` re-checks at
+runtime and the scout pages show its verdict before a paid run can start):
+
+| What | Where | Why |
+|---|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `ANTHROPIC_API_KEY` (and `APOLLO_API_KEY` for external people discovery) | Environment Variables, all environments | The run row, the agents, the people search |
+| **Protection Bypass for Automation** enabled | Settings → Deployment Protection | The app reaches its own scouting worker by POSTing to itself; Deployment Protection would answer that with 401. Enabling this makes Vercel provide `VERCEL_AUTOMATION_BYPASS_SECRET` and the app sends it. Alternative for production only: set `SCOUT_WORKER_BASE_URL` to the production domain. |
+| **Automatically expose System Environment Variables** ON | Settings → Environment Variables | `VERCEL`, `VERCEL_ENV`, `VERCEL_URL`, `VERCEL_PROJECT_PRODUCTION_URL`, `VERCEL_DEPLOYMENT_ID` are how the deployment knows where it is. Off, every Vercel branch of the code thinks it is local. |
+| `CRON_SECRET` | Environment Variables, all environments | The two daily crons (`vercel.json`) run the scout watchdog and answer 503 without it. |
+
+Also confirm **Fluid compute is ON** (Settings → Functions) and the plan allows a 300 s
+function: the worker declares `maxDuration = 300` and plans on 280 s per leg. A run that
+needs longer continues in another leg by itself. Apply `supabase/migrations/021_scout_reliability.sql`
+(after 016 and 020) in the Supabase SQL editor; readiness names the missing file otherwise.
+
+Preview deployments dispatch to themselves (never to production) and need the bypass secret
+too; without it a preview says "Scouting is unavailable" with the fix, and starts nothing.
+
 ---
 
 ## Step 7 — Career OS (Summer 2027 job search)

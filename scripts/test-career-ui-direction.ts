@@ -13,8 +13,9 @@ import { DEFAULT_MISSION_PREFERENCES, DEFAULT_HARD_CONSTRAINTS, renderMission, s
 import { fitJudgmentVersion } from '../lib/career/intelligence/orchestrator'
 import { fitEvaluatorPrompt } from '../lib/agents/fit-evaluator'
 import { directionDirty, directionPatch, NO_DIRECTION_LINE, normalizeDirection, scoutingLine } from '../app/dashboard/jobs/direction'
-import { activeRunIdOf, durableOf, isActive, isRunId, isTerminal, legacyRunDetail, parseRunDetail, parseStartResponse, runJobsQuery, runResultsHref } from '../app/dashboard/jobs/run-view'
-import { partialReason, runDuration, runHeadline, runJobsCountLine, runSummary, stalenessNote, statsLines, tabSafetyLine } from '../app/dashboard/jobs/run-copy'
+import { activeRunIdOf, durableOf, isActive, isRunId, isTerminal, legacyRunDetail, LOST_CONTACT_POLL_MS, MAX_POLL_FAILURES, parseQueueActions, parseRunDetail, parseStartResponse, POLL_MS, runCancelHref, runJobsQuery, runResultsHref } from '../app/dashboard/jobs/run-view'
+import { dispatchNote, partialReason, queueActionLine, queueAttemptsLine, runContinuation, runDuration, runHeadline, runJobsCountLine, runPassLine, runSummary, stalenessNote, statsLines, tabSafetyLine, workerSourceLine } from '../app/dashboard/jobs/run-copy'
+import { errorCodeSentence, parseReadiness, pollVerdict, readinessBlockLine, runStopReason } from '../app/dashboard/jobs/run-reasons'
 import { careersOpenRoles, groupCompanies, intentOf, mergeCompanyPatch, openRoles, originOf, type CompanyView } from '../app/dashboard/companies/company-view'
 
 let failures = 0
@@ -206,7 +207,11 @@ check('the server saying NOT durable is believed', durableOf({ durable: false })
 check('a missing answer is unknown, not a promise', durableOf({ runs: [] }) === null && durableOf(null) === null)
 check('a durable run is the only case that says the tab can be closed', tabSafetyLine(true) === 'The run happens on the server — you can close this tab.')
 check('an undurable run tells the founder to keep the tab open', tabSafetyLine(false).includes('keep the tab open'))
-check('an UNKNOWN answer is worded like the undurable one — never the reverse', tabSafetyLine(null) === tabSafetyLine(false) && tabSafetyLine(undefined) === tabSafetyLine(false))
+// Defect 7: an unknown answer used to be worded like the pre-016 one, which told a
+// founder on a migrated database that migration 016 was missing on every load.
+check('an UNKNOWN answer says the check is still running — not that 016 is missing', tabSafetyLine(null) === 'Checking whether runs survive this request…' && tabSafetyLine(undefined) === tabSafetyLine(null))
+check('an unknown answer never claims a migration is missing', !/016|migration/.test(tabSafetyLine(null)))
+check('an unknown answer never promises the tab can be closed', !/close this tab/.test(tabSafetyLine(null)))
 check('a 202 is durable by definition', parseStartResponse({ runId: RUN_ID, status: 'queued' }, 202).durable === true)
 check('the synchronous answer carries durable:false through', parseStartResponse({ durable: false, stats: {}, jobs: [] }, 200).durable === false)
 
@@ -224,6 +229,131 @@ check(
 )
 check('no active run means nothing to resume', activeRunIdOf({ active: null, runs: [] }) === null && activeRunIdOf(null) === null)
 check('a non-uuid id is never polled', activeRunIdOf({ active: { id: 'legacy', status: 'running' } }) === null)
+
+// ─── The monitor tells the truth (run-view.ts, run-copy.ts, run-reasons.ts) ──
+//
+// Each block below is one release blocker from the reliability pass. The
+// fixtures are the shapes the routes answer TODAY — the 202 with its dispatch
+// report, the 409 with the run already going, a row carrying an error code.
+
+console.log('1. the 202 body’s dispatch report is read')
+const twoOhTwo = parseStartResponse(
+  { runId: RUN_ID, status: 'queued', durable: true, claimed: false, claimInMs: null, dispatch: { outcome: 'failed', status: 401, error: 'HTTP 401 with an HTML page', attempt: 2 }, workerBase: { source: 'env:VERCEL_URL+bypass', baseUrl: 'https://x.vercel.app' } },
+  202
+)
+check('the dispatch outcome, status, error and attempt come through', twoOhTwo.dispatch?.outcome === 'failed' && twoOhTwo.dispatch.status === 401 && twoOhTwo.dispatch.error === 'HTTP 401 with an HTML page' && twoOhTwo.dispatch.attempt === 2)
+check('the worker source comes through', twoOhTwo.workerBase?.source === 'env:VERCEL_URL+bypass' && twoOhTwo.workerBase.baseUrl === 'https://x.vercel.app')
+check('claimed and claimInMs come through', twoOhTwo.claimed === false && twoOhTwo.claimInMs === null)
+check('a failed dispatch is a sentence with its error', (dispatchNote(twoOhTwo.dispatch) ?? '').includes('HTTP 401') && (dispatchNote(twoOhTwo.dispatch) ?? '').includes('HTML page'), dispatchNote(twoOhTwo.dispatch) ?? '')
+const claimedFast = parseStartResponse({ runId: RUN_ID, status: 'running', claimed: true, claimInMs: 812.4, dispatch: { outcome: 'pending', status: null, error: null, attempt: 1 }, workerBase: { source: 'env:SCOUT_WORKER_BASE_URL', baseUrl: 'https://prod.example' } }, 202)
+check('a claimed run keeps how long the claim took', claimedFast.claimed && claimedFast.claimInMs === 812)
+check('a pending dispatch is not a warning (the worker answers at the end of its leg)', dispatchNote(claimedFast.dispatch) === null)
+check('the worker note names the source and the address', workerSourceLine(claimedFast.workerBase) === 'worker: env:SCOUT_WORKER_BASE_URL → https://prod.example')
+check('a 202 with no dispatch report has none, not a guess', parseStartResponse({ runId: RUN_ID, status: 'queued' }, 202).dispatch === null && parseStartResponse({ runId: RUN_ID, status: 'queued' }, 202).workerBase === null)
+
+console.log('2. a 409 alreadyActive attaches to the run already going')
+const conflict = parseStartResponse(
+  { error: 'A scout run is already running. Watch it, or cancel it to start another.', code: 'CONFLICT', retryable: false, runId: RUN_ID, status: 'running', alreadyActive: true, durable: true, run: { id: RUN_ID, kind: 'job_scout', status: 'running', stage: 'discover', invocation: 2, attempts: 1, resumable: false, cancel_requested: false, jobs: { total: 4 } } },
+  409
+)
+check('the 409 is recognised as already active, not as queued and not as a legacy result', conflict.alreadyActive && !conflict.queued && !conflict.legacy)
+check('it attaches to body.run.id', conflict.runId === RUN_ID && conflict.run?.id === RUN_ID)
+check('the run already going is parsed so the monitor can render it at once', conflict.run?.status === 'running' && conflict.run.stage === 'discover' && conflict.run.invocation === 2)
+check('an already-going run is durable by definition', conflict.durable === true)
+const conflictNoRun = parseStartResponse({ error: 'already', code: 'CONFLICT', runId: RUN_ID, alreadyActive: true }, 409)
+check('a 409 without the run object still attaches by runId', conflictNoRun.alreadyActive && conflictNoRun.runId === RUN_ID && conflictNoRun.run === null)
+check('a 409 that is not alreadyActive (e.g. nothing left to continue) does not attach', !parseStartResponse({ error: 'that run finished every stage', code: 'CONFLICT', runId: RUN_ID }, 409).alreadyActive)
+const refused = parseStartResponse({ error: 'Scouting could not start: the app could not reach its own worker (HTTP 401).', code: 'DISPATCH', retryable: true, runId: RUN_ID, remedy: 'Enable Protection Bypass.' }, 503)
+check('a 503 refusal is neither queued, legacy nor already active — but names the row it closed', !refused.queued && !refused.legacy && !refused.alreadyActive && refused.runId === RUN_ID)
+
+console.log('RunDetail carries the reliability fields, parsed defensively')
+const full = parseRunDetail({ run: { id: RUN_ID, kind: 'job_scout', status: 'failed', error: 'x', error_code: 'dispatch', remedy: 'do y', invocation: '3', attempts: 2, resumable: true, cancel_requested: true } })
+check('error_code is upper-cased, remedy and kind are kept', full?.error_code === 'DISPATCH' && full.remedy === 'do y' && full.kind === 'job_scout')
+check('invocation and attempts are counts', full?.invocation === 3 && full.attempts === 2)
+check('resumable and cancel_requested are booleans', full?.resumable === true && full.cancel_requested === true)
+const bare = parseRunDetail({ id: RUN_ID, status: 'running' })
+check('absent fields: no code, no remedy, pass 1, no attempts, resumable UNKNOWN (null), not cancelling', bare?.error_code === null && bare.remedy === null && bare.invocation === 1 && bare.attempts === 0 && bare.resumable === null && bare.cancel_requested === false)
+check('a resumable that is not a boolean is unknown, never true', parseRunDetail({ id: RUN_ID, status: 'partial', resumable: 'yes' })?.resumable === null)
+check('a negative invocation is still pass 1', parseRunDetail({ id: RUN_ID, status: 'running', invocation: -4 })?.invocation === 1)
+
+console.log('4. Continue this run follows run.resumable, the server’s judgement')
+const reaped = parseRunDetail({ id: RUN_ID, status: 'partial', error_code: 'PLATFORM_KILL', resumable: true, stats: {}, jobs: { total: 3, inserted: 3 } })
+check('a reaped run with no discovery report is offered when the server says its cursor has work left', !!reaped && runContinuation(reaped).canContinue)
+check('and says it stopped before finishing', !!reaped && runContinuation(reaped).note === 'It stopped before finishing; continuing picks up from what it saved.')
+const budgetRun = parseRunDetail({ id: RUN_ID, status: 'partial', resumable: true, stats: { discovery: { stopped: 'budget', cursor: { stages: ['plan'] } } } })
+check('the existing spend-limit note is kept when the report has a stopping reason', !!budgetRun && (runContinuation(budgetRun).note ?? '').includes('spend limit'))
+const serverSaysNo = parseRunDetail({ id: RUN_ID, status: 'partial', resumable: false, stats: { discovery: { stopped: 'deadline', cursor: { stages: ['plan'] } } } })
+check('the server saying NOT resumable wins over a report that looks continuable', !!serverSaysNo && !runContinuation(serverSaysNo).canContinue)
+const succeededResumable = parseRunDetail({ id: RUN_ID, status: 'succeeded', resumable: true, completed_at: '2026-08-30T10:04:00Z' })
+check('a finished run is never offered a second pass', !!succeededResumable && !runContinuation(succeededResumable).canContinue)
+const unknownResumable = parseRunDetail({ id: RUN_ID, status: 'partial', stats: { discovery: { stopped: 'deadline', cursor: { stages: ['plan'] } } } })
+check('when the server did not say, the discovery report decides as before', !!unknownResumable && runContinuation(unknownResumable).canContinue)
+check('when the server did not say and there is no report, nothing is offered', !runContinuation(parseRunDetail({ id: RUN_ID, status: 'partial' })!).canContinue)
+
+console.log('5. partialReason prefers the row’s error code and remedy')
+const codes: [string, RegExp][] = [
+  ['RUN_DEADLINE', /ran out of time/],
+  ['PLATFORM_KILL', /hosting platform ended the worker/],
+  ['DISPATCH', /could not reach its own worker/],
+  ['PROVIDER_TIMEOUT', /too slow to answer/],
+  ['PROVIDER_RATE_LIMIT', /rate-limited/],
+  ['CANCELLED', /was cancelled/],
+  ['SCHEMA_MIGRATION', /missing a migration/],
+  ['CONFIGURATION', /missing configuration/],
+]
+for (const [code, re] of codes) check(`${code} maps to a sentence`, re.test(errorCodeSentence(code) ?? ''), errorCodeSentence(code) ?? 'null')
+check('an unmapped code has no sentence of its own', errorCodeSentence('INTERNAL') === null && errorCodeSentence(null) === null)
+const coded = parseRunDetail({ id: RUN_ID, status: 'partial', error: 'run deadline passed in discover', error_code: 'RUN_DEADLINE', remedy: 'Continue the run to pick up where it stopped.', stats: { deadline_hit: false } })
+check('the code’s sentence beats the raw error text', !!coded && (partialReason(coded) ?? '').startsWith('It ran out of time'), coded ? partialReason(coded) ?? '' : '')
+const codedReason = coded ? runStopReason(coded) : null
+check('the raw error is kept as a detail line', codedReason?.detail === 'run deadline passed in discover')
+check('the remedy is its own line', codedReason?.remedy === 'Continue the run to pick up where it stopped.')
+const dispatchFailed = parseRunDetail({ id: RUN_ID, status: 'failed', error: 'Scouting could not start: the app could not reach its own worker (HTTP 401).', error_code: 'DISPATCH', remedy: 'Enable Protection Bypass for Automation.' })
+check('a DISPATCH failure explains itself and carries its fix', !!dispatchFailed && (partialReason(dispatchFailed) ?? '').includes('could not reach its own worker') && runStopReason(dispatchFailed)?.remedy === 'Enable Protection Bypass for Automation.')
+const unmapped = parseRunDetail({ id: RUN_ID, status: 'failed', error: 'boom', error_code: 'INTERNAL' })
+check('an unmapped code falls back to the error text', !!unmapped && partialReason(unmapped) === 'boom')
+check('an unmapped code with no error text still names the code', partialReason(parseRunDetail({ id: RUN_ID, status: 'failed', error_code: 'DATABASE' })!) === 'The run stopped with DATABASE.')
+check('a run that recorded no code keeps the old fallbacks (the error text)', !!failed && partialReason(failed) === 'the ATS adapter timed out')
+check('a finished run still has no reason', !!succeeded && runStopReason(succeeded) === null)
+const cancelledRun = parseRunDetail({ id: RUN_ID, status: 'cancelled', error_code: 'CANCELLED' })
+check('a cancelled run says so, with no remedy', !!cancelledRun && partialReason(cancelledRun) === 'The run was cancelled.' && runStopReason(cancelledRun)?.remedy === null)
+
+console.log('6. the poll verdict')
+const base = { error: 'HTTP 500', maxFailures: MAX_POLL_FAILURES, pollMs: POLL_MS, lostContactPollMs: LOST_CONTACT_POLL_MS }
+check('one miss is silent and polls again at the normal rate', pollVerdict({ ...base, status: 500, failures: 1 }).message === null && pollVerdict({ ...base, status: 500, failures: 1 }).nextMs === POLL_MS && !pollVerdict({ ...base, status: 500, failures: 1 }).stop)
+const lost = pollVerdict({ ...base, status: 502, failures: MAX_POLL_FAILURES, error: 'gateway' })
+check('five misses say lost contact, with the error, and keep polling at 10s', !lost.stop && lost.nextMs === 10_000 && lost.message === 'Lost contact (gateway). The run keeps going on the server; reload to pick it up.', lost.message ?? '')
+const signedOut = pollVerdict({ ...base, status: 401, failures: 1 })
+check('a 401 stops the poll and says sign in again', signedOut.stop && /sign in again/i.test(signedOut.message ?? ''))
+const gone = pollVerdict({ ...base, status: 404, failures: 1 })
+check('a 404 stops the poll and says not found', gone.stop && /no such run/.test(gone.message ?? ''))
+check('the cancel URL sits under the run', runCancelHref(RUN_ID) === `/api/career/scout/runs/${RUN_ID}/cancel`)
+
+console.log('9. queue actions, passes and attempts')
+const actions = parseQueueActions({ run: { id: RUN_ID }, queueActions: [{ runId: RUN_ID, action: 'redispatched', waitedMs: 31_000, attempt: 2, message: 'queued for 31s; asking a worker again' }, { action: 'failed', attempt: 2, message: 'Scouting could not start: HTTP 401' }, 'nope', { message: 'no action' }] })
+check('only well-formed actions are read', actions.length === 2 && actions[0].attempt === 2 && actions[0].waitedMs === 31_000)
+check('a redispatch reads as asking a worker again with its attempt', queueActionLine(actions[0]) === 'asking a worker again (attempt 2)', queueActionLine(actions[0]))
+check('a queue failure names its reason', queueActionLine(actions[1]) === 'closed as failed (attempt 2): Scouting could not start: HTTP 401')
+check('a poll with no actions reads as none', parseQueueActions({ run: { id: RUN_ID } }).length === 0 && parseQueueActions(null).length === 0)
+const secondPass = parseRunDetail({ id: RUN_ID, status: 'running', invocation: 2 })
+check('a later leg reads as pass N', !!secondPass && runPassLine(secondPass) === 'pass 2' && runPassLine(bare!) === null)
+const queuedTwice = parseRunDetail({ id: RUN_ID, status: 'queued', attempts: 2 })
+check('attempts show while queued', !!queuedTwice && queueAttemptsLine(queuedTwice) === 'worker asked 2 times')
+check('attempts are not shown once running', queueAttemptsLine(secondPass!) === null)
+
+console.log('10. the queued headline is the row’s own detail')
+const queuedDetail = parseRunDetail({ id: RUN_ID, status: 'queued', detail: 'asked a worker; waiting for it to claim the run' })
+check('run.detail leads when present', !!queuedDetail && runHeadline(queuedDetail) === 'Queued — asked a worker; waiting for it to claim the run', queuedDetail ? runHeadline(queuedDetail) : '')
+check('the generic text stays when there is none', !!queued && runHeadline(queued) === 'Queued — waiting for the worker to pick it up')
+
+console.log('3. readiness')
+const notReady = parseReadiness({ ready: false, people: { ready: true, reason: null, remedy: null, code: null, warnings: [] }, jobs: { ready: false, reason: 'The scouting worker at https://x did not answer: HTTP 401.', remedy: 'Enable Protection Bypass for Automation.', code: 'DISPATCH', warnings: ['CRON_SECRET is not set'] }, worker: { source: 'env:VERCEL_URL+bypass', baseUrl: 'https://x' } })
+check('a blocked kind is read with its reason, remedy and code', notReady.known && notReady.ready === false && notReady.code === 'DISPATCH' && notReady.warnings.length === 1 && notReady.worker?.source === 'env:VERCEL_URL+bypass')
+check('the block line is "Scouting is unavailable: <reason> — Fix: <remedy>"', readinessBlockLine(notReady) === 'Scouting is unavailable: The scouting worker at https://x did not answer: HTTP 401. — Fix: Enable Protection Bypass for Automation.')
+check('the other kind is its own verdict', parseReadiness({ people: { ready: true, warnings: ['APOLLO_API_KEY is not set'] }, jobs: { ready: false } }, 'people').ready === true)
+const noVerdict = parseReadiness({ error: 'boom' })
+check('a body without a verdict is unknown — neither ready nor blocked', !noVerdict.known && noVerdict.ready === null && readinessBlockLine(noVerdict) === null)
+check('a ready kind has no block line', readinessBlockLine(parseReadiness({ jobs: { ready: true, warnings: [] } })) === null)
 
 // ─── The Companies page (app/dashboard/companies/company-view.ts) ────────────
 

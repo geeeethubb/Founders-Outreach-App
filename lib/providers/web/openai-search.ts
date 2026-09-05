@@ -10,6 +10,7 @@
 
 import { cached, cacheKey } from '../cache'
 import { modelFor } from '@/lib/ai/models'
+import { currentRunClock } from '@/lib/runs/context'
 import type {
   ProviderCapabilities,
   ProviderResult,
@@ -19,6 +20,8 @@ import type {
 } from '../types'
 
 const RESPONSES_URL = 'https://api.openai.com/v1/responses'
+/** How long ONE Responses call may take, at most. A web-search turn is slow; a hang is not a turn. */
+const OPENAI_SEARCH_TIMEOUT_MS = Number(process.env.OPENAI_SEARCH_TIMEOUT_MS ?? 90_000)
 
 const CAPABILITIES: ProviderCapabilities = {
   organization_search: false,
@@ -116,6 +119,17 @@ async function callWebSearch(prompt: string, maxResults: number): Promise<WebRes
   for (let attempt = 0; attempt < 3; attempt++) {
     if (attempt > 0) await sleep(Math.round(800 * Math.pow(2, attempt) * (0.5 + Math.random() * 0.5)))
 
+    // Bounded: the provider ceiling, or what the ambient run has left before
+    // its reserve — whichever is smaller. A hung upstream must never hold an
+    // invocation, and a retry must never start inside the run's reserve.
+    const clock = currentRunClock()
+    const timeoutMs = clock ? clock.attemptTimeoutMs(OPENAI_SEARCH_TIMEOUT_MS) : OPENAI_SEARCH_TIMEOUT_MS
+    if (timeoutMs === 0) {
+      stats.errors++
+      return { text: '', citations: [], error: 'run deadline: no time left for a web search' }
+    }
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), timeoutMs)
     try {
       const res = await fetch(RESPONSES_URL, {
         method: 'POST',
@@ -126,9 +140,11 @@ async function callWebSearch(prompt: string, maxResults: number): Promise<WebRes
           input: prompt,
           max_output_tokens: 1200,
         }),
+        signal: controller.signal,
       })
 
       const text = await res.text()
+      clearTimeout(timer)
       if (!res.ok) {
         // 429/5xx are transient; anything else will not succeed on retry.
         if (res.status === 429 || res.status >= 500) continue
@@ -157,6 +173,7 @@ async function callWebSearch(prompt: string, maxResults: number): Promise<WebRes
 
       return { text: body, citations }
     } catch (e) {
+      clearTimeout(timer)
       if (attempt === 2) {
         stats.errors++
         return { text: '', citations: [], error: e instanceof Error ? e.message : 'network error' }

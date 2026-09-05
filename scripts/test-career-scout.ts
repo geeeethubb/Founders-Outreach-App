@@ -21,6 +21,7 @@ import { emptyBank } from '../lib/career/evidence/store'
 import type { CareerRun } from '../lib/career/runs'
 import type { NormalizedJob } from '../lib/career/jobs/normalize'
 import { buildPlannerWatchlist, directionMatches, directionPhrases, directionTerms, fallbackStrategies, runJobScout, selectJobsToRank, toWatched, type JobScoutDeps, type ScoutStore } from '../lib/career/scout/orchestrator'
+import { terminalStatusFor } from '../lib/career/scout/run-record'
 import type { PlannerWatchlist } from '../lib/agents/job-mission-planner'
 // The run monitor's own parser, so "these counts are what the UI reads" is an
 // assertion rather than a claim.
@@ -477,6 +478,73 @@ async function main() {
     // run did not get through the work it planned.
     check('a deadline-hit run reports itself partial', r.partial && r.stats.deadline_hit && (mem.runs[0]?.stats.deadline_hit as boolean), `partial=${r.partial}`)
     check('ranking is not started past the deadline, and says so', mem.ranked.length === 0 && r.errors.some((e) => e.startsWith('ranking skipped')) && r.stats.jobs_ranked === 0, r.errors.join(' | '))
+  }
+
+  // ─── B2. A sweep the clock cut is a DEADLINE hit, never "complete" ────────
+  //
+  // The live BROAD run of 2026-09-04: the planner's web-search call took 145 s
+  // of a 280 s leg, so the sweep started with its share of the clock already
+  // spent, checked 0 of 298 companies, said so in its own sentence — and the
+  // run was closed "succeeded", cursor done, never to get its second pass.
+  console.log('orchestrator: sweep cut by the clock')
+  {
+    const { store, rank } = memStore({ watchlist: [
+      { id: 'c-acme', name: 'Acme', domain: 'acme.com', careers_url: null, ats_type: 'greenhouse', ats_identifier: 'acme', watch_status: 'target', watch_priority: 90 },
+      { id: 'c-beta', name: 'Beta', domain: 'beta.com', careers_url: null, ats_type: null, ats_identifier: null, watch_status: 'watching', watch_priority: 10 },
+    ] })
+    const r = await runJobScout({ userId: USER, budget: { deadlineMs: 4_000 }, sweep: true, maxStrategies: 1, concurrency: 1 }, {
+      store, rank, registry, fetcher, extractor, verifier,
+      // Longer than the sweep's quarter of the run, shorter than the run.
+      planner: async () => { await sleep(1_100); return agentResult(PLAN, 'job_mission_planner') },
+      session: async () => sessionResult(SCOUTED),
+    })
+    check('the sweep says it stopped at its deadline with companies unchecked', r.errors.some((e) => /sweep stopped at its deadline with \d+ of \d+ companies unchecked/.test(e)), r.errors.join(' | '))
+    check('no stage was refused outright — the run itself had time', !r.errors.some((e) => e.startsWith('deadline reached before')), r.errors.join(' | '))
+    check('a sweep the clock cut is a deadline hit (DEFECT if false: the run is reported complete with the watchlist unswept)', r.stats.deadline_hit === true, `deadline_hit=${r.stats.deadline_hit}`)
+    check('the run is partial and stopped by the deadline, not complete', r.partial === true && r.stopped === 'deadline', `partial=${r.partial} stopped=${r.stopped}`)
+    check('the cursor leaves the sweep open and the run unfinished, so the next pass continues', !r.cursor.stages.includes('done') && !r.cursor.stages.includes('sweep'), JSON.stringify(r.cursor.stages))
+    check('the row is recorded partial', terminalStatusFor({ migrationMissing: false, deadlineHit: r.stats.deadline_hit, errors: r.errors, partial: r.partial, stopped: r.stopped }) === 'partial')
+  }
+
+  // ─── B3. Company-first cut at its share of the clock leaves work: a DEADLINE hit ─
+  //
+  // The live BROAD run of 2026-09-04 also had "company-first stopped at its
+  // share of the run; 42 companies not checked" in its errors — and was
+  // closed "succeeded".
+  console.log('orchestrator: company-first cut at its share')
+  {
+    const many = Array.from({ length: 30 }, (_, i) => ({ id: `c-many-${i}`, name: `Many Co ${i}`, domain: `many-${i}.example`, careers_url: null, ats_type: 'greenhouse', ats_identifier: `many-${i}`, watch_status: 'target', watch_priority: 50 }))
+    const { store, rank } = memStore({ slowCheck: 160, watchlist: many })
+    const r = await runJobScout({ userId: USER, budget: { deadlineMs: 6_000 }, maxStrategies: 1, concurrency: 1 }, {
+      store, rank, registry, fetcher, extractor, verifier,
+      planner: async () => agentResult(PLAN, 'job_mission_planner'),
+      session: async () => sessionResult(SCOUTED),
+    })
+    check('company-first says it stopped at its share with companies unchecked', r.errors.some((e) => /company-first stopped at its share of the run .* companies not checked/.test(e)), r.errors.join(' | '))
+    check('no stage was refused outright — the run itself had time', !r.errors.some((e) => e.startsWith('deadline reached before')), r.errors.join(' | '))
+    check('a lane cut at its share is a deadline hit (DEFECT if false: the run is reported complete with companies unchecked)', r.stats.deadline_hit === true, `deadline_hit=${r.stats.deadline_hit}`)
+    check('the run is partial, stopped by the deadline, cursor open for the next pass', r.partial === true && r.stopped === 'deadline' && !r.cursor.stages.includes('done') && !r.cursor.stages.includes('company-first'), `partial=${r.partial} stopped=${r.stopped} stages=${JSON.stringify(r.cursor.stages)}`)
+  }
+
+  // ─── B4. Extractions the clock refused leave work: a DEADLINE hit ─────────
+  //
+  // The same live run: four "extract …: run deadline: no time left for a
+  // structured call" lines — the Anthropic client refusing inside the
+  // finalisation reserve — recorded as per-posting failures on a run closed
+  // "succeeded".
+  console.log('orchestrator: extraction refused by the clock')
+  {
+    const { store, mem, rank } = memStore({ watchlist: [{ id: 'c-acme', name: 'Acme', domain: 'acme.com', careers_url: null, ats_type: 'greenhouse', ats_identifier: 'acme', watch_status: 'target', watch_priority: 90 }] })
+    const r = await runJobScout({ userId: USER, maxStrategies: 1, concurrency: 1 }, {
+      store, rank, registry, fetcher, verifier,
+      extractor: async () => agentResult<JobExtraction>(null, 'job_extractor', 'run deadline: no time left for a structured call'),
+      planner: async () => agentResult(PLAN, 'job_mission_planner'),
+      session: async () => sessionResult(SCOUTED),
+    })
+    check('postings the clock kept unread are still stored', mem.jobs.length > 0, `${mem.jobs.length} stored`)
+    check('the run says how many postings were not read because of the clock, once', r.errors.filter((e) => /not read before the run.s clock ran out/.test(e)).length >= 1 && !r.errors.some((e) => /^extract .*run deadline/.test(e)), r.errors.join(' | '))
+    check('extractions refused by the clock are a deadline hit (DEFECT if false: the run is reported complete with postings unread)', r.stats.deadline_hit === true, `deadline_hit=${r.stats.deadline_hit}`)
+    check('the run is partial and resumable', r.partial === true && r.stopped === 'deadline' && !r.cursor.stages.includes('done'), `partial=${r.partial} stopped=${r.stopped}`)
   }
 
   // ─── B1b. selectJobsToRank: the best 12, not the first 12 ─────────────────

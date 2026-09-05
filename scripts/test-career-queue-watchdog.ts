@@ -74,8 +74,11 @@ function fakeDb(seed: Partial<ScoutRunRow>[] = []) {
     async listRuns(_userId: string, statuses: string[]) {
       return { rows: [...rows.values()].filter((r) => statuses.includes(String(r.status))) as unknown as ScoutRunRow[], error: null }
     },
-    async getRun(_userId: string, id: string) {
+    async getRun(id: string) {
       return { row: (rows.get(id) ?? null) as unknown as ScoutRunRow | null, error: null }
+    },
+    async countJobs() {
+      return { counts: { total: 0, inserted: 0, verified_open: 0, likely_open: 0, unverified: 0, closed: 0, ranked: 0 }, error: null }
     },
   } as unknown as RunStoreDb & { rows: typeof rows; patches: () => number }
   return db
@@ -169,10 +172,17 @@ async function main(): Promise<void> {
     const db = fakeDb([queued({ started_at: ago(MAX_QUEUE_WAIT_MS + 5_000) })])
     await sweepScoutQueue('u', { db, now: NOW, dispatch: async () => ({ dispatched: false, error: 'ECONNREFUSED' }) })
     check('a failed dispatch still counts as an attempt', db.rows.get('r1')!.attempt_count === 1)
+    check('and the real reason is on the row, not a fabricated count', /ECONNREFUSED/.test(String(db.rows.get('r1')!.last_error)) && db.rows.get('r1')!.error_code === 'DISPATCH', String(db.rows.get('r1')!.last_error))
+    // Not again inside the spacing window: the last dispatch may still be a cold start landing.
     await sweepScoutQueue('u', { db, now: NOW + 1_000, dispatch: async () => ({ dispatched: false, error: 'ECONNREFUSED' }) })
-    check('the second failure exhausts them', db.rows.get('r1')!.attempt_count === 2)
-    await sweepScoutQueue('u', { db, now: NOW + 2_000, dispatch: async () => ({ dispatched: false, error: 'ECONNREFUSED' }) })
-    check('and the third sweep fails the run rather than retrying again', db.rows.get('r1')!.status === 'failed', String(db.rows.get('r1')!.status))
+    check('a second sweep a second later does not redispatch (spacing)', db.rows.get('r1')!.attempt_count === 1 && db.rows.get('r1')!.status === 'queued')
+    await sweepScoutQueue('u', { db, now: NOW + 20_000, dispatch: async () => ({ dispatched: false, error: 'ECONNREFUSED' }) })
+    check('the second failure exhausts the attempts', db.rows.get('r1')!.attempt_count === 2)
+    // A dispatch that FAILED with the attempts spent is a terminal answer, now,
+    // with the reason — not another minute of spinner for a third sweep to end.
+    check('and fails the run at once, naming the cause', db.rows.get('r1')!.status === 'failed' && /ECONNREFUSED/.test(String(db.rows.get('r1')!.error)), `${db.rows.get('r1')!.status}: ${db.rows.get('r1')!.error}`)
+    const third = await sweepScoutQueue('u', { db, now: NOW + 40_000, dispatch: async () => ({ dispatched: false, error: 'ECONNREFUSED' }) })
+    check('and the third sweep finds nothing to do', third.actions.length === 0 && db.rows.get('r1')!.status === 'failed', String(db.rows.get('r1')!.status))
   }
   {
     unknownColumns = []
@@ -296,39 +306,44 @@ async function main(): Promise<void> {
   // ─── The worker base: never silently healthy ───
   console.log('\nworker base: a misconfigured deployment must be loud')
   {
-    const at = (env: Record<string, string | undefined>, resolved: { baseUrl: string; source: string }) => checkWorkerBase(env, resolved)
+    const at = (env: Record<string, string | undefined>) => checkWorkerBase(env)
 
-    // THE INCIDENT CONFIGURATION: on Vercel with nothing pinned, the base falls
-    // back to the per-deployment hostname that Deployment Protection 401s.
-    const unpinned = at({ VERCEL: '1' }, { baseUrl: 'https://app-abc123-team.vercel.app', source: 'env:VERCEL_URL' })
+    // THE INCIDENT CONFIGURATION: a preview on Vercel with nothing pinned and
+    // no bypass secret. The old code fell back to the per-deployment hostname
+    // that Deployment Protection 401s; the new one refuses to resolve at all.
+    const unpinned = at({ VERCEL: '1', VERCEL_ENV: 'preview', VERCEL_URL: 'app-abc123-team.vercel.app' })
     check('Vercel with nothing pinned is an ERROR', unpinned.severity === 'error', unpinned.severity)
     check('and it names the variable that fixes it', /SCOUT_WORKER_BASE_URL/.test(String(unpinned.remedy)), String(unpinned.remedy))
-    check('and explains Deployment Protection rather than just saying 401', /Deployment Protection/.test(unpinned.message))
+    check('and explains Deployment Protection rather than just saying 401', /Deployment Protection/.test(unpinned.message), unpinned.message)
+    check('and the bypass secret is the other remedy', /Protection Bypass for Automation/.test(String(unpinned.remedy)))
 
-    const pinned = at(
-      { VERCEL: '1', SCOUT_WORKER_BASE_URL: 'https://outreach.example.com' },
-      { baseUrl: 'https://outreach.example.com', source: 'env:SCOUT_WORKER_BASE_URL' }
-    )
+    // Production with none of the three: also an error — no address can be proven callable.
+    const prodBare = at({ VERCEL: '1', VERCEL_ENV: 'production', VERCEL_URL: 'app-abc123-team.vercel.app' })
+    check('production with no alias, no bypass and nothing pinned is an ERROR', prodBare.severity === 'error', prodBare.severity)
+
+    // The same deployment with the automation bypass: ok, preview or production.
+    const bypass = at({ VERCEL: '1', VERCEL_ENV: 'preview', VERCEL_URL: 'app-abc123-team.vercel.app', VERCEL_AUTOMATION_BYPASS_SECRET: 'secret' })
+    check('a deployment with the bypass secret is ok', bypass.severity === 'ok' && bypass.source === 'env:VERCEL_URL+bypass', `${bypass.severity} ${bypass.source}`)
+
+    // Production without a bypass: the stable alias Vercel provides.
+    const alias = at({ VERCEL: '1', VERCEL_ENV: 'production', VERCEL_URL: 'app-abc123-team.vercel.app', VERCEL_PROJECT_PRODUCTION_URL: 'outreach.vercel.app' })
+    check('production falls back to its stable alias, and that is ok', alias.severity === 'ok' && alias.baseUrl === 'https://outreach.vercel.app', `${alias.severity} ${alias.baseUrl}`)
+
+    const pinned = at({ VERCEL: '1', SCOUT_WORKER_BASE_URL: 'https://outreach.example.com' })
     check('a pinned production URL is ok', pinned.severity === 'ok', pinned.severity)
 
     // Pinned, but to something a serverless function cannot reach.
-    const loopback = at(
-      { VERCEL: '1', SCOUT_WORKER_BASE_URL: 'http://localhost:3000' },
-      { baseUrl: 'http://localhost:3000', source: 'env:SCOUT_WORKER_BASE_URL' }
-    )
+    const loopback = at({ VERCEL: '1', SCOUT_WORKER_BASE_URL: 'http://localhost:3000' })
     check('localhost pinned on Vercel is an ERROR', loopback.severity === 'error', loopback.severity)
 
     // Pinned, but to the deployment hash URL — the subtle version of the bug.
-    const hash = at(
-      { VERCEL: '1', SCOUT_WORKER_BASE_URL: 'https://app-9f2c1a-team.vercel.app' },
-      { baseUrl: 'https://app-9f2c1a-team.vercel.app', source: 'env:SCOUT_WORKER_BASE_URL' }
-    )
-    check('a per-deployment URL pinned on Vercel still WARNS', hash.severity === 'warn', hash.severity)
+    const hash = at({ VERCEL: '1', SCOUT_WORKER_BASE_URL: 'https://app-9f2c1a-team.vercel.app' })
+    check('a per-deployment URL pinned on Vercel without a bypass still WARNS', hash.severity === 'warn', hash.severity)
 
-    const local = at({}, { baseUrl: 'http://localhost:3000', source: 'env:NEXT_PUBLIC_APP_URL' })
+    const local = at({ NEXT_PUBLIC_APP_URL: 'http://localhost:3000' })
     check('localhost off Vercel is fine', local.severity === 'ok', local.severity)
 
-    const guessed = at({}, { baseUrl: 'https://staging.example.com', source: 'header:loopback' })
+    const guessed = at({ NEXT_PUBLIC_APP_URL: 'https://staging.example.com' })
     check('an inferred non-local base warns rather than passing silently', guessed.severity === 'warn', guessed.severity)
 
     // The whole point of the module: nothing unverified is reported as healthy.

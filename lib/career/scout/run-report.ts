@@ -24,8 +24,13 @@ import { summarizeYield } from '../discovery/budget'
 import { summarizeBudget, type RunBudget } from '../discovery/modes'
 import type { ScoutCursor } from './run-dispatch'
 
-/** Why the run stopped. `deadline` and `budget` are the resumable ones. */
-export type ScoutStopReason = 'complete' | 'deadline' | 'budget' | 'saturated'
+/**
+ * Why the run stopped. `deadline` and `budget` are the resumable ones.
+ * `failed` is a run that could not start (no mission, no bank, a broken input):
+ * a failure, never a partial success that "ran out of time", and never offered
+ * a continuation — which would pay a second time against the same broken input.
+ */
+export type ScoutStopReason = 'complete' | 'deadline' | 'budget' | 'saturated' | 'failed'
 
 /** What a run reports about its own size, spend and shape, on top of JobScoutResult. */
 export interface JobScoutRunReport {
@@ -84,7 +89,7 @@ export function stopReasonOf(i: Pick<RunReportInput, 'everyStageRan' | 'deadline
  * where.
  */
 export function isRunFinished(stopped: ScoutStopReason): boolean {
-  return stopped === 'complete' || stopped === 'saturated'
+  return stopped === 'complete' || stopped === 'saturated' || stopped === 'failed'
 }
 
 export function buildRunReport(i: RunReportInput): JobScoutRunReport {

@@ -275,7 +275,8 @@ async function testReaper() {
   db.seed({ id: 'run-package-fresh', user_id: USER, kind: 'package', status: 'running', started_at: ago(20_000) })
   // A verify run stays nobody's business: short, synchronous, no user-visible row.
   db.seed({ id: 'run-verify', user_id: USER, kind: 'verify', status: 'running', started_at: ago(3_600_000) })
-  db.seed({ id: 'run-no-pulse', user_id: USER, status: 'running', started_at: ago(3_600_000) })
+  // A pulseless row of a kind the reaper has no ceiling for: never touched.
+  db.seed({ id: 'run-no-pulse', user_id: USER, kind: 'other', status: 'running', started_at: ago(3_600_000) })
   // THE ONE THAT MATTERS: a healthy local run, silent for 301s inside a 1200s
   // deadline. A scout is legitimately quiet for minutes (one live planner call
   // took 226s); reaping this would put "Failed — the worker stopped
@@ -402,19 +403,29 @@ async function testParamsAndDispatch() {
   // x-forwarded-host is both a blind SSRF and a leaked token.
   const headers = (h: Record<string, string>) => ({ get: (n: string) => h[n.toLowerCase()] ?? null })
   const attacker = headers({ 'x-forwarded-proto': 'https', 'x-forwarded-host': 'attacker.example.net' })
-  const hosted = resolveWorkerBase(attacker, { VERCEL_URL: 'outreach.vercel.app' })
-  check('a forged forwarded host does NOT become the dispatch target', hosted.baseUrl === 'https://outreach.vercel.app' && hosted.source === 'env:VERCEL_URL', hosted.baseUrl)
+  // On Vercel with the automation bypass secret: the SAME deployment, with the
+  // header that gets through Deployment Protection — never the forged host.
+  const hosted = resolveWorkerBase(attacker, { VERCEL: '1', VERCEL_ENV: 'preview', VERCEL_URL: 'outreach-abc123-team.vercel.app', VERCEL_AUTOMATION_BYPASS_SECRET: 'bypass-secret' })
+  check('a forged forwarded host does NOT become the dispatch target', hosted.baseUrl === 'https://outreach-abc123-team.vercel.app' && hosted.source === 'env:VERCEL_URL+bypass', `${hosted.baseUrl} ${hosted.source}`)
   check('and the ignored header is reported, not swallowed', hosted.ignoredHeaderHost === 'attacker.example.net')
+  check('and the request carries the protection bypass header', hosted.headers['x-vercel-protection-bypass'] === 'bypass-secret' && hosted.problem === null)
+  // Production with no bypass: the stable production alias, never the deployment hash.
+  const prod = resolveWorkerBase(attacker, { VERCEL: '1', VERCEL_ENV: 'production', VERCEL_URL: 'outreach-abc123-team.vercel.app', VERCEL_PROJECT_PRODUCTION_URL: 'outreach.vercel.app' })
+  check('production without a bypass uses the production alias', prod.baseUrl === 'https://outreach.vercel.app' && prod.source === 'env:VERCEL_PROJECT_PRODUCTION_URL', `${prod.baseUrl} ${prod.source}`)
+  // A preview with nothing: refused with the remedy — and NEVER routed to production.
+  const preview = resolveWorkerBase(attacker, { VERCEL: '1', VERCEL_ENV: 'preview', VERCEL_URL: 'outreach-abc123-team.vercel.app', VERCEL_PROJECT_PRODUCTION_URL: 'outreach.vercel.app', NEXT_PUBLIC_APP_URL: 'https://outreach.vercel.app' })
+  check('a preview with no bypass is unresolved, not sent to production', preview.source === 'unresolved' && preview.baseUrl === '' && preview.problem !== null, `${preview.source} ${preview.baseUrl}`)
+  check('and the problem names the fix', /Protection Bypass for Automation/.test(String(preview.problem?.remedy)), String(preview.problem?.remedy))
   const configured = resolveWorkerBase(attacker, { NEXT_PUBLIC_APP_URL: 'https://app.example.com/' })
-  check('the configured app URL wins over any header', configured.baseUrl === 'https://app.example.com')
-  const explicit = resolveWorkerBase(attacker, { SCOUT_WORKER_BASE_URL: 'https://tunnel.example.dev', VERCEL_URL: 'outreach.vercel.app' })
-  check('SCOUT_WORKER_BASE_URL wins over everything', explicit.baseUrl === 'https://tunnel.example.dev')
+  check('off Vercel the configured app URL wins over any header', configured.baseUrl === 'https://app.example.com')
+  const explicit = resolveWorkerBase(attacker, { VERCEL: '1', SCOUT_WORKER_BASE_URL: 'https://tunnel.example.dev', VERCEL_URL: 'outreach.vercel.app', VERCEL_AUTOMATION_BYPASS_SECRET: 's' })
+  check('SCOUT_WORKER_BASE_URL wins over everything', explicit.baseUrl === 'https://tunnel.example.dev' && explicit.source === 'env:SCOUT_WORKER_BASE_URL')
   const nothing = resolveWorkerBase(attacker, {})
   check('with no configuration a foreign host is still refused', nothing.baseUrl === 'http://localhost:3000' && nothing.source === 'default', nothing.baseUrl)
   const dev = resolveWorkerBase(headers({ host: 'localhost:3000' }), {})
   check('next dev keeps working: a loopback host is honoured', dev.baseUrl === 'http://localhost:3000' && dev.source === 'header:loopback')
   check('127.0.0.1 counts as loopback too', resolveWorkerBase(headers({ host: '127.0.0.1:3001' }), {}).baseUrl === 'http://127.0.0.1:3001')
-  check('workerBaseUrl agrees with resolveWorkerBase', workerBaseUrl(attacker, { VERCEL_URL: 'outreach.vercel.app' }) === 'https://outreach.vercel.app')
+  check('workerBaseUrl agrees with resolveWorkerBase', workerBaseUrl(attacker, { VERCEL: '1', VERCEL_ENV: 'production', VERCEL_PROJECT_PRODUCTION_URL: 'outreach.vercel.app' }) === 'https://outreach.vercel.app')
 
   // A worker that takes minutes must not hold the enqueue request open.
   let sentTo: string | null = null
@@ -425,7 +436,8 @@ async function testParamsAndDispatch() {
   const t0 = Date.now()
   const d = await dispatchScoutWorker('http://localhost:3000', 'run-1', 'tok', { raceMs: 30, fetchImpl: hang })
   check('dispatch returns without waiting for the worker', d.dispatched && Date.now() - t0 < 1_000, `${Date.now() - t0}ms`)
-  check('and it posts to the worker route on the chosen base', sentTo === 'http://localhost:3000/api/career/scout/worker', String(sentTo))
+  check('and it posts to the shared worker route on the chosen base', sentTo === 'http://localhost:3000/api/scout/worker', String(sentTo))
+  d.abort()
 
   const dead: typeof fetch = () => Promise.reject(new Error('ECONNREFUSED'))
   const d2 = await dispatchScoutWorker('http://localhost:3000', 'run-1', 'tok', { raceMs: 200, fetchImpl: dead })

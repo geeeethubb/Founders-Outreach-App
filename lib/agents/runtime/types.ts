@@ -8,6 +8,7 @@
 // See docs/AGENTS.md and docs/ARCHITECTURE.md ADR-016.
 
 import type { ModelRole } from '@/lib/ai/models'
+import type { ScoutErrorCode } from '@/lib/runs/errors'
 
 /** A client-side tool the agent may call. Executed by us, not by the model. */
 export interface AgentTool<TArgs = Record<string, unknown>> {
@@ -81,6 +82,13 @@ export interface AgentResult<TOutput> {
   output: TOutput | null
   status: 'succeeded' | 'failed' | 'invalid_output'
   error: string | null
+  /**
+   * Why it failed, when the cause was the RUN rather than the model: the
+   * clock (RUN_DEADLINE), a cancel (CANCELLED), or the provider. A caller that
+   * treats a failure as "this item is broken" must not do so for these — the
+   * item was never really attempted and belongs to the next leg.
+   */
+  errorCode?: ScoutErrorCode | null
   /** Every URL the model cited during the run, in first-seen order. */
   evidence: EvidenceSource[]
   trace: AgentTrace

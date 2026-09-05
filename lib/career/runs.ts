@@ -35,6 +35,7 @@ export async function startCareerRun(params: {
     label: params.label,
     mission: params.mission,
     budget: params.budget ?? {},
+    kind: params.kind,
   })
 
   let cost = 0
@@ -106,6 +107,12 @@ export async function attachCareerRun(params: {
   careerMissionId?: string | null
   /** Write the terminal status from `finish` too. Default false — see above. */
   ownsStatus?: boolean
+  /**
+   * The worker id this leg was claimed with. Every write from this CareerRun
+   * is fenced on it, so a late write from a leg the platform froze cannot land
+   * on the row a later leg now owns (see updateScoutingRun's guard).
+   */
+  workerId?: string | null
 }): Promise<CareerRun> {
   let cost = 0
   let calls = 0
@@ -137,11 +144,17 @@ export async function attachCareerRun(params: {
     agentCalls: () => calls,
     async finish(status, stats, error = null) {
       const owns = params.ownsStatus === true
-      await updateScoutingRun(params.runId, {
-        ...(owns ? { status, completed: true } : {}),
-        stats: { ...stats, cost_usd: Number(cost.toFixed(4)), agent_calls: calls },
-        error,
-      })
+      await updateScoutingRun(
+        params.runId,
+        {
+          ...(owns ? { status, completed: true } : {}),
+          stats: { ...stats, cost_usd: Number(cost.toFixed(4)), agent_calls: calls },
+          error,
+        },
+        // Fenced on the leg's worker id, and on the run still being active: a
+        // stats write must never reopen or overwrite a row another leg owns.
+        params.workerId ? { workerId: params.workerId, statuses: ['queued', 'running'] } : {}
+      )
     },
   }
 }

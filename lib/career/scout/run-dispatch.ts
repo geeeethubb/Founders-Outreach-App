@@ -400,128 +400,21 @@ export function continuationParams(p: ScoutRunParams, cursor: ScoutCursor): Scou
 }
 
 // ─── Where the worker is ─────────────────────────────────────────────────────
+//
+// Moved to ./worker-target.ts, which also owns the Deployment Protection rules
+// and the time-boxed dispatch. Re-exported so every existing import path keeps
+// working.
 
-export type WorkerBaseSource = 'env:SCOUT_WORKER_BASE_URL' | 'env:VERCEL_URL' | 'env:NEXT_PUBLIC_APP_URL' | 'header:loopback' | 'default'
-
-export interface WorkerBase {
-  baseUrl: string
-  source: WorkerBaseSource
-  /** True when a host header was present and deliberately NOT used. */
-  ignoredHeaderHost: string | null
-}
-
-type HeaderBag = { get(name: string): string | null }
-
-function trimUrl(u: string): string {
-  return u.replace(/\/$/, '')
-}
-
-const LOOPBACK = /^(localhost|127\.0\.0\.1|\[::1\])(:\d{1,5})?$/i
-
-/**
- * The dispatch target, chosen by the SERVER — never by the caller.
- *
- * `x-forwarded-host` and `host` arrive from whoever made the request. Deriving
- * the dispatch URL from them means a request can point the server at any host
- * on the internet and hand it the run's claim token: a blind SSRF that also
- * leaks a capability. So the trustworthy sources come first, and a header host
- * is honoured only when it names this machine (a loopback address), which is
- * the one case where no configuration exists to consult — `next dev`.
- *
- * Set SCOUT_WORKER_BASE_URL when the app is reachable at an address neither
- * VERCEL_URL nor NEXT_PUBLIC_APP_URL describes (a tunnel, a reverse proxy on a
- * different origin).
- */
-export function resolveWorkerBase(headers?: HeaderBag | null, env: Record<string, string | undefined> = process.env): WorkerBase {
-  const headerHost = headers?.get('x-forwarded-host') ?? headers?.get('host') ?? null
-
-  if (env.SCOUT_WORKER_BASE_URL) return { baseUrl: trimUrl(env.SCOUT_WORKER_BASE_URL), source: 'env:SCOUT_WORKER_BASE_URL', ignoredHeaderHost: null }
-  if (env.VERCEL_URL) return { baseUrl: `https://${trimUrl(env.VERCEL_URL)}`, source: 'env:VERCEL_URL', ignoredHeaderHost: headerHost }
-  if (env.NEXT_PUBLIC_APP_URL) return { baseUrl: trimUrl(env.NEXT_PUBLIC_APP_URL), source: 'env:NEXT_PUBLIC_APP_URL', ignoredHeaderHost: headerHost }
-  if (headerHost && LOOPBACK.test(headerHost)) return { baseUrl: `http://${headerHost}`, source: 'header:loopback', ignoredHeaderHost: null }
-  return { baseUrl: 'http://localhost:3000', source: 'default', ignoredHeaderHost: headerHost }
-}
-
-export function workerBaseUrl(headers?: HeaderBag | null, env: Record<string, string | undefined> = process.env): string {
-  return resolveWorkerBase(headers, env).baseUrl
-}
-
-/**
- * Start the worker without waiting for it to finish. We await only long enough
- * to learn whether the request was ACCEPTED — the run itself outlives this
- * request.
- *
- * This used to lie in three separate ways, and together they are why a run sat
- * queued for 328 minutes with `dispatched: true` recorded against it:
- *
- *   1. The race timer resolved `true`, so "1.5 seconds elapsed" and "a worker
- *      took it" were the same answer.
- *   2. `.then(() => true)` never looked at the Response, so a 401 from
- *      deployment protection, a 404, a 500 or an HTML login page all reported
- *      success with no error.
- *   3. A rejection arriving after the race wrote `error` into a variable
- *      nobody read again.
- *
- * Now the three outcomes are distinct, because the caller has to act
- * differently on each: `accepted` (the worker answered 2xx), `pending` (still in
- * flight — genuinely worth waiting for), `failed` (we know it did not land, so
- * fail fast rather than leave a spinner running).
- */
-export type DispatchOutcome = 'accepted' | 'pending' | 'failed'
-
-export async function dispatchScoutWorker(
-  baseUrl: string,
-  runId: string,
-  token: string,
-  opts: { raceMs?: number; fetchImpl?: typeof fetch } = {}
-): Promise<{
-  dispatched: boolean
-  outcome: DispatchOutcome
-  status: number | null
-  error: string | null
-  /**
-   * The underlying request, still in flight when `outcome` is 'pending'. Handed
-   * to `waitUntil` by the caller so a serverless function is not frozen before
-   * the self-POST lands — the failure this exists to prevent.
-   */
-  settled: Promise<{ outcome: DispatchOutcome; status: number | null; error: string | null }>
-}> {
-  const raceMs = opts.raceMs ?? 1_500
-  const doFetch = opts.fetchImpl ?? fetch
-  const url = `${trimUrl(baseUrl)}/api/career/scout/worker`
-
-  type Settled = { outcome: DispatchOutcome; status: number | null; error: string | null }
-  const sent: Promise<Settled> = doFetch(url, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ runId, token }),
-    cache: 'no-store',
-  }).then(
-    (res) =>
-      res.ok
-        ? { outcome: 'accepted' as const, status: res.status, error: null }
-        : {
-            outcome: 'failed' as const,
-            status: res.status,
-            // 401 here is almost always Vercel Deployment Protection on the
-            // self-POST; say so, because "401" alone sends people to their auth code.
-            error:
-              res.status === 401 || res.status === 403
-                ? `the worker refused the request (HTTP ${res.status}) — on Vercel this is usually Deployment Protection blocking the app from calling itself; set SCOUT_WORKER_BASE_URL to a reachable URL`
-                : `the worker answered HTTP ${res.status} at ${url}`,
-          },
-    (e: unknown) => ({
-      outcome: 'failed' as const,
-      status: null,
-      error: `${e instanceof Error ? e.message : String(e)} (dispatching to ${url})`,
-    })
-  )
-
-  const pending: Promise<Settled> = new Promise((r) =>
-    setTimeout(() => r({ outcome: 'pending', status: null, error: null }), raceMs)
-  )
-  const raced = await Promise.race([sent, pending])
-  // `dispatched` keeps its old meaning for existing callers — "not known to have
-  // failed" — while `outcome` carries the distinction they now need.
-  return { dispatched: raced.outcome !== 'failed', outcome: raced.outcome, status: raced.status, error: raced.error, settled: sent }
-}
+export {
+  dispatchScoutWorker,
+  resolveWorkerBase,
+  workerAuthHeaders,
+  workerBaseUrl,
+  DISPATCH_ACCEPT_TIMEOUT_MS,
+  WORKER_PATH,
+  type DispatchOutcome,
+  type DispatchResult,
+  type DispatchSettled,
+  type WorkerBase,
+  type WorkerBaseSource,
+} from './worker-target'

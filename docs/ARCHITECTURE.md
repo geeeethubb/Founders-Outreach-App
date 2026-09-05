@@ -1250,6 +1250,129 @@ of this ADR.
 
 ---
 
+### ADR-043 ★ — Both scouts are one durable run model, executed in fenced legs
+
+**Context.** Two scouting flows, two execution models. The Job Scout was a queued row
+advanced by a worker (ADR-040); the People Scout still executed inside `POST /api/scout`
+under a 300 s ceiling a full-depth run could not fit (a measured run took 527 s), and it
+wrote `status='running'` at the top of the request and a terminal status only on its own
+normal return. The live database held **five** People Scout rows that had been `running`
+for weeks, two of them from the afternoon this pass began. The same afternoon two Job
+Scout rows failed to start: the dispatch had failed within two seconds with a real reason
+(a refused self-request), and the row recorded a fabricated sentence — "after 2 attempts
+over 181 s" — because the fail-fast branch used a synthetic clock and never wrote the
+dispatch's own error. Nothing in either flow bounded a provider call by the time the run
+had left; the Anthropic client's run deadline lived in a module-global slot that
+concurrent runs on one instance could overwrite for each other.
+
+**Options considered.**
+
+| Option | Verdict |
+|---|---|
+| Vercel Workflow (the durable-execution SDK) | ✗ Needs Next 15+ and keeps step state in its own store beside the run row: a Next major upgrade and a second source of truth for the same run, for a single-user product whose row model already carries provenance, cost and progress |
+| Keep the People Scout synchronous and shrink it | ✗ Cuts the ambition to fit the ceiling; the ceiling is the platform's, not the product's |
+| Chain by new rows (`continued_from`) | ✗ Correct, but the page would follow a pointer chain and the one-active-run rule would need exceptions |
+| **One row, many legs, every write fenced on the leg** | **✓ Chosen** |
+
+**Decision.** A scout run of either kind is a `scouting_runs` row (kinds `job_scout` and
+`outreach`) with one lifecycle:
+
+```
+queued ──claim──▶ running ──finish──▶ succeeded | partial | failed | cancelled
+  ▲                  │
+  └─────handoff──────┘        (a leg reached its clock with work left)
+```
+
+- **Enqueue** (`lib/runs/enqueue.ts`, both `POST /api/scout` and `POST /api/career/scout`)
+  refuses before anything is paid for when readiness says the deployment cannot execute a
+  run (`lib/runs/readiness.ts`: configuration, schema, a real probe of the worker address).
+  It writes the row, dispatches the worker, and **observes the claim on the row** rather
+  than inferring it from HTTP — the worker executes inside its own POST and answers only at
+  the end. A dispatch that fails outright is retried once and then closed as `DISPATCH`
+  with the worker's real answer on the row. The database enforces one active queued run per
+  kind per user (migration 021), so a second click is answered with the run already going.
+- **A leg** (`lib/runs/worker.ts`) claims by single-use token, runs under **one absolute
+  clock** measured from the handler's entry (ADR-044), heartbeats a 90 s lease, and fences
+  every write on the per-leg `worker_id` it was claimed with. A leg that stops at its clock
+  with work left **hands the row back to the queue in one statement** — new token,
+  `queued_at`/`attempt_count` reset, the checkpoint or cursor and the partial result
+  carried in the same write — and asks a worker for the next leg, again observing the
+  claim on the row. The browser's 3-second poll is the primary chain link: a handed-back
+  leg nothing has dispatched is dispatched by the next read (`queue-health` state
+  `chain`), whatever its age. A leg refused another pass (the whole-run clock
+  `run_deadline_at`, the leg cap) is closed `partial` with everything kept.
+- **The People Scout** resumes from a versioned **checkpoint** (`lib/scouting/checkpoint.ts`):
+  strategy, the internal-first phase, discovered companies, validations, people, triage,
+  research per person and rankings per person. Its **result** — the exact payload the page
+  renders — is written progressively, so a run that stops short shows what it found,
+  including people it researched but did not rank. The Job Scout keeps its cursor
+  (ADR-041); continuation across legs is now automatic, and "Continue this run" remains for
+  a run stopped by its spend ceiling.
+- **Recovery is on every read and every enqueue** (`sweepScoutQueue`): a running row whose
+  lease lapsed is reaped — `PLATFORM_KILL` when the worker died well inside the leg it had
+  planned, `RUN_DEADLINE` otherwise — with its result kept; a queued row past the wait is
+  redispatched, spaced, and then failed with the last dispatch's own reason. The daily
+  crons run the same sweep for every profile (Hobby allows two crons; no third was added).
+- **Errors are a contract** (`lib/runs/errors.ts`): a stable code, a sentence, whether a retry
+  can help, and a remedy, on the row (`error_code`, `error_detail`) and in every API answer.
+  The browser wrapper (`components/career/api-errors.ts`) describes a non-JSON platform
+  page by its status and Vercel error code, never by the parser's complaint.
+
+**What the platform can and cannot promise.** Every observation of a run is truthful; a
+stuck run never blocks the next click; a run is terminal within seconds of any read or
+enqueue by its owner and within 24 hours regardless. A chained leg whose self-dispatch is
+lost while nobody is watching waits for the next read or the daily cron — documented,
+bounded, and never a permanently orphaned row.
+
+---
+
+### ADR-044 ★ — One clock per leg, carried by the run context; every provider attempt sized from it
+
+**Context.** Provider timeouts were process constants (120 s, 300 s with web search) with
+up to four attempts and backoff: a request that started one millisecond before the run's
+deadline ran to its full ceiling, a retry storm outlived the run, and a hung Apollo request
+held the process-wide throttle chain for every caller. The Anthropic deadline was a
+module-global slot: a run that died left its expired deadline behind and poisoned five
+consecutive later runs, and two concurrent runs on one warm instance disarmed each other.
+Nothing between the run and its provider clients knew how much time was left.
+
+**Decision.**
+
+- `lib/runs/deadline.ts` — a `RunClock` with a hard deadline, a finalisation reserve and a
+  minimum attempt size. `attemptTimeoutMs(ceiling)` is `min(ceiling, remaining before the
+  reserve)` or **zero — do not start**; `sleepWithin` refuses a backoff that would leave no
+  room for the next attempt.
+- `lib/runs/context.ts` — the clock, the run's identity and per-run provider accounting
+  travel in an `AsyncLocalStorage` context that follows one invocation's promise chain and
+  is invisible to every other request. It cannot leak: it ends with the chain it belongs to.
+- Every network client reads it: the Anthropic and Apollo clients (attempt timeouts, bounded
+  retries, per-run usage), the OpenAI search fallback, the ATS and careers-page fetchers and
+  the robots lookup (`ambientTimeoutMs`) — so a twenty-probe ATS detection that begins near
+  a run's deadline collapses into immediate refusals instead of a chain of fifteen-second
+  waits. The agent loop consults the clock between steps and stops on a cancel.
+- Apollo requests carry an `AbortController` whose fuse covers the body read; the throttle
+  chain can no longer be held by one dead request.
+- A stage that cannot fit its minimum is not started; the leg hands over instead of paying
+  for half a stage.
+- The distinction the run must never lose: **a failure caused by the clock is not a failure
+  of the item.** `AgentResult.errorCode` carries `RUN_DEADLINE` / `CANCELLED` from the loop,
+  `isClockOutcome()` in `lib/runs/errors.ts` is the one predicate every stage uses, and an
+  item the clock stopped is left pending for the next leg (internal scoring keeps them as
+  `internal.pending` in the checkpoint). The first live run found the gap: a leg that
+  recorded two clock-cut ranking calls as item errors finished `succeeded` with 14 of 16.
+  The same rule one level up: a lane that starts and is cut (the Job Scout's sweep,
+  company-first, extraction) leaves work, says so, and the run is a deadline hit — never
+  "complete" (`leftOpen` in the Job Scout orchestrator; `jobLegContinuation` decides whether
+  the next pass is worth dispatching, bounded by the mode's own runtime).
+
+**Consequences.** A child request can never outlive the run that made it; a retry storm can
+never outlive a deadline; usage and cost are the run's own. The CLI runs under a generous
+local clock; a hosted leg under 280 s of a 300 s function. The residual, stated plainly: a
+single web-search call may still consume most of one leg (a live planner call took 226 s);
+the next leg then resumes from the checkpoint and pays for nothing done.
+
+---
+
 ## 4. Providers
 
 ```ts
@@ -1332,6 +1455,10 @@ product's own data.
 5. **Absent capability degrades output volume, not output quality.** No PitchBook → fewer
    private companies. No web research → fewer prospects clear the facts gate. The system never
    compensates by lowering its bar.
+6. **No scouting action can become an opaque or orphaned failure.** Every run has an
+   identity, a bounded execution budget, persisted progress, bounded provider calls,
+   recoverable partial work and a guaranteed terminal outcome; a deployment that cannot
+   satisfy that fails before production (ADR-043, ADR-044, `npm run check:deploy`).
 
 ---
 
